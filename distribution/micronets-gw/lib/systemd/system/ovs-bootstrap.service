@@ -1,0 +1,13 @@
+[Unit]
+Description=Micronets OvS Bootstrap
+
+[Service]
+Type=oneshot
+Restart=no
+ExecStart=/opt/ovs-systemd/ovs-bootstrap-service-control.sh start $OPTIONS
+ExecStop=/opt/ovs-systemd/ovs-bootstrap-service-control.sh stop $OPTIONS
+ExecReload=/opt/ovs-systemd/ovs-bootstrap-service-control.sh reload $OPTIONS
+
+[Install]
+WantedBy=multi-user.target
+

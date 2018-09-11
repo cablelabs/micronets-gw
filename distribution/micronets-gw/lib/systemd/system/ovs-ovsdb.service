@@ -1,0 +1,13 @@
+[Unit]
+Description=Open vSwitch Database Unit
+
+[Service]
+Type=forking
+Restart=on-failure
+EnvironmentFile=/etc/openvswitch/ovs.conf
+ExecStart=/opt/ovs-systemd/ovs-ovsdb-service-control.sh start $OPTIONS
+ExecStop=/opt/ovs-systemd/ovs-ovsdb-service-control.sh stop $OPTIONS
+ExecReload=/opt/ovs-systemd/ovs-ovsdb-service-control.sh restart $OPTIONS
+RuntimeDirectory=openvswitch
+RuntimeDirectoryMode=0755
+

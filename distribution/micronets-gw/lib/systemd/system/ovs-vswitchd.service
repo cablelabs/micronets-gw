@@ -1,0 +1,15 @@
+[Unit]
+Description=Open vSwitch Forwarding Unit
+Requires=ovs-ovsdb.service
+ReloadPropagatedFrom=ovs-ovsdb.service
+AssertPathIsReadWrite=/opt/openvswitch/var/run/openvswitch/db.sock
+
+[Service]
+Type=forking
+Restart=on-failure
+Environment=HOME=/opt/openvswitch/var/run/openvswitch
+EnvironmentFile=/etc/openvswitch/ovs.conf
+ExecStart=/opt/ovs-systemd/ovs-vswitchd-service-control.sh start $OPTIONS
+ExecStop=/opt/ovs-systemd/ovs-vswitchd-service-control.sh stop $OPTIONS
+ExecReload=/opt/ovs-systemd/ovs-vswitchd-service-control.sh restart $OPTIONS
+TimeoutSec=300
