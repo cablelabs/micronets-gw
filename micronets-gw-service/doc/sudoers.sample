@@ -1,0 +1,2 @@
+micronets ALL=(ALL) NOPASSWD: /etc/init.d/isc-dhcp-server
+micronets ALL=(ALL) NOPASSWD: /etc/init.d/dnsmasq

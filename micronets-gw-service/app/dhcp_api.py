@@ -1,0 +1,284 @@
+from quart import request, jsonify
+from ipaddress import IPv4Address, IPv4Network
+from app import app, get_dhcp_conf_model
+from .utils import InvalidUsage
+
+import re
+import netaddr
+import logging
+
+logger = logging.getLogger ('micronets-dhcp-server')
+
+dhcp_api_prefix = '/micronets/v1/dhcp'
+
+# This installs the handler to turn the InvalidUsage exception into a response
+# See: http://flask.pocoo.org/docs/1.0/patterns/apierrors/
+@app.errorhandler (InvalidUsage)
+def handle_invalid_usage (error):
+    response = jsonify (error.to_dict())
+    response.status_code = error.status_code
+    return response
+
+def check_for_json_payload (request):
+    if not request.is_json:
+        raise InvalidUsage (400, message="supplied data is not a json object")
+
+def abort_if_field_missing (json_obj, field):
+    if field not in json_obj:
+        raise InvalidUsage (400, message=f"Required field '{field}' missing from {json_obj}")
+
+def check_field (json_obj, field, field_type, required):
+    if field not in json_obj:
+        if required:
+            raise InvalidUsage (400, message=f"Required field '{field}' missing from {json_obj}")
+        else:
+            return
+    field_val = json_obj [field]
+    if not isinstance (field_val, field_type):
+        raise InvalidUsage (400, message=f"Supplied field value '{field_val}' for '{field}' field"
+                                         f" in '{json_obj}' is not a {field_type}")
+    return field_val
+
+def check_for_unrecognized_entries (container, allowed_field_names):
+    keys = container.keys ()
+    unrecognized_keys = keys - allowed_field_names  # This is set subtraction
+    if ((len (unrecognized_keys)) > 0):
+        raise InvalidUsage (400, message=f"Illegal field(s) {unrecognized_keys} in '{container}'")
+    return True
+
+subnet_id_re = re.compile ('^\w+[\w-]*$', re.ASCII)
+
+def check_subnet_id (subnet_id, location):
+    if not subnet_id_re.match (subnet_id):
+        raise InvalidUsage (400, message="Supplied subnet ID '{}' in '{}' is not alpha-numeric"
+                                         .format (subnet_id, location))
+
+ip_re = re.compile ('^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$', re.ASCII)
+
+def check_ipv4_network (container, subnet_id, required):
+    ipv4_network = check_field (container, 'ipv4Network', (dict, list), required)
+    if ipv4_network:
+        check_for_unrecognized_entries (ipv4_network, ['network','mask','gateway'])
+        check_ipv4_address_field (ipv4_network, 'gateway', False)
+        net_address = check_ipv4_address_field (ipv4_network, 'network', required)
+        net_mask = check_ipv4_address_field (ipv4_network, 'mask', required)
+        if (required or (net_address and net_mask)):
+            try:
+                IPv4Network (net_address + "/" + net_mask, strict=True)
+            except Exception as ex:
+                raise InvalidUsage (400, message=f"Supplied IP network/mask value '{net_address}/"
+                                                 f"{net_mask}' in subnet '{subnet_id}' is not valid: {ex}")
+    return ipv4_network
+
+def get_ipv4_address_error (ip_address):
+    if not ip_address:
+        return "Address is empty"
+    try:
+        addr = IPv4Address (ip_address)
+        if not addr:
+            return "Invalid address"
+        if addr.is_loopback or addr.is_multicast:
+            return "Address is a loopback or broadcast address"
+        return None;
+    except Exception as ex:
+        return str (ex)
+
+def check_ipv4_address_field (json_obj, ip_addr_field, required):
+    ip_address = check_field (json_obj, ip_addr_field, str, required)
+    if not ip_address and not required:
+        return
+    ipv4_address_error = get_ipv4_address_error (ip_address)
+    if (ipv4_address_error):
+        raise InvalidUsage (400, message=f"Supplied IP address value '{ip_address}' for '{ip_addr_field}'"
+                                         f" field in '{json_obj}' is not valid: {ipv4_address_error}")
+    return ip_address
+
+def check_nameservers (container, field_name, required):
+    nameservers = check_field (container, 'nameservers', (list), False)
+    if nameservers:
+        for ip_address in nameservers:
+            ipv4_address_error = get_ipv4_address_error (ip_address)
+            if (ipv4_address_error):
+                raise InvalidUsage (400, message=f"Supplied IP address value '{ip_address}' in "
+                                                 f"'{container}' field '{field_name}' is not valid: "
+                                                 f"{ipv4_address_error}")
+    return nameservers
+
+def check_subnet (subnet, subnet_id=None, required=True):
+    check_for_unrecognized_entries (subnet, ['subnetId','ipv4Network','nameservers'])
+    body_subnet_id = check_field (subnet, 'subnetId', str, required)
+    if (subnet_id and body_subnet_id):
+        raise InvalidUsage (400, message=f"A subnet ID cannot be provided in the path ('{subnet_id}') "
+                                         f"and the body ('{body_subnet_id}')")
+    if body_subnet_id:
+        subnet_id = body_subnet_id
+    subnet_id = subnet_id.lower ()
+    check_subnet_id (subnet_id, subnet)
+    check_ipv4_network (subnet, subnet_id, required)
+    check_nameservers (subnet, 'nameservers', required)
+
+def check_subnets (subnets, required):
+    for subnet in subnets:
+        check_subnet (subnet, required=required)
+
+@app.route (dhcp_api_prefix + '/subnets', methods=['POST'])
+async def create_subnet ():
+    check_for_json_payload (request)
+    subnets = await request.get_json ()
+    if isinstance (subnets, list):
+        check_subnets (subnets, required=True)
+        return get_dhcp_conf_model ().create_subnets (subnets)
+    elif isinstance (subnets, dict):
+        check_subnet (subnets, required=True)
+        return get_dhcp_conf_model ().create_subnet (subnets)
+    else:
+        raise InvalidUsage (400, message="Supplied payload is neither a json list or object")
+
+@app.route (dhcp_api_prefix + '/subnets', methods=['GET'])
+async def get_all_subnets ():
+    return get_dhcp_conf_model ().get_all_subnets ()
+
+@app.route (dhcp_api_prefix + '/subnets', methods=['DELETE'])
+async def delete_all_subnets ():
+    return get_dhcp_conf_model ().delete_all_subnets ()
+
+@app.route (dhcp_api_prefix + '/subnets/<subnet_id>', methods=['PUT'])
+async def update_subnet (subnet_id):
+    subnet_id = subnet_id.lower ()
+    check_for_json_payload (request)
+    check_subnet_id (subnet_id, request.path)
+    subnet = await request.get_json ()
+    check_subnet (subnet, subnet_id=subnet_id, required=False)
+    updated_subnet = get_dhcp_conf_model ().update_subnet (subnet, subnet_id)
+    return updated_subnet
+
+@app.route (dhcp_api_prefix + '/subnets/<subnet_id>', methods=['GET'])
+async def get_subnet (subnet_id):
+    subnet_id = subnet_id.lower ()
+    check_subnet_id (subnet_id, request.path)
+    return get_dhcp_conf_model ().get_subnet (subnet_id)
+
+@app.route (dhcp_api_prefix + '/subnets/<subnet_id>', methods=['DELETE'])
+async def delete_subnet (subnet_id):
+    subnet_id = subnet_id.lower()
+    check_subnet_id (subnet_id, request.path)
+    return get_dhcp_conf_model ().delete_subnet (subnet_id)
+
+device_id_re = re.compile ('^\w+[\w-]*$', re.ASCII)
+
+def check_device_id (device_id, location):
+    if not device_id_re.match (device_id):
+        raise InvalidUsage (400, message=f"Supplied device ID '{device_id}' in '{location}'"
+                                         f" is not alpha-numeric")
+
+def check_mac_address_field (json_obj, mac_addr_field, required):
+    mac_field = check_field (json_obj, mac_addr_field, str, required)
+    if not mac_field and not required:
+        return
+    if not netaddr.valid_mac (mac_field):
+        raise InvalidUsage (400, message=f"Supplied MAC '{mac_field}' in '{mac_addr_field}' is not valid")
+    return mac_field
+
+def check_device (device, required):
+    check_for_unrecognized_entries (device, ['deviceId','macAddress','networkAddress'])
+    device_id = check_field (device, 'deviceId', str, required)
+    if device_id:
+        device_id = device_id.lower ()
+        check_device_id (device_id, device)
+
+    mac_address = check_field (device, 'macAddress', (dict, list), required)
+    if not mac_address:
+        if required:
+            raise InvalidUsage (400, message=f"macAddress missing from device '{device_id}'")
+    else:
+        check_for_unrecognized_entries (mac_address, ['eui48'])
+        check_mac_address_field (mac_address, 'eui48', required)
+
+    network_address = check_field (device, 'networkAddress', (dict, list), required)
+    if not network_address:
+        if required:
+            raise InvalidUsage (400, message=f"networkAddress missing from device '{device_id}'")
+    else:
+        check_for_unrecognized_entries (network_address, ['ipv4'])
+        check_ipv4_address_field (network_address, 'ipv4', required)
+
+def check_devices (devices, required):
+    for device in devices:
+        check_device (device, required)
+
+@app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices', methods=['POST'])
+async def create_devices (subnet_id):
+    subnet_id = subnet_id.lower ()
+    check_for_json_payload (request)
+    devices = await request.get_json ()
+    if isinstance (devices, list):
+        check_devices (devices, required=True)
+        return get_dhcp_conf_model ().create_devices (devices, subnet_id)
+    elif isinstance (devices, dict):
+        check_device (devices, required=True)
+        return get_dhcp_conf_model ().create_device (devices, subnet_id)
+    else:
+        raise InvalidUsage (400, message="Supplied payload is neither a json list or object")
+
+@app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices', methods=['GET'])
+async def get_devices (subnet_id):
+    subnet_id = subnet_id.lower ()
+    check_subnet_id (subnet_id, request.path)
+    return get_dhcp_conf_model ().get_all_devices (subnet_id)
+
+@app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices', methods=['DELETE'])
+async def delete_devices (subnet_id):
+    subnet_id = subnet_id.lower()
+    check_subnet_id (subnet_id, request.path)
+    return get_dhcp_conf_model ().delete_all_devices (subnet_id)
+
+@app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices/<device_id>', methods=['PUT'])
+async def update_device (subnet_id, device_id):
+    subnet_id = subnet_id.lower ()
+    device_id = device_id.lower ()
+    check_for_json_payload (request)
+    check_subnet_id (subnet_id, request.path)
+    check_device_id (device_id, request.path)
+    check_device (request.json, required=False)
+    device_update = await request.get_json ()
+    return get_dhcp_conf_model ().update_device (device_update, subnet_id, device_id)
+
+@app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices/<device_id>', methods=['GET'])
+async def get_device (subnet_id, device_id):
+    subnet_id = subnet_id.lower ()
+    device_id = device_id.lower ()
+    check_subnet_id (subnet_id, request.path)
+    check_device_id (device_id, request.path)
+    return get_dhcp_conf_model ().get_device (subnet_id, device_id)
+
+@app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices/<device_id>', methods=['DELETE'])
+async def delete_device (subnet_id, device_id):
+    subnet_id = subnet_id.lower ()
+    device_id = device_id.lower ()
+    check_subnet_id (subnet_id, request.path)
+    check_device_id (device_id, request.path)
+    return get_dhcp_conf_model ().delete_device (subnet_id, device_id)
+
+async def check_lease_event (lease_event):
+    check_for_unrecognized_entries (lease_event, ['event', 'macAddress','networkAddress','hostname'])
+    event_id = check_field (lease_event, 'event', str, True)
+    if (event_id != "leaseAcquired" and event_id != "leaseExpired"):
+        raise InvalidUsage (400, message=f"unrecognized lease event '{event_id}'"
+                                         f" (must be 'leaseAcquired' or 'leaseExpired')")
+
+    mac_address = check_field (lease_event, 'macAddress', (dict, list), True)
+    check_for_unrecognized_entries (mac_address, ['eui48'])
+    check_mac_address_field (mac_address, 'eui48', True)
+
+    network_address = check_field (lease_event, 'networkAddress', (dict, list), True)
+    check_for_unrecognized_entries (network_address, ['ipv4'])
+    check_ipv4_address_field (network_address, 'ipv4', True)
+
+    hostname = check_field (lease_event, 'hostname', str, True)
+
+@app.route (dhcp_api_prefix + '/leases', methods=['PUT'])
+async def process_lease ():
+    check_for_json_payload (request)
+    lease_event = await request.get_json ()
+    check_lease_event (lease_event)
+    return get_dhcp_conf_model ().process_dhcp_lease_event (lease_event)

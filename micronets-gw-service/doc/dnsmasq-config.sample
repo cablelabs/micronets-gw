@@ -1,0 +1,26 @@
+# THIS CONF FILE IS MANAGED BY MICRONETS-DHCP
+# MODIFICATIONS TO THIS FILE WILL BE OVER-WRITTEN
+
+# Subnet: testsubnet001
+dhcp-range=set:testsubnet001,10.40.0.0,static,255.255.255.0,10m
+dhcp-option=tag:testsubnet001, option:router,10.40.0.1
+dhcp-option=tag:testsubnet001, option:dns-server,8.8.8.8,4.4.4.4
+
+# Subnet: testsubnet002
+dhcp-range=set:testsubnet002,10.50.0.0,static,255.255.255.0,10m
+dhcp-option=tag:testsubnet002, option:router,10.50.0.1
+dhcp-option=tag:testsubnet002, option:dns-server,8.8.8.8,4.4.4.4
+
+# DEVICES FOR SUBNET: testsubnet001
+
+# Device: micronet-client-1
+dhcp-host=08:00:27:e5:77:c5,micronet-client-1,set:micronet-client-1,10.40.0.71,10m
+
+# Device: mydevice-1
+dhcp-host=00:23:12:0f:b0:26,mydevice-1,set:mydevice-1,10.40.0.42,10m
+
+# DEVICES FOR SUBNET: testsubnet002
+
+# Device: micronet-client-2
+dhcp-host=08:00:27:3c:ae:02,micronet-client-2,set:micronet-client-2,10.50.0.43,10m
+

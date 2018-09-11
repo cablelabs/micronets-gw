@@ -1,0 +1,2 @@
+micronut ALL=(ALL:ALL) NOPASSWD: /etc/init.d/isc-dhcp-server
+

@@ -1,0 +1,4 @@
+For the dnsmasq adapter (IscTestingConfig, IscProductionConfig):
+
+ sudo touch /etc/dnsmasq.d/micronets
+ sudo chown micronets.micronets /etc/dnsmasq.d/micronets

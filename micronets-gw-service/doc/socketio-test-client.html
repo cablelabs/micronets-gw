@@ -1,0 +1,42 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>Flask-SocketIO Notification Test - Micronets-DHCP</title>
+    <script src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.11.3.min.js"></script>
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/2.1.0/socket.io.dev.js"></script>
+    
+    <script type="text/javascript" charset="utf-8">
+        $(document).ready(function(){
+            namespace = '/micronets-dhcp-v1'; // change to an empty string to use the global namespace
+
+            // the socket.io documentation recommends sending an explicit package upon connection
+            // this is specially important when using the global namespace
+            var socket = io.connect('http://localhost:5000' + namespace);
+            
+            socket.on('connect', function(msg) {
+                socket.emit('my event', {data: 'I\'m connected!'});
+            });
+
+            socket.on('message', function(msg){
+                console.log (msg)
+                $('#test').html('<p>' + msg + '</p>');
+            });
+          
+            socket.on('leaseAcquired', function(msg){
+                console.log ('leaseAcquired: ' + JSON.stringify(msg))
+                $('#test').html('<p>leaseAcquired</p></p>' + JSON.stringify(msg) + '</p>');
+            });
+          
+            socket.on('leaseExpired', function(msg){
+                console.log ('leaseExpired: ' + JSON.stringify(msg))
+                $('#test').html('<p>leaseExpired</p></p>' + JSON.stringify(msg) + '</p>');
+            });
+          
+        });
+    </script>
+</head>
+<body>
+    <h3>Flask-SocketIO Test for Micronets-DHCP Notifications</h3>
+    <p id='test'> Hello </p>
+</body>
+</html>
