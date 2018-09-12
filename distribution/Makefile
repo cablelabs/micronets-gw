@@ -2,7 +2,7 @@
 
 VERSION=1.0.0
 FBASE=micronets-gw
-SDIRS=filesystem ../micronets-gw-service
+SDIRS=../filesystem ../micronets-gw-service
 IBASE=/opt
 
 TARGETDIR=target
