@@ -2,13 +2,27 @@ from gevent import monkey
 monkey.patch_all ()
 
 from quart import Quart, request
-import os, config, sys, traceback, asyncio, websockets, logging
+import os, argparse, config, sys, traceback, asyncio, websockets, logging
 
 # create application instance
 app = Quart (__name__)
 
-# set the FLASK_ENV environment variable to config.DevelopementConfig/TestingConfig/ProductionConfig
-app.config.from_object (os.environ.get ('FLASK_ENV') or 'config.MockDevelopmentConfig')
+arg_parser = argparse.ArgumentParser(description='The Micronets Gateway Service')
+
+arg_parser.add_argument ('--config', "-c", required=False, action='store', type=str,
+                         help="The service configuration to use (e.g. config.MockDevelopmentConfig, config.DnsmasqTestingConfig)")
+args = arg_parser.parse_args ()
+
+flask_env = os.environ.get ('FLASK_ENV')
+
+if (args.config):
+    config = args.config
+elif (flask_env):
+    config = flask_env
+else:
+    config = 'config.MockDevelopmentConfig'
+
+app.config.from_object (config)
 
 logging_filename = app.config ['LOGFILE_PATH']
 logging_filemode = app.config ['LOGFILE_MODE']
@@ -16,9 +30,9 @@ logging_level = app.config ['LOGGING_LEVEL']
 logging.basicConfig (level=logging_level, filename=logging_filename, filemode=logging_filemode,
                      format='%(asctime)s %(name)s: %(levelname)s %(message)s')
 
-logger = logging.getLogger ('micronets-gateway-services')
+logger = logging.getLogger ('micronets-gw-service')
 
-logger.info ("Loading app module...")
+logger.info (f"Loading app module using {config}")
 
 dhcp_conf_model = None
 dhcp_adapter = None
