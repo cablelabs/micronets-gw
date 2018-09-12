@@ -2,13 +2,13 @@
 
 VERSION=1.0.0
 FBASE=micronets-gw
-SDIRS=../filesystem ../micronets-gw-service
+SDIRS=../filesystem
 IBASE=/opt
 
 TARGETDIR=target
 ARDIR=$(TARGETDIR)/ar
 
-SCPHOST=u16
+SCPHOST=mop01
 
 VDIR=$(FBASE)-$(VERSION)
 DEBFILE=$(VDIR).deb
@@ -31,8 +31,12 @@ $(DEBPATH):
 	mkdir $(TARGETDIR) # Create output directory.
 	mkdir $(ARDIR) # Create debug archive output directory.
 
-	# Move the source filesystems to the package construction directory.
+	# Copy the source filesystems SDIRS to the package construction directory.
 	$(foreach var,$(SDIRS),(cd $(var); tar cf - .) | (cd $(VDIR); tar xf -);)
+
+	# Copy the micronets-gw-service under $(VDIR)/opt/$(FBASE) to the package construction directory.
+	(cd ../micronets-gw-service; tar cf - .) | (cd $(VDIR)/opt/$(FBASE); tar xf -);)
+	rm -rf $(VDIR)/opt/$(FBASE)/.idea
 
 	# Create the build metadata files.
 	date -Iseconds > $(IDIR)/BUILDTIME
