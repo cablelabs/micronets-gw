@@ -1,0 +1,30 @@
+#!/bin/bash
+
+function hr {
+  echo "------------------------------------------------------------------------------------------------------"
+}
+
+function link_ifupdown {
+  rm /etc/network/if-pre-up.d/openvswitch
+  rm /etc/network/if-post-down.d/openvswitch
+  ln -s /opt/micronets-gw/bin/ifupdown.sh /etc/network/if-pre-up.d/micronets-gw-openvswitch
+  ln -s /opt/micronets-gw/bin/ifupdown.sh /etc/network/if-post-down.d/micronets-gw-openvswitch
+}
+
+function main {
+  {
+    link_ifupdown
+  } 2>&1 | logger -t ${TAG}
+}
+
+echo "X: $*"
+
+TS=`date +%j'T'%H%M%S`
+TAG="micronets-gw-${TS}"
+if [ ! -z "${2}" ]; then
+  echo "Upgrading from version ${2}"
+fi
+main
+grep "${TAG}" /var/log/syslog
+exit 0
+
