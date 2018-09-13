@@ -4,45 +4,23 @@ function hr {
   echo "------------------------------------------------------------------------------------------------------"
 }
 
-function create_var_dirs { # PURPOSE: Create var/run and var/log directories.
-  if [ "$OVS_VAR_RUN_DIR" != "" ] && [ ! -d $OVS_VAR_RUN_DIR ]; then
-    mkdir -p -v $OVS_VAR_RUN_DIR
-  fi
-
-  if [ "$OVS_VAR_LOG_DIR" != "" ] && [ ! -d $OVS_VAR_LOG_DIR ]; then
-    mkdir -p -v $OVS_VAR_LOG_DIR
-  fi
-}
-
-function create_ovsdb_database {
-  systemctl stop ovs-vswitchd.service
-  systemctl stop ovs-ovsdb.service
-
-  rm $OVS_DB_CONF
-  $OVS_BIN_DIR/ovsdb-tool create $OVS_DB_CONF $OVS_INSTALL_DIR/share/openvswitch/vswitch.ovsschema
-
-  systemctl start ovs-ovsdb.service
-  systemctl start ovs-vswitchd.service
+function link_ifupdown {
+  rm /etc/network/if-pre-up.d/openvswitch
+  rm /etc/network/if-post-down.d/openvswitch
+  ln -s /opt/micronets-gw/bin/ifupdown.sh /etc/network/if-pre-up.d/micronets-gw-openvswitch
+  ln -s /opt/micronets-gw/bin/ifupdown.sh /etc/network/if-post-down.d/micronets-gw-openvswitch
 }
 
 function main {
   {
-    create_var_dirs
-    create_ovsdb_database
-
-    systemctl daemon-reload
-
-    systemctl enable ovs-bootstrap.service
-    systemctl start ovs-bootstrap.service
-
+    link_ifupdown
   } 2>&1 | logger -t ${TAG}
 }
 
 echo "X: $*"
 
-source /etc/openvswitch/ovs.conf 
 TS=`date +%j'T'%H%M%S`
-TAG="ovs-bootstrap-${TS}"
+TAG="micronets-gw-${TS}"
 if [ ! -z "${2}" ]; then
   echo "Upgrading from version ${2}"
 fi
