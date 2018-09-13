@@ -17,11 +17,16 @@
 # Have a look at /usr/share/doc/openvswitch-switch/README.Debian
 # for more information about configuring the /etc/network/interfaces.
 
+debug_log() {
+    logger -t "micronets-ovs-ifupdown" -- "$@"
+}
+
 if [ -z "${IF_OVS_TYPE}" ]; then
     exit 0
 fi
 
 ovs_vsctl() {
+    debug_log "running: ovs-vsctl $@"
     ovs-vsctl --timeout=5 "$@"
 }
 
@@ -30,6 +35,7 @@ if (ovs_vsctl --version) > /dev/null 2>&1; then :; else
 fi
 
 if /etc/init.d/openvswitch-switch status > /dev/null 2>&1; then :; else
+    debug_log "starting openvswitch-switch service"
     /etc/init.d/openvswitch-switch start
 fi
 
@@ -39,7 +45,9 @@ if [ "${MODE}" = "start" ]; then
     case "${IF_OVS_TYPE}" in
         OVSBridge)
                 ovs_vsctl -- --may-exist add-br "${IFACE}" ${IF_OVS_OPTIONS}\
-                         ${OVS_EXTRA+-- $OVS_EXTRA}
+                    ${IF_OVS_MANAGER+-- set-manager $IF_OVS_MANAGER} \
+                    ${IF_OVS_PROTOCOLS+-- set bridge ${IFACE} protocols=$IF_OVS_PROTOCOLS} \
+                    ${OVS_EXTRA+-- $OVS_EXTRA}
 
                 if [ ! -z "${IF_OVS_PORTS}" ]; then
                     ifup --allow="${IFACE}" ${IF_OVS_PORTS}
@@ -48,6 +56,7 @@ if [ "${MODE}" = "start" ]; then
         OVSPort)
                 ovs_vsctl -- --may-exist add-port "${IF_OVS_BRIDGE}"\
                     "${IFACE}" ${IF_OVS_OPTIONS} \
+                    ${IF_OVS_PORT_REQ+-- set Interface ${IFACE} ofport_request=$IF_OVS_PORT_REQ} \
                     ${OVS_EXTRA+-- $OVS_EXTRA}
 
                 ip link set "${IFACE}" up

@@ -1,0 +1,45 @@
+#
+# create an Openvswitch bridge
+# on the commandline: ovs-vsctl add-br brmn001
+#
+auto brmn001
+allow-ovs brmn001
+iface brmn001 inet dhcp
+  ovs_type OVSBridge
+  ovs_ports enp3s0 enxac7f3ee61832 enx00e04c534458
+  ovs_manager tcp:10.10.1.109:6640
+  ovs_protocols OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13
+
+# Assign additional IP addresses to the bridge
+
+iface brmn001 inet static
+  address 192.168.250.1
+  netmask 255.255.255.0
+
+iface brmn001 inet static
+  address 192.168.251.1
+  netmask 255.255.255.0
+
+iface brmn001 inet static
+  address 192.168.252.1
+  netmask 255.255.255.0
+
+# Attach physical ports to the bridge (requesting particular port numbers)
+
+allow-brmn001 enp3s0
+iface enp3s0 inet manual
+  ovs_type OVSPort
+  ovs_bridge brmn001
+  ovs_port_req 2
+
+allow-brmn001 enx00e04c534458
+iface enx00e04c534458 inet manual
+  ovs_type OVSPort
+  ovs_bridge brmn001
+  ovs_port_req 3
+
+allow-brmn001 enxac7f3ee61832
+iface enxac7f3ee61832 inet manual
+  ovs_type OVSPort
+  ovs_bridge brmn001
+  ovs_port_req 4
