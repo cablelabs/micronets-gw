@@ -145,7 +145,7 @@ class DHCPConf:
         del self.subnet_list [subnet_id]
         del self.device_lists [subnet_id]
         self.update_conf ()
-        return '', 200
+        return '', 204
 
     #
     # Device Operations
@@ -237,7 +237,7 @@ class DHCPConf:
         self.check_subnet_reference (subnet_id)
         self.device_lists [subnet_id].clear ()
         self.update_conf ()
-        return '', 200
+        return '', 204
 
     def create_device (self, device, subnet_id):
         logger.info (f"DHCPConf.create_device ({device}, {subnet_id})")
@@ -308,7 +308,7 @@ class DHCPConf:
         self.check_device_reference (subnet_id, device_id)
         del self.device_lists [subnet_id] [device_id]
         self.update_conf ()
-        return '', 200
+        return '', 204
 
     def process_dhcp_lease_event (self, dhcp_lease_event):
         logger.info (f"DHCPConf.process_lease_event ({dhcp_lease_event})")
