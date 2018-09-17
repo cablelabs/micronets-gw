@@ -24,7 +24,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
 
-    Expected output: (status code 200)
+    Expected output: (status code 201)
 
     ```
     {
@@ -55,7 +55,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
 
-    Expected output: (status code 200)
+    Expected output: (status code 201)
 
     ```
     {
@@ -96,7 +96,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
         ' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
 
-    Expected output: (status code 200)
+    Expected output: (status code 201)
 
     ```
 {
@@ -501,7 +501,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
         }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
 
-    Expected output: (status code 200)
+    Expected output: (status code 201)
 
     ```
     {
@@ -542,7 +542,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     ]' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
 
-    Expected output: (status code 200)
+    Expected output: (status code 201)
 
     ```
     {
@@ -576,7 +576,6 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     ```
 
     Expected output: (status code 200)
-
 
     ```
     {
