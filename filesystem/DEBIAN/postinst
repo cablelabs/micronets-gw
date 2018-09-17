@@ -13,14 +13,13 @@ function link_ifupdown {
 
 function main {
   {
+    echo "POSTINSTALL: ${TAG}"
     link_ifupdown
   } 2>&1 | logger -t ${TAG}
 }
 
-echo "X: $*"
-
 TS=`date +%j'T'%H%M%S`
-TAG="micronets-gw-${TS}"
+TAG="mngw-post-${TS}"
 if [ ! -z "${2}" ]; then
   echo "Upgrading from version ${2}"
 fi

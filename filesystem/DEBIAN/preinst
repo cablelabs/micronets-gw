@@ -1,0 +1,18 @@
+#!/bin/bash
+
+function hr {
+  echo "------------------------------------------------------------------------------------------------------"
+}
+
+function main {
+  {
+     echo "PREINSTALL: ${TAG}"
+  } 2>&1 | logger -t ${TAG}
+}
+
+TS=`date +%j'T'%H%M%S`
+TAG="mngw-pre-${TS}"
+main
+grep "${TAG}" /var/log/syslog
+exit 0
+

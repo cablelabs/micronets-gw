@@ -1,6 +1,6 @@
 .PHONY: all clean distclean deb scp
 
-VERSION=1.0.0
+VERSION=1.0.3
 FBASE=micronets-gw
 SDIRS=../filesystem
 IBASE=/opt
@@ -8,7 +8,8 @@ IBASE=/opt
 TARGETDIR=target
 ARDIR=$(TARGETDIR)/ar
 
-SCPHOST=mop01
+SCPUSER=root
+SCPHOST=ovs01
 
 VDIR=$(FBASE)-$(VERSION)
 DEBFILE=$(VDIR).deb
@@ -65,4 +66,4 @@ $(DEBPATH):
 	echo "The $(ARDIR) directory is for debugging purposes: Do not distribute.\n\nContains un-archived contents of $(DEBFILE)." > $(ARDIR)/README
 
 scp: $(DEBPATH)
-	scp $(DEBPATH) $(SCPHOST):
+	scp $(DEBPATH) $(SCPUSER)@$(SCPHOST):
