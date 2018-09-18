@@ -11,10 +11,18 @@ function link_ifupdown {
   ln -s /opt/micronets-gw/bin/ifupdown.sh /etc/network/if-post-down.d/micronets-gw-openvswitch
 }
 
+function install-ovs-bootstrap-service {
+  echo "Reloading service files."
+  systemctl daemon-reload
+  echo "Starting ovs-bootstrap service."
+  systemctl start ovs-bootstrap.service
+}
+
 function main {
   {
     echo "POSTINSTALL: ${TAG}"
     link_ifupdown
+    install-ovs-bootstrap-service 
   } 2>&1 | logger -t ${TAG}
 }
 

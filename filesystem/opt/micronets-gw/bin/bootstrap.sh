@@ -2,7 +2,7 @@
 
 source /etc/openvswitch/ovs.conf
 
-CWD=/opt/micronets-gw/bin # 
+CWD=/opt/micronets-gw/bin
 
 TS=`date +%j'T'%H%M%S`
 TAG=ovsboot-${TS}
@@ -22,10 +22,6 @@ function show {
   ovs-dpctl -m dump-flows
   ovs-dpctl show
   hr
-}
-
-function set_manager_connect {
- ovs-vsctl set-manager ${OVSDB_MANAGER_CONNECT_SOCKET}
 }
 
 function main {
@@ -48,8 +44,6 @@ function main {
     iptables -S --table nat
  
     sysctl -w net.ipv4.ip_forward=1
-
-    set_manager_connect # TODO: Remove when manager connection is dynamically initiated.
 
     echo "END bootstrap.sh -------------------------------------------------------------"
   } 2>&1 | logger -t ${TAG}

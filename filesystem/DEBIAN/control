@@ -2,4 +2,4 @@ Package: micronets-gw
 Maintainer: Mark Deazley <m.deazley-contractor@cablelabs.com>
 Architecture: all
 Description: Micronets Gateway OpenvSwitch and micronets-gw daemon.
-Depends: python3.6, virtualenv, dnsmasq, libopenvswitch (>=2.9.2), openvswitch-common (>=2.9.2), openvswitch-switch (>=2.9.2)
+Depends: python3.6, python-pip, virtualenv, dnsmasq, libopenvswitch (>=2.9.2), openvswitch-common (>=2.9.2), openvswitch-switch (>=2.9.2)
