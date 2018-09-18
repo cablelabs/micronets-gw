@@ -21,6 +21,7 @@ greenlet==0.4.13
 h11==0.7.0
 h2==3.0.1
 hpack==3.0.0
+Hypercorn==0.2.4
 hyperframe==5.1.0
 ipaddress==1.0.22
 itsdangerous==0.24
@@ -32,9 +33,11 @@ netaddr==0.7.19
 pathlib==1.0.1
 python-engineio==2.1.1
 python-socketio==1.9.0
-Quart==0.5.0
+pytoml==0.1.19
+Quart==0.6.6
 six==1.11.0
 sortedcontainers==2.0.2
+typing-extensions==3.6.5
 websockets==5.0.1
 Werkzeug==0.14.1
 wsproto==0.11.0
