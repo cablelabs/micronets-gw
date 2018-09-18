@@ -12,19 +12,16 @@ class BaseConfig:
     MIN_DHCP_UPDATE_INTERVAL_S = 5
     DEFAULT_LEASE_PERIOD = '10m'
     SERVER_BIN_DIR = os.path.dirname (os.path.abspath (sys.argv [0]))
-    WEBSOCKET_SERVER_ADDRESS = "localhost"
+    WEBSOCKET_CONNECTION_ENABLED = False
+    WEBSOCKET_SERVER_ADDRESS = "74.207.229.106"
     WEBSOCKET_SERVER_PORT = 5050
     WEBSOCKET_SERVER_PATH = '/micronets/v1/ws-proxy/micronets-gw-0001'
     WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
 
-    ##### Flask-Mail configurations #####
-    MAIL_SERVER = 'smtp.googlemail.com'
-    MAIL_PORT = 587
-    MAIL_USE_TLS = True
-    MAIL_USERNAME = os.environ.get ('MAIL_USERNAME') or 'xyz@gmail.com'
-    MAIL_PASSWORD = os.environ.get ('MAIL_PASSWORD') or 'password'
-    MAIL_DEFAULT_SENDER = MAIL_USERNAME
+#
+# Mock Adapter Configurations
+#
 
 class BaseMockConfig (BaseConfig):
     DHCP_ADAPTER = "Mock"
@@ -35,11 +32,13 @@ class MockDevelopmentConfig (BaseMockConfig):
     LOGFILE_MODE = None
     DEBUG = True
 
-class MockTestingConfig (BaseMockConfig):
-    """For testing with the mock adapter on all interfaces"""
-    WEBSOCKET_SERVER_ADDRESS = "74.207.229.106"
-    USE_MOCK_DHCP_CONFIG = True
-    DEBUG = True
+class MockDevelopmentConfigWithWebsocket (MockDevelopmentConfig):
+    WEBSOCKET_CONNECTION_ENABLED = True
+    WEBSOCKET_SERVER_ADDRESS = "localhost"
+
+#
+# ISC DHCP Adapter Configurations
+#
 
 class BaseIscDhcpConfig (BaseConfig):
     DHCP_ADAPTER = "IscDhcp"
@@ -61,6 +60,10 @@ class IscProductionConfig (BaseIscDhcpConfig):
     DEBUG = False
     LOGGING_LEVEL = logging.INFO
 
+#
+# DNSMASQ DHCP Adapter Configurations
+#
+
 class BaseDnsmasqConfig (BaseConfig):
     DHCP_ADAPTER = "DnsMasq"
     DNSMASQ_CONF_FILE = '/etc/dnsmasq.d/micronets'
@@ -74,11 +77,15 @@ class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
     DNSMASQ_RESTART_COMMAND = []
     DEBUG = True
 
+class DnsmasqDevelopmentConfigWithWebsocket (DnsmasqDevelopmentConfig):
+    WEBSOCKET_CONNECTION_ENABLED = True
+    WEBSOCKET_SERVER_ADDRESS = "localhost"
+
 class DnsmasqTestingConfig (BaseDnsmasqConfig):
-    WEBSOCKET_SERVER_ADDRESS = "74.207.229.106"
+    WEBSOCKET_CONNECTION_ENABLED = True
     DEBUG = True
 
 class DnsmasqProductionConfig (BaseDnsmasqConfig):
-    WEBSOCKET_SERVER_ADDRESS = "74.207.229.106"
+    WEBSOCKET_CONNECTION_ENABLED = True
     DEBUG = False
     LOGGING_LEVEL = logging.INFO
