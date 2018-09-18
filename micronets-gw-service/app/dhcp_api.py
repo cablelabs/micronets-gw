@@ -15,14 +15,20 @@ dhcp_api_prefix = '/micronets/v1/dhcp'
 # See: http://flask.pocoo.org/docs/1.0/patterns/apierrors/
 @app.errorhandler (InvalidUsage)
 def handle_invalid_usage (error):
-    return jsonify ({"error": str (error)}), error.status_code, {'Content-Type': 'application/json'}
+    response = jsonify(error.to_dict())
+    response.status_code = error.status_code
+    return response
 
 @app.errorhandler (500)
 def error_handler_500 (exception):
     return jsonify ({"error": str (exception)}), 500, {'Content-Type': 'application/json'}
 
+@app.errorhandler (400)
+def error_handler_400 (exception):
+    return jsonify ({"error": str (exception)}), 400, {'Content-Type': 'application/json'}
+
 @app.errorhandler (404)
-def error_handler_500 (exception):
+def error_handler_404 (exception):
     return jsonify ({"error": str (exception)}), 404, {'Content-Type': 'application/json'}
 
 def check_for_json_payload (request):
@@ -113,9 +119,10 @@ def check_nameservers (container, field_name, required):
 def check_subnet (subnet, subnet_id=None, required=True):
     check_for_unrecognized_entries (subnet, ['subnetId','ipv4Network','nameservers'])
     body_subnet_id = check_field (subnet, 'subnetId', str, required)
-    if (subnet_id and body_subnet_id):
-        raise InvalidUsage (400, message=f"A subnet ID cannot be provided in the path ('{subnet_id}') "
-                                         f"and the body ('{body_subnet_id}')")
+    if subnet_id and body_subnet_id:
+        if subnet_id != body_subnet_id:
+            raise InvalidUsage (400, message=f"The subnet ID in the path ('{subnet_id}') must match the one "
+                                             f"in the body ('{body_subnet_id}')")
     if body_subnet_id:
         subnet_id = body_subnet_id
     subnet_id = subnet_id.lower ()
@@ -128,17 +135,18 @@ def check_subnets (subnets, required):
         check_subnet (subnet, required=required)
 
 @app.route (dhcp_api_prefix + '/subnets', methods=['POST'])
-async def create_subnet ():
+async def create_subnets ():
     check_for_json_payload (request)
-    subnets = await request.get_json ()
-    if isinstance (subnets, list):
+    top_level = await request.get_json ()
+    check_for_unrecognized_entries (top_level, ['subnet', 'subnets'])
+    if 'subnets' in top_level:
+        subnets = top_level ['subnets']
         check_subnets (subnets, required=True)
         return get_dhcp_conf_model ().create_subnets (subnets)
-    elif isinstance (subnets, dict):
-        check_subnet (subnets, required=True)
-        return get_dhcp_conf_model ().create_subnet (subnets)
-    else:
-        raise InvalidUsage (400, message="Supplied payload is neither a json list or object")
+    elif 'subnet' in top_level:
+        subnet = top_level ['subnet']
+        check_subnet (subnet, required=True)
+        return get_dhcp_conf_model ().create_subnet (subnet)
 
 @app.route (dhcp_api_prefix + '/subnets', methods=['GET'])
 async def get_all_subnets ():
@@ -153,7 +161,10 @@ async def update_subnet (subnet_id):
     subnet_id = subnet_id.lower ()
     check_for_json_payload (request)
     check_subnet_id (subnet_id, request.path)
-    subnet = await request.get_json ()
+
+    top_level = await request.get_json ()
+    check_for_unrecognized_entries (top_level, ['subnet'])
+    subnet = top_level ['subnet']
     check_subnet (subnet, subnet_id=subnet_id, required=False)
     updated_subnet = get_dhcp_conf_model ().update_subnet (subnet, subnet_id)
     return updated_subnet
@@ -216,15 +227,16 @@ def check_devices (devices, required):
 async def create_devices (subnet_id):
     subnet_id = subnet_id.lower ()
     check_for_json_payload (request)
-    devices = await request.get_json ()
-    if isinstance (devices, list):
+    top_level = await request.get_json ()
+    check_for_unrecognized_entries (top_level, ['device', 'devices'])
+    if 'devices' in top_level:
+        devices = top_level ['devices']
         check_devices (devices, required=True)
         return get_dhcp_conf_model ().create_devices (devices, subnet_id)
-    elif isinstance (devices, dict):
-        check_device (devices, required=True)
-        return get_dhcp_conf_model ().create_device (devices, subnet_id)
-    else:
-        raise InvalidUsage (400, message="Supplied payload is neither a json list or object")
+    elif 'device' in top_level:
+        device = top_level ['device']
+        check_device (device, required=True)
+        return get_dhcp_conf_model ().create_device (device, subnet_id)
 
 @app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices', methods=['GET'])
 async def get_devices (subnet_id):
@@ -245,8 +257,10 @@ async def update_device (subnet_id, device_id):
     check_for_json_payload (request)
     check_subnet_id (subnet_id, request.path)
     check_device_id (device_id, request.path)
-    check_device (request.json, required=False)
-    device_update = await request.get_json ()
+    top_level = await request.get_json ()
+    check_for_unrecognized_entries (top_level, ['device'])
+    device_update = top_level ['device']
+    check_device (device_update, required=False)
     return get_dhcp_conf_model ().update_device (device_update, subnet_id, device_id)
 
 @app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices/<device_id>', methods=['GET'])

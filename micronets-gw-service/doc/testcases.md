@@ -14,13 +14,15 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnetId": "mocksubnet007",
-            "ipv4Network": {
-                "network": "192.168.1.0",
-                "mask": "255.255.255.0",
-                "gateway":"192.168.1.1"
-            },
-            "nameservers": ["1.2.3.4","1.2.3.5"]
+            "subnet": {
+                "subnetId": "mocksubnet007",
+                "ipv4Network": {
+                    "network": "192.168.1.0",
+                    "mask": "255.255.255.0",
+                    "gateway":"192.168.1.1"
+                },
+                "nameservers": ["1.2.3.4","1.2.3.5"]
+            }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
 
@@ -47,10 +49,12 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnetId": "mocksubnet008",
-            "ipv4Network": {
-                "network": "192.168.2.0",
-                "mask": "255.255.255.0"
+            "subnet": {
+                "subnetId": "mocksubnet008",
+                "ipv4Network": {
+                    "network": "192.168.2.0",
+                    "mask": "255.255.255.0"
+                }
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
@@ -72,27 +76,29 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 * Creating multiple subnets via one POST:
 
     ```
-    curl -X POST -H "Content-Type: application/json" -d '[
-        {
-            "subnetId": "mocksubnet008",
-            "ipv4Network": {
-                "network": "192.168.8.0",
-                "mask": "255.255.255.0",
-                "gateway": "192.168.8.1"
+    curl -X POST -H "Content-Type: application/json" -d '{
+        "subnets": [
+            {
+                "subnetId": "mocksubnet008",
+                "ipv4Network": {
+                    "network": "192.168.8.0",
+                    "mask": "255.255.255.0",
+                    "gateway": "192.168.8.1"
+                },
+                "nameservers": [
+                    "4.4.4.4",
+                    "8.8.8.8"
+                ]
             },
-            "nameservers": [
-                "4.4.4.4",
-                "8.8.8.8"
-            ]
-        },
-        {
-            "subnetId": "mocksubnet009",
-            "ipv4Network": {
-                "network": "192.168.9.0",
-                "mask": "255.255.255.0",
-                "gateway": "192.168.9.1"
+            {
+                "subnetId": "mocksubnet009",
+                "ipv4Network": {
+                    "network": "192.168.9.0",
+                    "mask": "255.255.255.0",
+                    "gateway": "192.168.9.1"
+                }
             }
-        } ]
+        ] }
         ' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
 
@@ -165,36 +171,14 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-            "subnetId": "mocksubnet007",
-            "ipv4Network": {
-                "network": "192.168.1.0",
-                "mask": "255.255.255.0",
-                "gateway":"192.168.1.2"
-        }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
-    ```
-
-    Expected output: (status code 200)
-
-    ```
-    {
-        "subnet": {
-            "subnetId": "mocksubnet007",
-            "ipv4Network": {
-                "network": "192.168.1.0",
-                "mask": "255.255.255.0",
-                "gateway": "192.168.1.2"
-            },
-            "nameservers": [
-                "1.2.3.4",
-                "1.2.3.5"
-            ]
-        }
-    }
-    ```
-
-    ```
-    curl -X PUT -H "Content-Type: application/json" -d '{
-            "nameservers": ["1.2.3.4", "1.2.3.5"]
+            "subnet": {
+                "subnetId": "mocksubnet007",
+                "ipv4Network": {
+                    "network": "192.168.1.0",
+                    "mask": "255.255.255.0",
+                    "gateway":"192.168.1.2"
+                }
+            }
         }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
     ```
 
@@ -219,9 +203,39 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
+            "subnet": {
+                "nameservers": ["1.2.3.4", "1.2.3.5"]
+            }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
+    ```
+
+    Expected output: (status code 200)
+
+    ```
+    {
+        "subnet": {
+            "subnetId": "mocksubnet007",
             "ipv4Network": {
-                "gateway": "192.168.1.3"
-        }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
+                "network": "192.168.1.0",
+                "mask": "255.255.255.0",
+                "gateway": "192.168.1.2"
+            },
+            "nameservers": [
+                "1.2.3.4",
+                "1.2.3.5"
+            ]
+        }
+    }
+    ```
+
+    ```
+    curl -X PUT -H "Content-Type: application/json" -d '{
+            "subnet": {
+                "ipv4Network": {
+                    "gateway": "192.168.1.3"
+                }
+            }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
     ```
 
     Expected output: (status code 200)
@@ -269,13 +283,15 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnetId": "mocksubnet007",
-            "ipv4Network": {
-                "network": "192.168.1.0",
-                "mask": "255.255.255.0",
-                "gateway":"192.168.1.1"
-            },
-            "nameservers": ["1.2.3.4","1.2.3.5"]
+            "subnet": {
+                "subnetId": "mocksubnet007",
+                "ipv4Network": {
+                    "network": "192.168.1.0",
+                    "mask": "255.255.255.0",
+                    "gateway":"192.168.1.1"
+                },
+                "nameservers": ["1.2.3.4","1.2.3.5"]
+            }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
 
@@ -291,12 +307,14 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnetId": "bad subnet name",
-            "ipv4Network": {
-                "network": "192.168.1.0",
-                "mask": "255.255.255.0"
-            },
-            "nameservers": ["1.2.3.4","1.2.3.5"]
+           "subnet": {
+                "subnetId": "bad subnet name",
+                "ipv4Network": {
+                    "network": "192.168.1.0",
+                    "mask": "255.255.255.0"
+                },
+                "nameservers": ["1.2.3.4","1.2.3.5"]
+            }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
 
@@ -312,11 +330,13 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "ipv4Network": {
-                "network": "192.168.1.0",
-                "mask": "255.255.255.0"
-            },
-            "nameservers": ["1.2.3.4","1.2.3.5"]
+           "subnet": {
+                "ipv4Network": {
+                    "network": "192.168.1.0",
+                    "mask": "255.255.255.0"
+                },
+                "nameservers": ["1.2.3.4","1.2.3.5"]
+            }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
 
@@ -330,9 +350,11 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnetId": "MySubnet",
-            "ipv4Network": {
-                "network": "192.168.1.0"
+           "subnet": {
+                "subnetId": "MySubnet",
+                "ipv4Network": {
+                    "network": "192.168.1.0"
+                }
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
@@ -349,11 +371,13 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnetId": "mocksubnet007",
-            "ipv4Network": {
-                "network": "192.168.1.0",
-                "mask": "255.255.255.0",
-                "gateway":"192.168.2.1"
+           "subnet": {
+                "subnetId": "mocksubnet007",
+                "ipv4Network": {
+                    "network": "192.168.1.0",
+                    "mask": "255.255.255.0",
+                    "gateway":"192.168.2.1"
+                }
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
@@ -370,21 +394,25 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnetId": "mocksubnet007",
-            "ipv4Network": {
-                "network": "192.168.1.0",
-                "mask": "255.255.255.0",
-                "gateway":"192.168.1.1"
+           "subnet": {
+                "subnetId": "mocksubnet007",
+                "ipv4Network": {
+                    "network": "192.168.1.0",
+                    "mask": "255.255.255.0",
+                    "gateway":"192.168.1.1"
+                }
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnetId": "mocksubnet008",
-            "ipv4Network": {
-                "network": "192.168.0.0",
-                "mask": "255.255.0.0",
-                "gateway":"192.168.2.1"
+           "subnet": {
+                "subnetId": "mocksubnet008",
+                "ipv4Network": {
+                    "network": "192.168.0.0",
+                    "mask": "255.255.0.0",
+                    "gateway":"192.168.2.1"
+                }
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
@@ -401,11 +429,13 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-            "subnetId": "mocksubnet008",
-            "ipv4Network": {
-                "network": "192.168.1.0",
-                "mask": "255.255.255.0",
-                "gateway":"192.168.1.2"
+           "subnet": {
+                "subnetId": "mocksubnet008",
+                "ipv4Network": {
+                    "network": "192.168.1.0",
+                    "mask": "255.255.255.0",
+                    "gateway":"192.168.1.2"
+                }
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
     ```
@@ -422,8 +452,10 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-            "ipv4Network": {
-                "network": "192.168.1.1234"
+           "subnet": {
+                "ipv4Network": {
+                    "network": "192.168.1.1234"
+                }
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
     ```
@@ -440,8 +472,10 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-            "ipv4Network": {
-                "network": "127.0.0.1"
+           "subnet": {
+                "ipv4Network": {
+                    "network": "127.0.0.1"
+                }
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
     ```
@@ -458,22 +492,27 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnetId": "mocksubnet007",
-            "ipv4Network": {
-                "network": "192.168.1.0",
-                "mask": "255.255.255.0"
+           "subnet": {
+                "subnetId": "mocksubnet007",
+                "ipv4Network": {
+                    "network": "192.168.1.0",
+                    "mask": "255.255.255.0"
+                }
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "deviceId": "MyDevice01",
-           "macAddress": {
-               "eui48": "00:23:12:0f:b0:26"
-           },
-           "networkAddress": {
-               "ipv4": "192.168.1.42"
-        }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+           "subnet": {
+               "deviceId": "MyDevice01",
+               "macAddress": {
+                   "eui48": "00:23:12:0f:b0:26"
+               },
+               "networkAddress": {
+                   "ipv4": "192.168.1.42"
+               }
+           }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
 
     Expected output: (status code 400)
@@ -492,13 +531,16 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "deviceId": "MyDevice01",
-           "macAddress": {
-               "eui48": "00:23:12:0f:b0:26"
-           },
-           "networkAddress": {
-               "ipv4": "192.168.1.42"
-        }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+           "device": {
+               "deviceId": "MyDevice01",
+               "macAddress": {
+                   "eui48": "00:23:12:0f:b0:26"
+               },
+               "networkAddress": {
+                   "ipv4": "192.168.1.42"
+               }
+           }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
 
     Expected output: (status code 201)
@@ -520,26 +562,28 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 * Creating multiple devices in a subnet:
 
     ```
-    curl -X POST -H "Content-Type: application/json" -d '[
-        {
-            "deviceId": "MyDevice01",
-            "macAddress": {
-               "eui48": "00:23:12:0f:b0:26"
-            },
-            "networkAddress": {
-                "ipv4": "192.168.1.42"
-            }
-        },
-        {
-            "deviceId": "MyDevice02",
-            "macAddress": {
-                "eui48": "00:23:12:0f:b0:27"
-            },
-            "networkAddress": {
-                "ipv4": "192.168.1.43"
-            }
-        }
-    ]' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+    curl -X POST -H "Content-Type: application/json" -d '{
+           "devices": [
+                {
+                    "deviceId": "MyDevice01",
+                    "macAddress": {
+                       "eui48": "00:23:12:0f:b0:26"
+                    },
+                    "networkAddress": {
+                        "ipv4": "192.168.1.42"
+                    }
+                },
+                {
+                    "deviceId": "MyDevice02",
+                    "macAddress": {
+                        "eui48": "00:23:12:0f:b0:27"
+                    },
+                    "networkAddress": {
+                        "ipv4": "192.168.1.43"
+                    }
+                }
+            ]
+    }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
 
     Expected output: (status code 201)
@@ -606,13 +650,16 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "deviceId" :"MyDevice02",
-            "macAddress": {
-                "eui48": "00:23:12:0f:b0:27"
-            },
-            "networkAddress": {
-                "ipv4": "192.168.42.43"
-        }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+           "device": {
+                "deviceId" :"MyDevice02",
+                "macAddress": {
+                    "eui48": "00:23:12:0f:b0:27"
+                },
+                "networkAddress": {
+                    "ipv4": "192.168.42.43"
+                }
+            }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
 
     Expected output: (status code 200)
@@ -635,9 +682,12 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-            "networkAddress": {
-                "ipv4": "192.168.42.43"
-        }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices/MyDevice01
+           "device": {
+                "networkAddress": {
+                    "ipv4": "192.168.1.143"
+                }
+            }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices/MyDevice01
     ```
 
     Expected output: (status code 200)
@@ -672,13 +722,16 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "deviceId": "MyDevice01",
-            "macAddress": {
-                "eui48": "00:23:12:0f:b0:26"
-            },
-            "networkAddress": {
-                "ipv4": "192.168.1.4222"
-        }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+           "device": {
+                "deviceId": "MyDevice01",
+                "macAddress": {
+                    "eui48": "00:23:12:0f:b0:26"
+                },
+                "networkAddress": {
+                    "ipv4": "192.168.1.4222"
+                }
+            }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
 
     Expected output: (status code 400)
@@ -691,11 +744,13 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "deviceId": "MyDevice01",
-            "macAddress": {
-                "eui48": "00:23:12:0f:b0:26"
-            },
-            "networkAddress": "blah"
+           "device": {
+                "deviceId": "MyDevice01",
+                "macAddress": {
+                    "eui48": "00:23:12:0f:b0:26"
+                },
+                "networkAddress": "blah"
+            }
         }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
 
@@ -711,12 +766,14 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "deviceId": "MyDevice01",
-            "macAddress": {
-                "eui48": "00:23:12:0f:b0:26"
-            },
-            "networkAddress": {
-          }}'  http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+           "device": {
+                "deviceId": "MyDevice01",
+                "macAddress": {
+                    "eui48": "00:23:12:0f:b0:26"
+                },
+                "networkAddress": {}
+            }
+          }'  http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
 
     Expected output: (status code 400)
@@ -729,9 +786,11 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "deviceId": "MyDevice01",
-            "macAddress": {
-                "eui48": "00:23:12:0f:b0:26"
+           "device": {
+                "deviceId": "MyDevice01",
+                "macAddress": {
+                    "eui48": "00:23:12:0f:b0:26"
+                }
             }
         }'  http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
@@ -748,13 +807,16 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "deviceId": "MyDevice01",
-           "macAddress": {
-               "eui48": "00:23:12:0f:b0:"
-           },
-           "networkAddress": {
-               "ipv4": "192.168.1.42"
-        }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+           "device": {
+               "deviceId": "MyDevice01",
+               "macAddress": {
+                   "eui48": "00:23:12:0f:b0:"
+               },
+               "networkAddress": {
+                   "ipv4": "192.168.1.42"
+               }
+           }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
 
     Expected output: (status code 400)
@@ -767,12 +829,14 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "deviceId": "MyDevice01",
-           "macAddress": {
-               "eui48": "00:23:12:0f:b0:26:00"
-           },
-           "networkAddress": {
-               "ipv4": "192.168.1.42"
+           "device": {
+               "deviceId": "MyDevice01",
+               "macAddress": {
+                   "eui48": "00:23:12:0f:b0:26:00"
+               },
+               "networkAddress": {
+                   "ipv4": "192.168.1.42"
+               }
            }
         }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
@@ -787,13 +851,15 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-           "deviceId": "MyDevice01",
-           "macAddress": {
-               "eui48": "0023120fb02600"
-           },
-           "networkAddress": {
-               "ipv4": "192.168.1.42"
-        }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices/MyDevice01
+           "device": {
+               "deviceId": "MyDevice01",
+               "macAddress": {
+                   "eui48": "0023120fb02600"
+               },
+               "networkAddress": {
+                   "ipv4": "192.168.1.42"
+               }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices/MyDevice01
     ```
 
     Expected output: (status code 400)
@@ -808,24 +874,29 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnetId": "mocksubnet007",
-            "ipv4Network": {
-                "network": "192.168.1.0",
-                "mask": "255.255.255.0",
-                "gateway":"192.168.1.1"
-            },
-            "nameservers": ["1.2.3.4","1.2.3.5"]
+           "device": {
+                "subnetId": "mocksubnet007",
+                "ipv4Network": {
+                    "network": "192.168.1.0",
+                    "mask": "255.255.255.0",
+                    "gateway":"192.168.1.1"
+                },
+                "nameservers": ["1.2.3.4","1.2.3.5"]
+            }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "deviceId": "MyDevice01",
-           "macAddress": {
-               "eui48": "00:23:12:0f:b0:26"
-           },
-           "networkAddress": {
-               "ipv4": "192.168.2.42"
-        }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+           "device": {
+               "deviceId": "MyDevice01",
+               "macAddress": {
+                   "eui48": "00:23:12:0f:b0:26"
+               },
+               "networkAddress": {
+                   "ipv4": "192.168.2.42"
+               }
+           }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
 
     Expected output: (status code 400)
@@ -840,34 +911,42 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnetId": "mocksubnet007",
-            "ipv4Network": {
-                "network": "192.168.1.0",
-                "mask": "255.255.255.0",
-                "gateway":"192.168.1.1"
-            },
-            "nameservers": ["1.2.3.4","1.2.3.5"]
+           "device": {
+               "subnetId": "mocksubnet007",
+               "ipv4Network": {
+                   "network": "192.168.1.0",
+                   "mask": "255.255.255.0",
+                   "gateway":"192.168.1.1"
+               },
+               "nameservers": ["1.2.3.4","1.2.3.5"]
+           }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "deviceId": "MyDevice01",
-           "macAddress": {
-               "eui48": "00:23:12:0f:b0:26"
-           },
-           "networkAddress": {
-               "ipv4": "192.168.1.42"
-        }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+           "device": {
+               "deviceId": "MyDevice01",
+               "macAddress": {
+                   "eui48": "00:23:12:0f:b0:26"
+               },
+               "networkAddress": {
+                   "ipv4": "192.168.1.42"
+               }
+           }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "deviceId": "MyDevice02",
-           "macAddress": {
-               "eui48": "00:23:12:0f:b0:26"
-           },
-           "networkAddress": {
-               "ipv4": "192.168.1.43"
-        }}' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+           "device": {
+               "deviceId": "MyDevice02",
+               "macAddress": {
+                   "eui48": "00:23:12:0f:b0:26"
+               },
+               "networkAddress": {
+                   "ipv4": "192.168.1.43"
+               }
+           }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
     ```
 
     Expected output: (status code 400)

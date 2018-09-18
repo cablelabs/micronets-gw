@@ -110,7 +110,7 @@ class DHCPConf:
         self.subnet_list.clear()
         self.device_lists.clear()
         self.update_conf ()
-        return 200
+        return '', 204
 
     def update_subnet (self, subnet_update, subnet_id):
         logger.info (f"DHCPConf.update_subnet ({subnet_update}, {subnet_id})")
