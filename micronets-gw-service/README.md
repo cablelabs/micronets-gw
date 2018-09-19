@@ -1,6 +1,42 @@
-# Micronets DHCP README
+# Micronets Gateway Service README
 
-## Micronets DHCP CRUD Interface
+## Running
+
+To setup a dev environment for the Micronets DHCP service, run the following steps:
+
+```
+cd ~/projects/micronets
+git clone git@github.com:cablelabs/micronets-gw.git
+cd micronets-gw/micronets-gw-service
+mkvirtualenv -r requirements.txt -a $PWD -p $(which python3) micronets-gw-service
+workon micronets-gw-service
+```
+
+If you want to access the REST API directly - running against the mock DHCP reservation adapter, use:
+
+```
+MICRONETS_DHCP_CONFIG=config.MockDevelopmentConfig python ./runner.py
+```
+
+If you want to have the DHCP service connect to a websocket for access to the REST API and to receive notifications,
+configure the WEBSOCKET_SERVER_ADDRESS, WEBSOCKET_SERVER_PORT, and WEBSOCKET_SERVER_PATH to point to the websocket
+endpoint. Note that currently only wss is supported (TLS). So the WEBSOCKET_TLS_CERTKEY_FILE must refer to a cert
+and corresponding private key that the server trusts - and WEBSOCKET_TLS_CA_CERT_FILE must refer to the certificate
+that can be used to verify the authenticity of the websocket server.
+
+In this case, you can start the Micronets gateway service using:
+
+```
+MICRONETS_DHCP_CONFIG=config.MockDevelopmentConfigWithWebsocket python ./runner.py
+```
+
+## Micronets DHCP REST/CRUD Interface
+
+This section contains the general REST API definitions for the Micronets DHCP reservation service.
+
+All request URIs are prefixed by **/micronets/v1/dhcp** unless otherwise noted
+
+See the `testcases.md` document in the `test` directory for examples.
 
 ### DHCP SUBNETS
 
@@ -39,8 +75,6 @@ Currently only data type _application/json_ is supported.
 
 #### DHCP Subnet Endpoints/Operations
 
-All request URIs are prefixed by **/micronets/v1/dhcp** unless otherwise noted
-
 | Method | HTTP request                                     | Description                           |
 | ------ | ------------------------------------------------ | ------------------------------------- |
 | insert | POST /subnets                  | Add a DHCP subnet or subnets (if an array of subnets are provided). This will return a status code of 405 (Method Not Allowed) if any of the provided subnet IDs already exist. (no subnets will be added in this case) |
@@ -63,7 +97,9 @@ Currently only data type _application/json_ is supported.
 ```json
 {
     "deviceId": string,
-    "macAddress": string,
+    "macAddress": {
+       "eui48": string
+    },
     "networkAddress": {
        "ipv4": string,
        "ipv6": string
@@ -74,7 +110,8 @@ Currently only data type _application/json_ is supported.
 | Property name            | Value         | Required | Description                           | Example      |
 | ------------------------ | ------------- | -------- | ------------------------------------- | ------------- 
 | deviceId                 | string        | Y        | An alphanumeric device identifier (max 64 characters) ||
-| macAddress               | string        | Y        | A 48- or 64-bit MAC address | 00:23:12:0f:b0:26 |
+| macAddress               | nested object | Y        | The device MAC address
+| macAddress.eui48         | string        | Y        | An EUI-48 format MAC address |          00:23:12:0f:b0:26 |
 | networkAddress           | nested object | Y        | The network address definition. Either **_ipv4_** or **_ipv6_** must be specified ||
 | networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | 192.168.1.42 |
 | networkAddress.ipv6      | string        | N        | The IPv6 network definition | fe80::104c:20b6:f71a:4e55 |
@@ -105,7 +142,7 @@ All request URIs are prefixed by **/micronets/v1/dhcp** unless otherwise noted
 }
 ```
 
-#### DHCP Subnet Operation Status Codes
+#### Micronets DHCP Subnet Operation Status Codes
 
 These status codes apply to all operations described above unless otherwise noted.
 

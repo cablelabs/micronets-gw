@@ -13,12 +13,12 @@ arg_parser.add_argument ('--config', "-c", required=False, action='store', type=
                          help="The service configuration to use (e.g. config.MockDevelopmentConfig, config.DnsmasqTestingConfig)")
 args = arg_parser.parse_args ()
 
-flask_env = os.environ.get ('FLASK_ENV')
+dhcp_config_env = os.environ.get ('MICRONETS_DHCP_CONFIG')
 
 if (args.config):
     config = args.config
-elif (flask_env):
-    config = flask_env
+elif (dhcp_config_env):
+    config = dhcp_config_env
 else:
     config = 'config.MockDevelopmentConfig'
 

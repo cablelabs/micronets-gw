@@ -28,7 +28,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 201)
 
-    ```
+    ```json
     {
         "subnet": {
             "subnetId": "mocksubnet007",
@@ -61,7 +61,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 201)
 
-    ```
+    ```json
     {
         "subnet": {
             "subnetId": "mocksubnet008",
@@ -104,7 +104,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 201)
 
-    ```
+    ```json
 {
     "subnets": [
         {
@@ -140,7 +140,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 200)
 
-    ```
+    ```json
     {
         "subnets": [
             {
@@ -184,7 +184,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 200)
 
-    ```
+    ```json
     {
         "subnet": {
             "subnetId": "mocksubnet007",
@@ -207,11 +207,11 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "nameservers": ["1.2.3.4", "1.2.3.5"]
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
-    ```
+    ```json
 
     Expected output: (status code 200)
 
-    ```
+    ```json
     {
         "subnet": {
             "subnetId": "mocksubnet007",
@@ -240,7 +240,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 200)
 
-    ```
+    ```json
     {
         "subnet": {
             "subnetId": "mocksubnet007",
@@ -297,7 +297,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 409)
 
-    ```
+    ```json
     {
         "message": "Supplied subnet ID 'mocksubnet007' already exists"
     }
@@ -320,7 +320,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Supplied subnet ID 'bad subnet name' in '{'subnetId': 'bad subnet name', 'ipv4Network': {'network': '192.168.1.0', 'mask': '255.255.255.0'}, 'nameservers': ['1.2.3.4', '1.2.3.5']}' is not alpha-numeric"
     }
@@ -342,7 +342,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Required field 'subnetId' missing from {'ipv4Network': {'network': '192.168.1.0', 'mask': '255.255.255.0'}, 'nameservers': ['1.2.3.4', '1.2.3.5']}"
     }
@@ -361,7 +361,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Required field 'mask' missing from {'network': '192.168.1.0'}"
     }
@@ -384,7 +384,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Gateway address 192.168.2.1 isn't in the 'mocksubnet019' subnet (192.168.1.0/24)"
     }
@@ -419,7 +419,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Subnet 'mocksubnet008' network 192.168.0.0/16 overlaps existing subnet 'mocksubnet007' (network 192.168.1.0/24)"
     }
@@ -442,7 +442,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 409)
 
-    ```
+    ```json
     {
         "message": "Update can only update subnet 'mocksubnet007' ('mocksubnet008' provided)"
     }
@@ -462,7 +462,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Supplied IP address value '192.168.1.1234' for 'network' field in '{'network': '192.168.1.1234'}' is not valid"
     }
@@ -482,7 +482,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Supplied IP address value '127.0.0.1' for 'network' field in '{'network': '127.0.0.1'}' is not valid: Address is a loopback or broadcast address"
     }
@@ -517,7 +517,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Subnet 'mocksubnet007' still has active devices"
     }
@@ -545,7 +545,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 201)
 
-    ```
+    ```json
     {
         "device": {
             "deviceId": "MyDevice01",
@@ -588,7 +588,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 201)
 
-    ```
+    ```json
     {
         "devices": [
             {
@@ -621,7 +621,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 200)
 
-    ```
+    ```json
     {
         "devices": [
             {
@@ -664,7 +664,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 200)
 
-    ```
+    ```json
     {
         "device": {
             "deviceId": "MyDevice02",
@@ -692,7 +692,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 200)
 
-    ```
+    ```json
     {
         "device": {
             "deviceId": "MyDevice01",
@@ -736,7 +736,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
       "message": "Supplied IP address value '192.168.1.4222' for 'ipv4' field in '{'ipv4': '192.168.1.4222'}' is not valid"
     }
@@ -756,7 +756,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
       "message": "Supplied field value 'blah' for 'networkAddress' field in '{'deviceId': 'MyDevice01', 'macAddress': '00:23:12:0f:b0:26', 'networkAddress': 'blah'}' is not a (<class 'dict'>, <class 'list'>)"
     }
@@ -778,7 +778,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Network address missing from device description {'deviceId': 'MyDevice01', 'macAddress': '00:23:12:0f:b0:26', 'networkAddress': {}}"
     }
@@ -797,7 +797,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Required field 'networkAddress' missing from {'deviceId': 'MyDevice01', 'macAddress': '00:23:12:0f:b0:26'}"
     }
@@ -821,7 +821,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Supplied MAC '00:23:12:0f:b0:' in 'macAddress' is not valid"
     }
@@ -843,7 +843,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Supplied MAC '00:23:12:0f:b0:26:00' in 'eui48' is not valid"
     }
@@ -864,7 +864,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Supplied MAC '0023120fb02600' in 'eui48' is not valid"
     }
@@ -901,7 +901,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "Device 'MyDevice01' address 192.168.2.42 isn't compatible with subnet 'mocksubnet007' (192.168.1.0/24)"
     }
@@ -951,7 +951,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     Expected output: (status code 400)
 
-    ```
+    ```json
     {
         "message": "MAC address of device 'MyDevice02' is not unique (MAC address 00:23:12:0f:b0:26 found in subnet 'mocksubnet007' device 'mydevice01')"
     }

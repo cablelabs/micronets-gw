@@ -54,11 +54,14 @@ class IscDevelopmentConfig (BaseIscDhcpConfig):
     DEBUG = True
 
 class IscTestingConfig (BaseIscDhcpConfig):
+    WEBSOCKET_CONNECTION_ENABLED = True
     DEBUG = True
 
 class IscProductionConfig (BaseIscDhcpConfig):
+    WEBSOCKET_CONNECTION_ENABLED = True
     DEBUG = False
     LOGGING_LEVEL = logging.INFO
+    LOGFILE_MODE = 'a'
 
 #
 # DNSMASQ DHCP Adapter Configurations
@@ -89,3 +92,4 @@ class DnsmasqProductionConfig (BaseDnsmasqConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
     DEBUG = False
     LOGGING_LEVEL = logging.INFO
+    LOGFILE_MODE = 'a'
