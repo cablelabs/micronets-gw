@@ -58,6 +58,10 @@ if [ "${MODE}" = "start" ]; then
                     "${IFACE}" ${IF_OVS_OPTIONS} \
                     ${IF_OVS_PORT_REQ+-- set Interface ${IFACE} ofport_request=$IF_OVS_PORT_REQ} \
                     ${OVS_EXTRA+-- $OVS_EXTRA}
+                if [ ! -z "${IF_OVS_BRIDGE_ASSUME_PORT_MAC}" ]; then
+                        mac_addr=$(/sbin/ethtool -P "${IFACE}" | cut -b 20-37)
+                        ovs_vsctl set bridge "${IF_OVS_BRIDGE}" other-config:hwaddr="${mac_addr}"
+                fi
 
                 ip link set "${IFACE}" up
                 ;;
