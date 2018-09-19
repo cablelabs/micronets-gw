@@ -1,8 +1,8 @@
 # Micronets Gateway Service README
 
-## Running
+## Development Setup
 
-To setup a dev environment for the Micronets DHCP service, run the following steps:
+To setup a dev environment for the Micronets gateway service, run the following steps:
 
 ```
 cd ~/projects/micronets
@@ -11,6 +11,34 @@ cd micronets-gw/micronets-gw-service
 mkvirtualenv -r requirements.txt -a $PWD -p $(which python3) micronets-gw-service
 workon micronets-gw-service
 ```
+
+Note that this requires Pyton 3 to be installed and the virtuanenv wrappers.
+
+For Linux, the virtualenvwrapper can be installed using:
+```
+sudo apt-get install virtualenvwrapper
+source /usr/share/virtualenvwrapper/virtualenvwrapper.sh
+```
+
+and Python 3.6 can be installed by running `sudo apt-get install python3.6` on Ubuntu 16.10+. For Ubuntu 16.04, follow the instructions here:
+
+For the Mac, the virtualenvwrapper can be installed by installing macports (see https://www.macports.org/install.php) and then running:
+
+```
+sudo port install py-virtualenvwrapper
+sudo port select --set python python27
+sudo port select --set python3 python36
+```
+and adding these to your ~/.bash_profile:
+
+```
+export VIRTUALENVWRAPPER_PYTHON='/opt/local/bin/python2.7'
+export VIRTUALENVWRAPPER_VIRTUALENV='/opt/local/bin/virtualenv-2.7'
+export VIRTUALENVWRAPPER_VIRTUALENV_CLONE='/opt/local/bin/virtualenv-clone-2.7'
+source /opt/local/bin/virtualenvwrapper.sh-2.7
+```
+
+## Development Testing
 
 If you want to access the REST API directly - running against the mock DHCP reservation adapter, use:
 
@@ -29,6 +57,8 @@ In this case, you can start the Micronets gateway service using:
 ```
 MICRONETS_DHCP_CONFIG=config.MockDevelopmentConfigWithWebsocket python ./runner.py
 ```
+
+To exit the virtual envonment use `deactivate`. You can continue working with the Micronets gateway service by running `workon micronets-gw-service`.
 
 ## Micronets DHCP REST/CRUD Interface
 
