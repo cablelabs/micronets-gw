@@ -1,10 +1,10 @@
-# Micronets DHCP Controller Test Cases
+# Micronets Gateway Service Test Cases
 
 * To start the server with the mock DHCP conf file, ensure that `USE_MOCK_DHCP_CONFIG = True` is set in the `BaseConfig` section of `config.py` and start the server using:
 
     `python runner.py runserver`
 
-### SUBNET TEST CASES:
+### DHCP SUBNET ENDPOINT TEST CASES:
 
 Note: For the sake of brevity, many of these test cases require consecutive execution. i.e. One test case depends on the execution of a previous one.
 
@@ -523,7 +523,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-### DEVICE TEST CASES:
+### DHCP DEVICE ENDPOINT TEST CASES:
 
 #### Positive Device Test Cases:
 
