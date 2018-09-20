@@ -18,6 +18,17 @@ function install-ovs-bootstrap-service {
   systemctl start ovs-bootstrap.service
 }
 
+function install-gw-service {
+  echo "Installing micronets-gw service."
+  mv /opt/micronets-gw/micronets-gw.service /lib/systemd/system
+  echo "Reloading service files."
+  systemctl daemon-reload
+  echo "Enabling micronets-gw service."
+  systemctl enable micronets-gw.service
+  echo "Starting micronets-gw service."
+  systemctl start micronets-gw.service
+}
+
 function main {
   {
     echo "POSTINSTALL: ${TAG}"
