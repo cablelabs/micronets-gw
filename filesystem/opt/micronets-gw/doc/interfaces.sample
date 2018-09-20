@@ -30,6 +30,7 @@ allow-brmn001 enp3s0
 iface enp3s0 inet manual
   ovs_type OVSPort
   ovs_bridge brmn001
+  ovs_bridge_assume_port_mac true
   ovs_port_req 2
 
 allow-brmn001 enx00e04c534458
