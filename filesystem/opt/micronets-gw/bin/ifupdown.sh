@@ -30,6 +30,10 @@ ovs_vsctl() {
     ovs-vsctl --timeout=5 "$@"
 }
 
+is_mac_addr() {
+    [ $(echo "$@" | sed -E 's/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}/foundamac/g') = "foundamac" ]
+}
+
 if (ovs_vsctl --version) > /dev/null 2>&1; then :; else
     exit 0
 fi
@@ -49,6 +53,16 @@ if [ "${MODE}" = "start" ]; then
                     ${IF_OVS_PROTOCOLS+-- set bridge ${IFACE} protocols=$IF_OVS_PROTOCOLS} \
                     ${OVS_EXTRA+-- $OVS_EXTRA}
 
+                if [ ! -z "${IF_OVS_BRIDGE_ASSUME_MAC}" ]; then
+                    # TODO: Consider allowing either an interface name or explicit MAC addr
+                    mac_addr=$(/sbin/ethtool -P "${IF_OVS_BRIDGE_ASSUME_MAC}" | cut -b 20-37)
+                    if is_mac_addr $mac_addr; then
+                        ovs_vsctl set bridge "${IFACE}" other-config:hwaddr="${mac_addr}"
+                    else
+                        debug_log "Invalid MAC address found for ${IF_OVS_BRIDGE_ASSUME_MAC} in ovs_bridge_assume_mac entry of OVSBridge declaration (\"$mac_addr\")"
+                    fi
+                fi
+
                 if [ ! -z "${IF_OVS_PORTS}" ]; then
                     ifup --allow="${IFACE}" ${IF_OVS_PORTS}
                 fi
@@ -58,9 +72,15 @@ if [ "${MODE}" = "start" ]; then
                     "${IFACE}" ${IF_OVS_OPTIONS} \
                     ${IF_OVS_PORT_REQ+-- set Interface ${IFACE} ofport_request=$IF_OVS_PORT_REQ} \
                     ${OVS_EXTRA+-- $OVS_EXTRA}
-                if [ ! -z "${IF_OVS_BRIDGE_ASSUME_PORT_MAC}" ]; then
-                        mac_addr=$(/sbin/ethtool -P "${IFACE}" | cut -b 20-37)
+                if [ "T${IF_OVS_BRIDGE_ASSUME_MAC}" = "Ttrue" ]; then
+                    mac_addr=$(/sbin/ethtool -P "${IFACE}" | cut -b 20-37)
+                    if is_mac_addr $mac_addr; then
                         ovs_vsctl set bridge "${IF_OVS_BRIDGE}" other-config:hwaddr="${mac_addr}"
+                    else
+                        debug_log "Found invalid MAC address (\"$mac_addr\") in ovs_bridge_assume_mac entry of OVSBridge declaration"
+                    fi
+                else
+                    debug_log "unrecognized ovs_bridge_assume_mac value for ${IFACE}: \"${IF_OVS_BRIDGE_ASSUME_MAC}\""
                 fi
 
                 ip link set "${IFACE}" up

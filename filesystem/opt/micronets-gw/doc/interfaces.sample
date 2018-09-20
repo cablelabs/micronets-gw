@@ -1,3 +1,7 @@
+# Note: The contained entries should augment the system-provided /etc/network/interfaces file.
+#       IOW, this file should not over-write the existing /etc/network/interfaces on 
+#       your system.
+
 #
 # create an Openvswitch bridge
 # on the commandline: ovs-vsctl add-br brmn001
@@ -7,6 +11,7 @@ allow-ovs brmn001
 iface brmn001 inet dhcp
   ovs_type OVSBridge
   ovs_ports enp3s0 enxac7f3ee61832 enx00e04c534458
+  ovs_bridge_assume_mac enp3s0
   ovs_manager tcp:10.10.1.109:6640
   ovs_protocols OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13
 
@@ -26,11 +31,13 @@ iface brmn001 inet static
 
 # Attach physical ports to the bridge (requesting particular port numbers)
 
+# This entry would represent the trunk interface (the interface with a gateway)
 allow-brmn001 enp3s0
 iface enp3s0 inet manual
   ovs_type OVSPort
   ovs_bridge brmn001
-  ovs_bridge_assume_port_mac true
+  # alt form of ovs_bridge_assume_mac sets the bridge MAC to this interface's MAC
+  # ovs_bridge_assume_mac true
   ovs_port_req 2
 
 allow-brmn001 enx00e04c534458
