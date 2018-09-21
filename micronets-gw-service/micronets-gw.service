@@ -4,14 +4,14 @@ After=network-online.target
 
 [Service]
 Type=idle
-WorkingDirectory=/opt/micronets/opt/micronets-gw
+WorkingDirectory=/opt/micronets-gw
 ExecStart=/opt/micronets-gw/virtualenv/bin/python runner.py --config config.DnsmasqTestingConfig
 # User=micronets
 # Group=micronets
 StandardOutput=syslog
 StandardError=syslog
-SyslogFacility=micronets
-SyslogIdentifier=gw-service
+SyslogFacility=none
+SyslogIdentifier=micronets-gw-service
 SyslogLevel=debug
 
 [Install]
