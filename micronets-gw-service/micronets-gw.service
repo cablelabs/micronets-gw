@@ -10,8 +10,8 @@ ExecStart=/opt/micronets-gw/virtualenv/bin/python runner.py --config config.Dnsm
 # Group=micronets
 StandardOutput=syslog
 StandardError=syslog
-SyslogFacility=micronets
-SyslogIdentifier=gw-service
+SyslogFacility=none
+SyslogIdentifier=micronets-gw-service
 SyslogLevel=debug
 
 [Install]
