@@ -5,10 +5,10 @@ function hr {
 }
 
 function link_ifupdown {
-  rm /etc/network/if-pre-up.d/openvswitch
-  rm /etc/network/if-post-down.d/openvswitch
-  ln -s /opt/micronets-gw/bin/ifupdown.sh /etc/network/if-pre-up.d/micronets-gw-openvswitch
-  ln -s /opt/micronets-gw/bin/ifupdown.sh /etc/network/if-post-down.d/micronets-gw-openvswitch
+  rm /etc/network/if-pre-up.d/openvswitch > /dev/null 2>&1
+  rm /etc/network/if-post-down.d/openvswitch > /dev/null 2>&1
+  ln -s /opt/micronets-gw/bin/ifupdown.sh /etc/network/if-pre-up.d/micronets-gw-openvswitch > /dev/null 2>&1
+  ln -s /opt/micronets-gw/bin/ifupdown.sh /etc/network/if-post-down.d/micronets-gw-openvswitch > /dev/null 2>&1
 }
 
 function install-ovs-bootstrap-service {
@@ -20,7 +20,7 @@ function install-ovs-bootstrap-service {
 
 function install-gw-service {
   echo "Installing micronets-gw service."
-  mv /opt/micronets-gw/micronets-gw.service /lib/systemd/system
+  mv /opt/micronets-gw/micronets-gw.service /lib/systemd/system > /dev/null 2>&1
   echo "Reloading service files."
   systemctl daemon-reload
   echo "Enabling micronets-gw service."
@@ -33,7 +33,8 @@ function main {
   {
     echo "POSTINSTALL: ${TAG}"
     link_ifupdown
-    install-ovs-bootstrap-service 
+    install-ovs-bootstrap-service
+    install-gw-service
   } 2>&1 | logger -t ${TAG}
 }
 
