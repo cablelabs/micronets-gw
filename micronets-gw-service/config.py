@@ -16,6 +16,7 @@ class BaseConfig:
     WEBSOCKET_SERVER_ADDRESS = "74.207.229.106"
     WEBSOCKET_SERVER_PORT = 5050
     WEBSOCKET_SERVER_PATH = '/micronets/v1/ws-proxy/micronets-gw-0001'
+    # NOTE: WEBSOCKET_SERVER_PATH should be unique to the gateway/subscriber if using the proxy
     WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
 
