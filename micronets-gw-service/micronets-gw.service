@@ -4,8 +4,8 @@ After=network-online.target
 
 [Service]
 Type=idle
-WorkingDirectory=/opt/micronets/gw-service
-ExecStart=/opt/micronets/gw-service/virtualenv/bin/python runner.py --config config.MockDevelopmentConfig
+WorkingDirectory=/opt/micronets/opt/micronets-gw
+ExecStart=/opt/micronets-gw/virtualenv/bin/python runner.py --config config.DnsmasqTestingConfig
 # User=micronets
 # Group=micronets
 StandardOutput=syslog
