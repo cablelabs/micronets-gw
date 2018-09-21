@@ -2,7 +2,7 @@
 
 This repository is for development of the micronets-gw.service.
 
-See: TBD
+More documentation at the [GitHub Wiki](https://github.com/cablelabs/micronets-gw/wiki).
 
 ## Top Level Directory Contents
 

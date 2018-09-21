@@ -1,5 +1,9 @@
 #!/bin/bash
 
+MICRONETS_GW_SERVICE_DIR=/opt/micronets-gw/
+MICRONETS_GW_VIRTENV_NAME=virtualenv
+
+
 function hr {
   echo "------------------------------------------------------------------------------------------------------"
 }
@@ -7,8 +11,8 @@ function hr {
 function link_ifupdown {
   rm /etc/network/if-pre-up.d/openvswitch > /dev/null 2>&1
   rm /etc/network/if-post-down.d/openvswitch > /dev/null 2>&1
-  ln -s /opt/micronets-gw/bin/ifupdown.sh /etc/network/if-pre-up.d/micronets-gw-openvswitch > /dev/null 2>&1
-  ln -s /opt/micronets-gw/bin/ifupdown.sh /etc/network/if-post-down.d/micronets-gw-openvswitch > /dev/null 2>&1
+  ln -s ${MICRONETS_GW_SERVICE_DIR}/bin/ifupdown.sh /etc/network/if-pre-up.d/micronets-gw-openvswitch > /dev/null 2>&1
+  ln -s ${MICRONETS_GW_SERVICE_DIR}/bin/ifupdown.sh /etc/network/if-post-down.d/micronets-gw-openvswitch > /dev/null 2>&1
 }
 
 function install-ovs-bootstrap-service {
@@ -19,8 +23,15 @@ function install-ovs-bootstrap-service {
 }
 
 function install-gw-service {
+  pushd ${MICRONETS_GW_SERVICE_DIR} > /dev/null
+  echo "Creating virtualenv ${MICRONETS_GW_VIRTENV_NAME} (in ${MICRONETS_GW_SERVICE_DIR}/${MICRONETS_GW_VIRTENV_NAME})"
+  virtualenv --clear -p $(which python3.6) ${MICRONETS_GW_SERVICE_DIR}/${MICRONETS_GW_VIRTENV_NAME}
+  source $MICRONETS_GW_VIRTENV_NAME/bin/activate
+  echo "Running: pip install -r requirements.txt"
+  pip install -r requirements.txt
+  popd > /dev/null
   echo "Installing micronets-gw service."
-  mv /opt/micronets-gw/micronets-gw.service /lib/systemd/system > /dev/null 2>&1
+  mv ${MICRONETS_GW_SERVICE_DIR}/micronets-gw.service /lib/systemd/system > /dev/null 2>&1
   echo "Reloading service files."
   systemctl daemon-reload
   echo "Enabling micronets-gw service."
