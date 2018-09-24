@@ -58,7 +58,7 @@ def check_for_unrecognized_entries (container, allowed_field_names):
         raise InvalidUsage (400, message=f"Illegal field(s) {unrecognized_keys} in '{container}'")
     return True
 
-subnet_id_re = re.compile ('^\w+[\w-]*$', re.ASCII)
+subnet_id_re = re.compile ('^\w+[-.\w]*$', re.ASCII)
 
 def check_subnet_id (subnet_id, location):
     if not subnet_id_re.match (subnet_id):
@@ -181,7 +181,7 @@ async def delete_subnet (subnet_id):
     check_subnet_id (subnet_id, request.path)
     return get_dhcp_conf_model ().delete_subnet (subnet_id)
 
-device_id_re = re.compile ('^\w+[\w-]*$', re.ASCII)
+device_id_re = re.compile ('^\w+[-.\w]*$', re.ASCII)
 
 def check_device_id (device_id, location):
     if not device_id_re.match (device_id):

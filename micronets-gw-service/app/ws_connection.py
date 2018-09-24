@@ -9,7 +9,7 @@ from quart import Quart, Request, json
 from app import app
 from .utils import check_json_field
 
-logger = logging.getLogger ('micronets-dhcp-server')
+logger = logging.getLogger ('micronets-gw-service')
 
 class WSConnector:
     def __init__ (self, ws_server_address, ws_server_port, ws_server_path,
@@ -172,7 +172,8 @@ class WSConnector:
         if (queries):
             for query in queries:
                 path += f"&{query['name']}={query['value']}"
-        request = Request (method, "http", path, header_dict)
+        query_part = b''
+        request = Request (method, "http", path, query_part, header_dict)
         if ('messageBody' in message):
             if isinstance (message_body, dict):
                 request.body.set_result (json.dumps (message_body).encode ('utf-8'))
