@@ -16,6 +16,7 @@ dhcp_api_prefix = '/micronets/v1/dhcp'
 @app.errorhandler (InvalidUsage)
 def handle_invalid_usage (error):
     response = jsonify (error.to_dict())
+    response.status_code = error.status_code
     logger.info (f"Returning status {response.status_code} for {request.method} request for {request.path}: {error.message}")
     return response
 
