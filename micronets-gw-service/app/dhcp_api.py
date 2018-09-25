@@ -15,8 +15,8 @@ dhcp_api_prefix = '/micronets/v1/dhcp'
 # See: http://flask.pocoo.org/docs/1.0/patterns/apierrors/
 @app.errorhandler (InvalidUsage)
 def handle_invalid_usage (error):
-    response = jsonify(error.to_dict())
-    response.status_code = error.status_code
+    response = jsonify (error.to_dict())
+    logger.info (f"Returning status {response.status_code} for {request.method} request for {request.path}: {error.message}")
     return response
 
 @app.errorhandler (500)
@@ -25,7 +25,8 @@ def error_handler_500 (exception):
 
 @app.errorhandler (400)
 def error_handler_400 (exception):
-    return jsonify ({"error": str (exception)}), 400, {'Content-Type': 'application/json'}
+    logger.info (f"Caught 400 error handing request: {exception}")
+    return jsonify (exception.to_dict ()), 400, {'Content-Type': 'application/json'}
 
 @app.errorhandler (404)
 def error_handler_404 (exception):
@@ -33,7 +34,7 @@ def error_handler_404 (exception):
 
 def check_for_json_payload (request):
     if not request.is_json:
-        raise InvalidUsage (400, message="supplied data is not a json object")
+        raise InvalidUsage (400, message="supplied data is not a valid json object")
 
 def abort_if_field_missing (json_obj, field):
     if field not in json_obj:

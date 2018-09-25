@@ -1,11 +1,27 @@
 from gevent import monkey
 monkey.patch_all ()
 
-from quart import Quart, request
+from quart import Quart, Request, request
+
 import os, argparse, config, sys, traceback, asyncio, websockets, logging
 
+from .utils import InvalidUsage
+
+# override the quart Request.on_json_loading_failed() to produce a more useful error
+class MyRequest (Request):
+    def on_json_loading_failed(self, error: Exception) -> None:
+        """Handle a JSON parsing error.
+
+        Arguments:
+            error: The exception raised during parsing.
+        """
+        raise InvalidUsage (400, message=f"JSON parsing error: {error}")
+
+class MyQuart (Quart):
+    request_class = MyRequest
+
 # create application instance
-app = Quart (__name__)
+app = MyQuart (__name__)
 
 arg_parser = argparse.ArgumentParser(description='The Micronets Gateway Service')
 
