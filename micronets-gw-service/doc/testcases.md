@@ -6,6 +6,8 @@
 
 ### DHCP SUBNET ENDPOINT TEST CASES:
 
+Note: JSON request/response object fields should not be assumed to be in any particular order (JSON object fields have no ordering requirements). e.g. `{"a":1, "b":2, "c":{"d":4, "e":5}}` is equivalent to `{"b":2, "c":{"e":5, "d":4}, "a":1}`.
+
 Note: For the sake of brevity, many of these test cases require consecutive execution. i.e. One test case depends on the execution of a previous one.
 
 #### Positive Subnet Test Cases:
