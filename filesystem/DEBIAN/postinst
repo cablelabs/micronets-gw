@@ -15,13 +15,6 @@ function link_ifupdown {
   ln -s ${MICRONETS_GW_SERVICE_DIR}/bin/ifupdown.sh /etc/network/if-post-down.d/micronets-gw-openvswitch > /dev/null 2>&1
 }
 
-function install-ovs-bootstrap-service {
-  echo "Reloading service files."
-  systemctl daemon-reload
-  echo "Starting ovs-bootstrap service."
-  systemctl start ovs-bootstrap.service
-}
-
 function install-gw-service {
   pushd ${MICRONETS_GW_SERVICE_DIR} > /dev/null
   echo "Creating virtualenv ${MICRONETS_GW_VIRTENV_NAME} (in ${MICRONETS_GW_SERVICE_DIR}/${MICRONETS_GW_VIRTENV_NAME})"
@@ -44,7 +37,6 @@ function main {
   {
     echo "POSTINSTALL: ${TAG}"
     link_ifupdown
-    install-ovs-bootstrap-service
     install-gw-service
   } 2>&1 | logger -t ${TAG}
 }
