@@ -58,6 +58,15 @@ if [ "${MODE}" = "start" ]; then
                     mac_addr=$(/sbin/ethtool -P "${IF_OVS_BRIDGE_ASSUME_MAC}" | cut -b 20-37)
                     if is_mac_addr $mac_addr; then
                         ovs_vsctl set bridge "${IFACE}" other-config:hwaddr="${mac_addr}"
+                        iptables --flush
+                        iptables --table nat --flush
+                        iptables --delete-chain
+                        iptables --table nat --delete-chain
+                        iptables --table nat --append POSTROUTING --out-interface ${IFACE} -j MASQUERADE
+                        iptables --append FORWARD --in-interface ${IF_OVS_BRIDGE_ASSUME_MAC} -j ACCEPT
+                        sysctl -w net.ipv4.ip_forward=1
+                        iptables -L -v
+                        iptables -L -v --table nat
                     else
                         debug_log "Invalid MAC address found for ${IF_OVS_BRIDGE_ASSUME_MAC} in ovs_bridge_assume_mac entry of OVSBridge declaration (\"$mac_addr\")"
                     fi
@@ -66,22 +75,17 @@ if [ "${MODE}" = "start" ]; then
                 if [ ! -z "${IF_OVS_PORTS}" ]; then
                     ifup --allow="${IFACE}" ${IF_OVS_PORTS}
                 fi
+
+                # Clear ALL Flows and set NORMAL .aka L2 Learning switch mode.
+                ovs-ofctl del-flows ${IFACE}
+                ovs-ofctl add-flow ${IFACE} "table=0 priority=0 actions=normal"
                 ;;
+
         OVSPort)
                 ovs_vsctl -- --may-exist add-port "${IF_OVS_BRIDGE}"\
                     "${IFACE}" ${IF_OVS_OPTIONS} \
                     ${IF_OVS_PORT_REQ+-- set Interface ${IFACE} ofport_request=$IF_OVS_PORT_REQ} \
                     ${OVS_EXTRA+-- $OVS_EXTRA}
-                if [ "T${IF_OVS_BRIDGE_ASSUME_MAC}" = "Ttrue" ]; then
-                    mac_addr=$(/sbin/ethtool -P "${IFACE}" | cut -b 20-37)
-                    if is_mac_addr $mac_addr; then
-                        ovs_vsctl set bridge "${IF_OVS_BRIDGE}" other-config:hwaddr="${mac_addr}"
-                    else
-                        debug_log "Found invalid MAC address (\"$mac_addr\") in ovs_bridge_assume_mac entry of OVSBridge declaration"
-                    fi
-                else
-                    debug_log "unrecognized ovs_bridge_assume_mac value for ${IFACE}: \"${IF_OVS_BRIDGE_ASSUME_MAC}\""
-                fi
 
                 ip link set "${IFACE}" up
                 ;;
