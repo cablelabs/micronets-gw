@@ -11,7 +11,7 @@ allow-ovs brmn001
 iface brmn001 inet dhcp
   ovs_type OVSBridge
   ovs_ports enp3s0 enp4s0 wlp2s0
-  ovs_bridge_assume_mac enp3s0
+  ovs_bridge_uplink_port enp3s0
   ovs_manager tcp:1.2.3.4:6640
   ovs_protocols OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13
 
