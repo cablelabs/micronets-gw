@@ -284,7 +284,7 @@ async def delete_device (subnet_id, device_id):
 async def check_lease_event (lease_event):
     event_fields = check_field (lease_event, 'leaseChangeEvent', dict, True)
     check_for_unrecognized_entries (event_fields, ['action','macAddress','networkAddress','hostname'])
-    action = check_field (lease_event, 'action', str, True)
+    action = check_field (event_fields, 'action', str, True)
     if action != "leaseAcquired" and action != "leaseExpired":
         raise InvalidUsage (400, message=f"unrecognized lease action '{action}'"
                                          f" (must be 'leaseAcquired' or 'leaseExpired')")
@@ -303,5 +303,5 @@ async def check_lease_event (lease_event):
 async def process_lease ():
     check_for_json_payload (request)
     lease_event = await request.get_json ()
-    check_lease_event (lease_event)
+    await check_lease_event (lease_event)
     return await get_dhcp_conf_model ().process_dhcp_lease_event (lease_event)
