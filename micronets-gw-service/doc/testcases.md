@@ -606,6 +606,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "deviceId": "MyDevice02",
                 "macAddress": {
                     "eui48": "00:23:12:0f:b0:27",
+                },
                 "networkAddress": {
                     "ipv4": "192.168.1.43"
                 }
@@ -958,3 +959,25 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
         "message": "MAC address of device 'MyDevice02' is not unique (MAC address 00:23:12:0f:b0:26 found in subnet 'mocksubnet007' device 'mydevice01')"
     }
     ```
+
+### LEASE NOTIFICATION TEST CASES:
+
+Lease change notifications can be performed by posting to the `/micronets/v1/dhcp/leases` endpoint.
+
+    ```
+    curl -X PUT -H "Content-Type: application/json" -d '{
+        "leaseChangeEvent": {
+            "action": "leaseExpired", 
+            "macAddress": {
+                "eui48": "00:23:12:0f:b0:26"
+            }, 
+            "networkAddress": {
+                "ipv4": "192.168.1.42"
+            }, 
+            "hostname": "myhost"}
+        }' http://localhost:5000/micronets/v1/dhcp/leases
+    ```
+
+    Expected output: (status code 200)
+
+    None
