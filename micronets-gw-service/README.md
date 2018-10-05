@@ -114,7 +114,7 @@ Currently only data type _application/json_ is supported.
 | update | PUT /subnets/**_subnetId_**    | Update a DHCP subnet definition. This will return 400 if the message body contains a **_subnetId_** that doesn't match the **_subnetId_** in the URI path or if the network conflicts with an already-existing network and will return 404 (Not Found) if the **_subnetId_** doesn't exist. |
 | delete | DELETE /subnets/**_subnetId_** | Delete a DHCP subnet definition. The operation will return a status code of 405 (Method Not Allowed) if the subnet still contains device reservations and will return 404 (Not Found) if the **_subnetId_** doesn't exist. |
 
-### DEVICE ADDRESSES RESERVATION
+### DEVICE ADDRESS RESERVATION
 
 These definitions allow for the management of micronet device DHCP reservations.
 Devices must be defined and exist within the context of a subnet.
@@ -158,6 +158,48 @@ All request URIs are prefixed by **/micronets/v1/dhcp** unless otherwise noted
 | get    | GET /subnets/**_subnetId_**/devices/**_deviceId_**    | Return a particular device definition. This will return 404 (Not Found) if the **_subnetId_** or **_deviceId_** doesn't exist. |
 | update | PUT /subnets/**_subnetId_**/devices/**_deviceId_**    | Update a DHCP device definition |
 | delete | DELETE /subnets/**_subnetId_**/devices/**_deviceId_** | Delete a DHCP device definition.  |
+
+### DHCP DEVICE LEASE CHANGE NOTIFICATIONS
+
+Device lease changes can be communicated by sending a properly formatted json message to the /micronets/v1/dhcp/leases endpoint. 
+
+#### DHCP Lease Change Representation
+
+Currently only data type _application/json_ is supported.
+
+**DHCP Lease Notification:**
+```json
+{
+    "leaseChangeEvent": {
+        "action": string, 
+        "macAddress": {
+            eui48": string
+        }, 
+        "networkAddress": {
+            "ipv4": string,
+            "ipv6": string
+        }, 
+        "hostname": string
+    }
+}
+```
+
+| Property name            | Value         | Required | Description                           | Example      |
+| ------------------------ | ------------- | -------- | ------------------------------------- | ------------- 
+| action                   | string        | Y        | One of "leaseAcquired" or "leaseExpired" ||
+| macAddress               | nested object | Y        | The device MAC address
+| macAddress.eui48         | string        | Y        | An EUI-48 format MAC address |          00:23:12:0f:b0:26 |
+| networkAddress           | nested object | Y        | The network address definition. Either **_ipv4_** or **_ipv6_** must be specified ||
+| networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | 192.168.1.42 |
+| networkAddress.ipv6      | string        | N        | The IPv6 network definition | fe80::104c:20b6:f71a:4e55 |
+
+#### DHCP Device Reservation Endpoints/Operations
+
+All request URIs are prefixed by **/micronets/v1/dhcp** unless otherwise noted
+
+| Method | HTTP request                                     | Description                           |
+| ------ | ------------------------------------------------ | ------------------------------------- |
+| update | PUT /micronets/v1/dhcp/leases                   | Perform a lease change notification. This will return a status code of 500 if the server doesn't have a channel to post the event into. Otherwise an appropriate error code will be returned based on the validity of the post body.
 
 ### COMMON DEFINITIONS
 

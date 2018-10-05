@@ -282,25 +282,26 @@ async def delete_device (subnet_id, device_id):
     return get_dhcp_conf_model ().delete_device (subnet_id, device_id)
 
 async def check_lease_event (lease_event):
-    check_for_unrecognized_entries (lease_event, ['event', 'macAddress','networkAddress','hostname'])
-    event_id = check_field (lease_event, 'event', str, True)
-    if (event_id != "leaseAcquired" and event_id != "leaseExpired"):
-        raise InvalidUsage (400, message=f"unrecognized lease event '{event_id}'"
+    event_fields = check_field (lease_event, 'leaseChangeEvent', dict, True)
+    check_for_unrecognized_entries (event_fields, ['action','macAddress','networkAddress','hostname'])
+    action = check_field (event_fields, 'action', str, True)
+    if action != "leaseAcquired" and action != "leaseExpired":
+        raise InvalidUsage (400, message=f"unrecognized lease action '{action}'"
                                          f" (must be 'leaseAcquired' or 'leaseExpired')")
 
-    mac_address = check_field (lease_event, 'macAddress', (dict, list), True)
+    mac_address = check_field (event_fields, 'macAddress', dict, True)
     check_for_unrecognized_entries (mac_address, ['eui48'])
     check_mac_address_field (mac_address, 'eui48', True)
 
-    network_address = check_field (lease_event, 'networkAddress', (dict, list), True)
+    network_address = check_field (event_fields, 'networkAddress', dict, True)
     check_for_unrecognized_entries (network_address, ['ipv4'])
     check_ipv4_address_field (network_address, 'ipv4', True)
 
-    hostname = check_field (lease_event, 'hostname', str, True)
+    hostname = check_field (event_fields, 'hostname', str, True)
 
 @app.route (dhcp_api_prefix + '/leases', methods=['PUT'])
 async def process_lease ():
     check_for_json_payload (request)
     lease_event = await request.get_json ()
-    check_lease_event (lease_event)
-    return get_dhcp_conf_model ().process_dhcp_lease_event (lease_event)
+    await check_lease_event (lease_event)
+    return await get_dhcp_conf_model ().process_dhcp_lease_event (lease_event)
