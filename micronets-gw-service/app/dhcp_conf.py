@@ -318,8 +318,8 @@ class DHCPConf:
 
         if not self.ws_connection.is_ready ():
             ws_uri = self.ws_connection.get_connect_uri ()
-            logger.info (f"DHCPConf.process_dhcp_lease_event: Cannot send {action} event - the websocket to {ws_uri} isn't ready")
-            return f"The websocket connection to {ws_uri} is not open/ready", 500
+            logger.info (f"DHCPConf.process_dhcp_lease_event: Cannot send {action} event - the websocket to {ws_uri} is not connected/ready")
+            return f"The websocket connection to {ws_uri} is not connected/ready", 500
 
         mac_addr = event_fields ['macAddress']['eui48']
         net_addr = event_fields ['networkAddress']['ipv4']
