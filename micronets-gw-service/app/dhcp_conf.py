@@ -3,7 +3,6 @@ from .utils import update_deep, InvalidUsage
 from threading import Timer
 from ipaddress import IPv4Network, IPv4Address, AddressValueError, NetmaskValueError
 from netaddr import EUI
-from app import app
 
 import json
 import copy
@@ -14,7 +13,8 @@ import logging
 logger = logging.getLogger ('micronets-dhcp-server')
 
 class DHCPConf:
-    def __init__ (self, dhcp_adapter, min_update_interval_s):
+    def __init__ (self, ws_connection, dhcp_adapter, min_update_interval_s):
+        self.ws_connection = ws_connection
         self.dhcp_adapter = dhcp_adapter
         self.min_update_interval_s = min_update_interval_s
         self.update_timer = None
@@ -310,23 +310,31 @@ class DHCPConf:
         self.update_conf ()
         return '', 204
 
-    def process_dhcp_lease_event (self, dhcp_lease_event):
+    async def process_dhcp_lease_event (self, dhcp_lease_event):
         logger.info (f"DHCPConf.process_lease_event ({dhcp_lease_event})")
-        event_type = dhcp_lease_event ['event']
-        mac_addr = dhcp_lease_event ['macAddress']['eui48']
-        net_addr = dhcp_lease_event ['networkAddress']['ipv4']
+
+        event_fields = dhcp_lease_event ['leaseChangeEvent']
+        action = event_fields ['action']
+
+        if not self.ws_connection.is_ready ():
+            ws_uri = self.ws_connection.get_connect_uri ()
+            logger.info (f"DHCPConf.process_dhcp_lease_event: Cannot send {action} event - the websocket to {ws_uri} isn't ready")
+            return f"The websocket connection to {ws_uri} is not open/ready", 500
+
+        mac_addr = event_fields ['macAddress']['eui48']
+        net_addr = event_fields ['networkAddress']['ipv4']
         ids = self.get_subnetid_deviceid_for_mac (mac_addr)
         if (not ids):
             logger.info (f"DHCPConf.process_lease_event: ERROR: Could not find device/subnet for mac {mac_addr}")
             raise InvalidUsage (404, message=f"No device found with mac address {mac_addr}")
         logger.info (f"DHCPConf.process_lease_event: found {ids} for mac {mac_addr}")
-        lease_change_event = { 'type': event_type,
-                               'data': {
-                                   'subnetId': ids ['subnetId'],
-                                   'deviceId': ids ['deviceId'],
-                                   'macAddress': {"eui48": mac_addr},
-                                   'networkAddress': {"ipv4": net_addr} } }
-#         logger.info (f"DHCPConf.process_lease_event: Sending: {event_type}")
-#         logger.info (json.dumps (lease_change_event, indent=4))
-#         socketio.emit (event_type, lease_change_event, 
-#                        namespace = app.config ['SOCKIO_NAMESPACE'])
+        lease_change_event = { f"{action}Event": {
+                                 'subnetId': ids['subnetId'],
+                                 'deviceId': ids['deviceId'],
+                                 'macAddress': {"eui48": mac_addr},
+                                 'networkAddress': {"ipv4": net_addr} }
+                             }
+        logger.info (f"DHCPConf.process_dhcp_lease_event: Sending: {action}")
+        logger.info (json.dumps (lease_change_event, indent=4))
+        await self.ws_connection.send_event_message ("DHCP", action, lease_change_event)
+        return '', 200

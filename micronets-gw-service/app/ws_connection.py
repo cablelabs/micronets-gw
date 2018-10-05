@@ -18,6 +18,9 @@ class WSConnector:
         self.ws_server_address = ws_server_address
         self.ws_server_port = ws_server_port
         self.ws_server_path = ws_server_path
+        self.websocket = None
+        self.message_id = 0
+        self.hello_received = False
         self.tls_certkey_file = tls_certkey_file
         self.tls_ca_file = tls_ca_file
         self.retry_interval_s = retry_interval_s
@@ -28,12 +31,37 @@ class WSConnector:
     def connect (self):
         asyncio.ensure_future (self.setup_connection ())
 
+    def is_connected (self):
+        return not self.websocket is None
+
+    def is_ready (self):
+        return self.is_connected () and self.hello_received
+
+    async def send_message (self, message, must_be_ready=True):
+        if not self.is_connected ():
+            raise Exception (f"Websocket not connected (to {self.get_connect_uri()})")
+        if must_be_ready and not self.is_ready():
+            raise Exception(f"Websocket not ready (connected to {self.get_connect_uri()})")
+        message_id = self.message_id
+        self.message_id += 1
+        message ['messageId'] = message_id
+        message_json = json.dumps ( {'message': message} )
+        logger.debug (f"ws_connection: > sending event message: {message}")
+        await self.websocket.send (message_json)
+        return message_id
+
+    def get_connect_uri (self):
+        if (self.tls_certkey_file):
+            scheme = "wss"
+        else:
+            scheme = "ws"
+        return f"{scheme}://{self.ws_server_address}:{self.ws_server_port}{self.ws_server_path}"
+
     async def setup_connection (self):
         logger.debug ("WSConnector: setup_connection: starting...")
         ssl_context = None
 
         if (self.tls_certkey_file):
-            scheme = 'wss'
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             # Setup the client's cert
             client_cert_path = pathlib.Path (self.tls_certkey_file)
@@ -48,13 +76,11 @@ class WSConnector:
             ssl_context.load_verify_locations (cafile = root_cert_path)
             ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED
             ssl_context.check_hostname = False
-        else:
-            scheme = 'ws'
 
-        dest_uri = f"{scheme}://{self.ws_server_address}:{self.ws_server_port}{self.ws_server_path}"
+        dest_uri = self.get_connect_uri ()
         while (True):
             try:
-                self.websocket =  await self.init_connection (dest_uri, ssl_context=ssl_context)
+                await self.init_connection (dest_uri, ssl_context=ssl_context)
             except Exception as ex:
                 logger.warn (f"WSConnector: setup_connection: Error connecting "
                              f"to {self.ws_server_address}:{self.ws_server_port}: {ex}", exc_info=False)
@@ -63,42 +89,54 @@ class WSConnector:
                 await asyncio.sleep (self.retry_interval_s)
                 continue
 
-            self.message_id = 1
             tasks = [ asyncio.ensure_future (self.sender ()),
                       asyncio.ensure_future (self.receiver ()) ]
             await asyncio.wait (tasks)
+            self.websocket = None
             logger.info (f"WSConnector: sender/receiver closed. Attempting to reconnect...")
 
     async def init_connection (self, dest_uri, ssl_context=None):
         logger.info (f"WSConnector: init_connect opening {dest_uri}...")
-        ws = await websockets.connect (dest_uri, ssl=ssl_context)
+        self.hello_received = False
+        self.websocket = await websockets.connect (dest_uri, ssl=ssl_context)
         logger.info (f"WSConnector: init_connect opened {dest_uri}.")
         logger.info (f"WSConnector Sending HELLO message...")
-        await self.send_hello_message (ws)
+        await self.send_hello_message (self.ws_server_path)
         logger.info (f"WSConnector: Waiting for HELLO messages...")
-        await self.wait_for_hello_message (ws)
+        await self.wait_for_hello_message ()
+        self.hello_received = True
         logger.info (f"WSConnector: HELLO handshake complete.")
-        return ws
 
-    async def send_hello_message (self, websocket):
-        message = json.dumps ( {'message': {'messageId': 0,
-                                            'messageType': 'CONN:HELLO',
-                                            'requiresResponse': False,
-                                            'peerClass': 'micronets-dhcp-service',
-                                            'peerId': '12345678' }} )
-        logger.debug (f"ws_connection: > sending hello message: {message}")
-        await websocket.send (message)
+    async def send_hello_message (self, peer_id):
+        message = {'messageType': 'CONN:HELLO',
+                   'requiresResponse': False,
+                   'peerClass': 'micronets-dhcp-service',
+                   'peerId': peer_id }
+        await self.send_message (message, must_be_ready=False)
 
-    async def send_info_message (self, websocket, info_message):
-        message = json.dumps ( {'message': {'messageId': self.message_id,
-                                            'messageType': 'CONN:INFO',
-                                            'info': info_message} })
-        logger.debug (f"ws_connection: > sending info message: {message}")
-        self.message_id += 1
-        await websocket.send (message)
+    async def send_rest_request_message (self, blah):
+        # TODO: IMPLEMENT/INTEGRATE
+        return 0
 
-    async def wait_for_hello_message (self, websocket):
-        raw_message = await websocket.recv ()
+    async def send_rest_response_message (self, blah):
+        # TODO: IMPLEMENT/INTEGRATE
+        return 0
+
+    async def send_info_message (self, info_message):
+        message = {'messageType': 'CONN:INFO', 'info': info_message}
+        message_id = await self.send_message (message)
+        return message_id
+
+    async def send_event_message (self, event_namespace, event_name, event_object):
+        message = { 'messageType': f'EVENT:{event_namespace}:{event_name}',
+                    'requiresResponse': False,
+                    'dataFormat': 'application/json',
+                    'messageBody': event_object }
+        message_id = await self.send_message (message)
+        return message_id
+
+    async def wait_for_hello_message (self):
+        raw_message = await self.websocket.recv ()
         message = json.loads (raw_message)
         logger.debug (f"ws_connection: process_hello_messages: Received message: {message}")
         if (not message):
@@ -150,13 +188,13 @@ class WSConnector:
         check_json_field (message, 'requiresResponse', bool, True)
         message_type = message ['messageType']
         if (message_type.startswith ("REST:")):
-            await self.handleRestMessage (message)
+            await self.handle_rest_message (message)
         elif (message_type.startswith ("EVENT:")):
-            await self.handleEventMessage (message)
+            await self.handle_event_message (message)
         else:
             raise Exception (f"unknown message type {message_type}")
 
-    async def handleRestMessage (self, message):
+    async def handle_rest_message (self, message):
         received_message_id = message ['messageId']
         method = check_json_field (message, 'method', str, True)
         path = check_json_field (message, 'path', str, True)
@@ -186,9 +224,9 @@ class WSConnector:
 
         response = await asyncio.ensure_future (app.handle_request (request))
 
-        await self.handleRestResponse (received_message_id, response)
+        await self.handle_rest_response (received_message_id, response)
 
-    async def handleRestResponse (self, request_message_id, response):
+    async def handle_rest_response (self, request_message_id, response):
         encoded_payload = None
         if ('Content-Length' in response.headers):
             content_length = int (response.headers ['Content-Length'])
@@ -206,8 +244,7 @@ class WSConnector:
                 else:
                     encoded_payload = raw_body.decode ('utf-8')
 
-        message = { 'messageId': self.message_id,
-                    'messageType': 'REST:RESPONSE',
+        message = { 'messageType': 'REST:RESPONSE',
                     'requiresResponse': False,
                     'inResponseTo': request_message_id,
                     'statusCode': response.status_code,
@@ -218,14 +255,11 @@ class WSConnector:
         headers = []
         for header_name, header_val in response.headers.items ():
             headers.append ({'name': header_name, 'value': header_val})
-        logger.debug (f"WSConnector: handleRestResponse: found headers: {headers}")
+        logger.debug (f"WSConnector: handle_rest_response: found headers: {headers}")
 
-        response_message = json.dumps ( {'message': message} )
-        logger.debug (f"WSConnector: handleRestResponse: Sending response message: {response_message}")
-        self.message_id += 1
-        await self.websocket.send (response_message)
-        logger.debug (f"WSConnector: handleRestResponse: Response sent.")
+        await self.send_message (message)
+        logger.debug (f"WSConnector: handle_rest_response: Response sent.")
 
-    async def handleEventMessage (self, message):
+    async def handle_event_message (self, message):
         logger.debug (f"WSConnector: handle EVENT message: {message}")
         # TODO: handle the event

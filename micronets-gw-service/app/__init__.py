@@ -52,6 +52,7 @@ logger.info (f"Loading app module using {config}")
 
 dhcp_conf_model = None
 dhcp_adapter = None
+ws_connection = None
 
 def get_dhcp_conf_model ():
     return dhcp_conf_model
@@ -75,22 +76,12 @@ elif adapter == "DNSMASQ":
 else:
     exit ("Unrecognized adapter type ({})".format (adapter))
 
-from .dhcp_conf import DHCPConf
-
-try:
-    min_dhcp_conf_update_int_s = app.config ['MIN_DHCP_UPDATE_INTERVAL_S']
-    logger.info (f"Minimum DHCP update interval (seconds): {min_dhcp_conf_update_int_s}")
-    dhcp_conf_model = DHCPConf (dhcp_adapter, min_dhcp_conf_update_int_s)
-except Exception as ex:
-    logger.info ("Error starting with adapter:", exc_info=True)
-    exit (1)
-
 from .ws_connection import WSConnector
 
 try:
     ws_connection_enabled = app.config['WEBSOCKET_CONNECTION_ENABLED']
     if ws_connection_enabled:
-        ws_server_address =  app.config ['WEBSOCKET_SERVER_ADDRESS']
+        ws_server_address = app.config ['WEBSOCKET_SERVER_ADDRESS']
         ws_server_port = app.config ['WEBSOCKET_SERVER_PORT']
         ws_server_path = app.config ['WEBSOCKET_SERVER_PATH']
         ws_tls_certkey_file = app.config['WEBSOCKET_TLS_CERTKEY_FILE']
@@ -101,9 +92,18 @@ try:
         ws_connection.connect ()
     else:
         logger.info("Not initiating websocket connection (Websocket connection disabled)")
-
 except Exception as ex:
     logger.info ("Error starting websocket connector:", exc_info=True)
+    exit (1)
+
+from .dhcp_conf import DHCPConf
+
+try:
+    min_dhcp_conf_update_int_s = app.config ['MIN_DHCP_UPDATE_INTERVAL_S']
+    logger.info (f"Minimum DHCP update interval (seconds): {min_dhcp_conf_update_int_s}")
+    dhcp_conf_model = DHCPConf (ws_connection, dhcp_adapter, min_dhcp_conf_update_int_s)
+except Exception as ex:
+    logger.info ("Error starting with adapter:", exc_info=True)
     exit (1)
 
 # Initialize the API

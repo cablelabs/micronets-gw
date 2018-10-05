@@ -13,6 +13,12 @@ from pathlib import Path
 
 logger = logging.getLogger ('micronets-gw-lease-notify')
 
+logging_filename = 'micronets-gw-lease-notify.log'
+logging_filemode = 'a'
+logging_level = logging.DEBUG
+logging.basicConfig (level=logging_level, filename=logging_filename, filemode=logging_filemode,
+                     format='%(asctime)s %(name)s: %(levelname)s %(message)s')
+
 def get_env (var_name):
     env = os.environ
     if not var_name in env:
@@ -28,7 +34,6 @@ def post_lease_event (event_json):
 
 if __name__ == '__main__':
     print ("Running dnsmasq_lease_notify: ", sys.argv)
-    logfile_path = Path ("/tmp/micronets_dnsmasq_lease_notify.log")
     program = sys.argv [0]
     action = sys.argv [1]
     mac_address = sys.argv [2]
@@ -43,18 +48,19 @@ if __name__ == '__main__':
     logger.debug ("DNSMASQ_SUPPLIED_HOSTNAME: {}\n".format (get_env ('DNSMASQ_SUPPLIED_HOSTNAME')))
     logger.debug ("DNSMASQ_INTERFACE: {}\n".format (get_env ('DNSMASQ_INTERFACE')))
     logger.debug ("DNSMASQ_TAGS: {}\n".format (get_env ('DNSMASQ_TAGS')))
-    if (action == "old"):
+    if action == "old":
         logger.debug(f"Ignoring action {action}")
         exit (0)
-    lease_change_event = {"leaseAcquiredMessage": {
-                              "deviceId": ,
+    if action == "add":
+        lease_change_type = 'leaseAcquired'
+    elif action == "del":
+        lease_change_type = "leaseExpired"
+    lease_change_event = {"leaseChangeEvent": {
+                              "action": lease_change_type,
                               "macAddress": {"eui48": mac_address},
-                          "networkAddress": {"ipv4": ip_address},
-                          "hostname": hostname}
-    if (action == "add"):
-        lease_change_event ['event'] = "leaseAcquired"
-    if (action == "del"):
-        lease_change_event ['event'] = "leaseExpired"
+                              "networkAddress": {"ipv4": ip_address},
+                              "hostname": hostname}
+                         }
     lease_change_event_json = json.dumps (lease_change_event)
     logger.debug ("Sending event: {}\n".format (lease_change_event_json))
 
