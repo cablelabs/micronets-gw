@@ -57,7 +57,8 @@ class WSConnector:
                 self.websocket =  await self.init_connection (dest_uri, ssl_context=ssl_context)
             except Exception as ex:
                 logger.warn (f"WSConnector: setup_connection: Error connecting "
-                             f"to {self.ws_server_address}:{self.ws_server_port}: {ex}", exc_info=True)
+                             f"to {self.ws_server_address}:{self.ws_server_port}: {ex}", exc_info=False)
+                # Note: Set "exc_info=True" to get a detailed traceback
                 logger.info (f"WSConnector: Sleeping {self.retry_interval_s} seconds before reconnecting...")
                 await asyncio.sleep (self.retry_interval_s)
                 continue
