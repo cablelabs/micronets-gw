@@ -9,7 +9,7 @@ from netaddr import EUI
 from subprocess import call
 from .utils import ip_addr_pattern, mac_addr_pattern, blank_line_re, comment_line_re
 
-logger = logging.getLogger ('micronets-dhcp-server')
+logger = logging.getLogger ('micronets-gw-service')
 
 class IscDhcpdAdapter:
     block_start_re = re.compile ('^# %%MICRONET BLOCK START', re.ASCII)
