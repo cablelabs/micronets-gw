@@ -71,14 +71,14 @@ if (ovs_vsctl --version) > /dev/null 2>&1; then :; else
     exit 0
 fi
 
-if /etc/init.d/openvswitch-switch status > /dev/null 2>&1; then :; else
+if /etc/init.d/openvswitch-switch status > /dev/null 2>&1; then
+    debug_log "openvswitch-switch service already started"
+else
     debug_log "starting openvswitch-switch service"
     # NOTE: This assumes that this script will start OVS (and start it only once)
     #       It would probably be more correct to reset the DB via the OVS startup script
     reset_ovsdb
     /etc/init.d/openvswitch-switch start
-else
-    debug_log "openvswitch-switch service already started"
 fi
 
 if [ "${MODE}" = "start" ]; then
