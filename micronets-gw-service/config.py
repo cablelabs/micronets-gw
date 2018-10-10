@@ -3,7 +3,7 @@ import os, sys, pathlib, logging
 app_dir = os.path.abspath (os.path.dirname (__file__))
 
 class BaseConfig:
-    LOGFILE_PATH = "micronets-dhcp.log"
+    LOGFILE_PATH = pathlib.Path (__file__).parent.joinpath ("micronets-gw.log")
     LOGFILE_MODE = 'w'  # 'w' clears the log at startup, 'a' appends to the existing log file
     LOGGING_LEVEL = logging.DEBUG
     SECRET_KEY = os.environ.get ('SECRET_KEY') or 'A SECRET KEY'
@@ -11,7 +11,7 @@ class BaseConfig:
     LISTEN_PORT = 5000
     MIN_DHCP_UPDATE_INTERVAL_S = 5
     DEFAULT_LEASE_PERIOD = '10m'
-    SERVER_BIN_DIR = os.path.dirname (os.path.abspath (sys.argv [0]))
+    SERVER_BIN_DIR = pathlib.Path (__file__).parent.joinpath ("bin")
     WEBSOCKET_CONNECTION_ENABLED = False
     WEBSOCKET_SERVER_ADDRESS = "74.207.229.106"
     WEBSOCKET_SERVER_PORT = 5050
@@ -72,6 +72,7 @@ class BaseDnsmasqConfig (BaseConfig):
     DHCP_ADAPTER = "DnsMasq"
     DNSMASQ_CONF_FILE = '/etc/dnsmasq.d/micronets'
     DNSMASQ_RESTART_COMMAND = ['sudo','/etc/init.d/dnsmasq','restart']
+    DNSMASQ_LEASE_SCRIPT = BaseConfig.SERVER_BIN_DIR.joinpath ("dnsmasq_lease_notify.py")
 
 class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
     LISTEN_HOST = "127.0.0.1"

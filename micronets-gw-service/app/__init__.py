@@ -45,6 +45,7 @@ logging_filemode = app.config ['LOGFILE_MODE']
 logging_level = app.config ['LOGGING_LEVEL']
 logging.basicConfig (level=logging_level, filename=logging_filename, filemode=logging_filemode,
                      format='%(asctime)s %(name)s: %(levelname)s %(message)s')
+print (f"Logging to logfile {logging_filename} (level {logging_level})")
 
 logger = logging.getLogger ('micronets-gw-service')
 
@@ -80,15 +81,15 @@ from .ws_connection import WSConnector
 
 try:
     ws_connection_enabled = app.config['WEBSOCKET_CONNECTION_ENABLED']
+    ws_server_address = app.config ['WEBSOCKET_SERVER_ADDRESS']
+    ws_server_port = app.config ['WEBSOCKET_SERVER_PORT']
+    ws_server_path = app.config ['WEBSOCKET_SERVER_PATH']
+    ws_tls_certkey_file = app.config['WEBSOCKET_TLS_CERTKEY_FILE']
+    ws_tls_ca_cert_file = app.config['WEBSOCKET_TLS_CA_CERT_FILE']
+    ws_connection = WSConnector (ws_server_address, ws_server_port, ws_server_path,
+                                 tls_certkey_file=ws_tls_certkey_file,
+                                 tls_ca_file=ws_tls_ca_cert_file)
     if ws_connection_enabled:
-        ws_server_address = app.config ['WEBSOCKET_SERVER_ADDRESS']
-        ws_server_port = app.config ['WEBSOCKET_SERVER_PORT']
-        ws_server_path = app.config ['WEBSOCKET_SERVER_PATH']
-        ws_tls_certkey_file = app.config['WEBSOCKET_TLS_CERTKEY_FILE']
-        ws_tls_ca_cert_file = app.config['WEBSOCKET_TLS_CA_CERT_FILE']
-        ws_connection = WSConnector (ws_server_address, ws_server_port, ws_server_path,
-                                     tls_certkey_file=ws_tls_certkey_file,
-                                     tls_ca_file=ws_tls_ca_cert_file)
         ws_connection.connect ()
     else:
         logger.info("Not initiating websocket connection (Websocket connection disabled)")

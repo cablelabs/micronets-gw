@@ -10,7 +10,7 @@ import logging
 
 # This is the Model for the DHCP conf file entries
 
-logger = logging.getLogger ('micronets-dhcp-server')
+logger = logging.getLogger ('micronets-gw-service')
 
 class DHCPConf:
     def __init__ (self, ws_connection, dhcp_adapter, min_update_interval_s):

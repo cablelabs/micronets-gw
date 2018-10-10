@@ -10,7 +10,7 @@ from netaddr import EUI
 from subprocess import call
 from .utils import ip_addr_pattern, mac_addr_pattern, blank_line_re, comment_line_re, find_subnet_id_for_host
 
-logger = logging.getLogger ('micronets-dhcp-server')
+logger = logging.getLogger ('micronets-gw-service')
 
 class DnsMasqAdapter:
     lease_duration_re = 'infinite|[0-9]+[hm]?'
@@ -46,10 +46,11 @@ class DnsMasqAdapter:
         self.conffile_path = Path (config ['DNSMASQ_CONF_FILE'])
         self.dnsmasq_restart_command = config ['DNSMASQ_RESTART_COMMAND']
         self.default_lease_period = config ['DEFAULT_LEASE_PERIOD']
-        self.lease_script = config ['SERVER_BIN_DIR'] + "/dnsmasq_lease_notify.py"
+        self.lease_script = Path (config ['DNSMASQ_LEASE_SCRIPT'])
         with self.conffile_path.open ('a'):
             pass
         logger.info  (f"Instantiated DnsMasq with conf file {self.conffile_path.absolute()}")
+        logger.info  (f"dnsmasq lease script location: {self.lease_script.absolute()}")
 
     def read_from_conf (self):
         with self.conffile_path.open ('r') as infile:
@@ -180,7 +181,7 @@ class DnsMasqAdapter:
         with self.conffile_path.open ('w') as outfile:
             logger.info (f"DnsMasqAdapter: Saving subnet data to {self.conffile_path.absolute ()}")
             outfile.write ("# MODIFICATIONS TO THIS FILE WILL BE OVER-WRITTEN\n\n")
-            outfile.write ("dhcp-script={}\n\n".format (self.lease_script))
+            outfile.write ("dhcp-script={}\n\n".format (self.lease_script.absolute ()))
             self.write_subnets (outfile, subnets)
             self.write_devices (outfile, devices)
 

@@ -5,19 +5,21 @@ import sys
 import http.client, urllib.parse
 import json
 import logging
-
-from pathlib import Path
+import pathlib
 
 # See the documentation for the "--dhcp-script" option for details on how this script is invoked
 #  buy dnsmasq (see http://www.thekelleys.org.uk/dnsmasq/docs/dnsmasq-man.html)
 
-logger = logging.getLogger ('micronets-gw-lease-notify')
+bindir = os.path.dirname (os.path.abspath (sys.argv [0]))
+logging_filename = pathlib.Path(bindir).parent.joinpath("micronets-gw.log")
+print (f"logging output to {logging_filename}")
 
-logging_filename = 'micronets-gw-lease-notify.log'
 logging_filemode = 'a'
 logging_level = logging.DEBUG
 logging.basicConfig (level=logging_level, filename=logging_filename, filemode=logging_filemode,
                      format='%(asctime)s %(name)s: %(levelname)s %(message)s')
+
+logger = logging.getLogger ('micronets-gw-lease-notify')
 
 def get_env (var_name):
     env = os.environ
@@ -33,7 +35,7 @@ def post_lease_event (event_json):
     return conn.getresponse ()
 
 if __name__ == '__main__':
-    print ("Running dnsmasq_lease_notify: ", sys.argv)
+    logger.info (f"{__file__} invoked with arguments: {sys.argv}")
     program = sys.argv [0]
     action = sys.argv [1]
     mac_address = sys.argv [2]

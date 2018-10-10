@@ -7,7 +7,7 @@ import re
 import netaddr
 import logging
 
-logger = logging.getLogger ('micronets-dhcp-server')
+logger = logging.getLogger ('micronets-gw-service')
 
 dhcp_api_prefix = '/micronets/v1/dhcp'
 
