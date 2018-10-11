@@ -31,21 +31,25 @@ iface brmn001 inet static
 
 # Attach physical ports to the bridge (requesting particular port numbers)
 
-# This entry would represent the trunk interface (the interface with a gateway)
+# This entry would represent the trunk/uplink interface (the interface with a gateway)
 allow-brmn001 enp3s0
 iface enp3s0 inet manual
   ovs_type OVSPort
   ovs_bridge brmn001
   ovs_port_req 2
+  ovs_port_initial_state enabled
 
 allow-brmn001 enp4s0
 iface enp4s0 inet manual
   ovs_type OVSPort
   ovs_bridge brmn001
   ovs_port_req 3
+  ovs_port_initial_state blocked
 
 allow-brmn001 wlp2s0
 iface wlp2s0 inet manual
   ovs_type OVSPort
   ovs_bridge brmn001
   ovs_port_req 4
+  ovs_port_initial_state blocked
+

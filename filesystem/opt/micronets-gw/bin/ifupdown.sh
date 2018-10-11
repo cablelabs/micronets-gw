@@ -36,10 +36,8 @@ ovs_ofctl() {
 }
 
 clear_iptables() {
-    iptables --flush
-    iptables --delete-chain
+    iptables --table filter --flush
     iptables --table nat --flush
-    iptables --table nat --delete-chain
 }
 
 reset_ovsdb() {
@@ -53,7 +51,7 @@ reset_ovsdb() {
 config_iptables_bridge_uplink() {
     BRIDGE_INTERFACE=$1
     UPLINK_INTERFACE=$2
-    iptables --append FORWARD --in-interface ${UPLINK_INTERFACE} -j ACCEPT
+    iptables --table filter --append FORWARD --in-interface ${UPLINK_INTERFACE} -j ACCEPT
     iptables --table nat --append POSTROUTING --out-interface ${BRIDGE_INTERFACE} -j MASQUERADE
     sysctl -w net.ipv4.ip_forward=1
 }
@@ -92,6 +90,9 @@ if [ "${MODE}" = "start" ]; then
                     ${IF_OVS_PROTOCOLS+-- set bridge ${IFACE} protocols=$IF_OVS_PROTOCOLS} \
                     ${OVS_EXTRA+-- $OVS_EXTRA}
 
+                # Delete any/all flows for the bridge
+                ovs_ofctl del-flows ${IFACE}
+
                 if [ -z "${IF_OVS_BRIDGE_UPLINK_PORT}" ]; then
                     debug_log "Error: ovs_bridge_uplink_port entry missing for OVSBridge ${IFACE} declaration!"
                 else
@@ -109,8 +110,7 @@ if [ "${MODE}" = "start" ]; then
                     ifup --allow=${IFACE} ${IF_OVS_PORTS}
                 fi
 
-                # Clear ALL Flows and set NORMAL .aka L2 Learning switch mode.
-                ovs_ofctl del-flows ${IFACE}
+                # NORMAL flow .aka L2 Learning switch mode.
                 ovs_ofctl add-flow ${IFACE} "table=0 priority=0 actions=normal"
                 ;;
 
@@ -119,6 +119,15 @@ if [ "${MODE}" = "start" ]; then
                     ${IFACE} ${IF_OVS_OPTIONS} \
                     ${IF_OVS_PORT_REQ+-- set Interface ${IFACE} ofport_request=${IF_OVS_PORT_REQ}} \
                     ${OVS_EXTRA+-- $OVS_EXTRA}
+
+		if [ "${IF_OVS_PORT_INITIAL_STATE}" = "blocked" ]; then
+		    if [ -z "${IF_OVS_PORT_REQ}" ]; then
+                        debug_log "Error: ovs_port_initial_state entry requires a ovs_port_req entry"
+		    else
+		        # Setup a flow to block all traffic to the port (until a controller is connected)
+		        ovs_ofctl add-flow "${IF_OVS_BRIDGE}" "table=0 priority=10 in_port=${IF_OVS_PORT_REQ} actions=drop"
+		    fi
+		fi
 
                 ip link set ${IFACE} up
                 ;;
