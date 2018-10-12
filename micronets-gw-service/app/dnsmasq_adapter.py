@@ -15,8 +15,10 @@ logger = logging.getLogger ('micronets-gw-service')
 class DnsMasqAdapter:
     lease_duration_re = 'infinite|[0-9]+[hm]?'
 
-    # # Subnet: wired-micronet-1, ovsPort: 3, interface: enp3s0
-    dhcp_range_prefix_re = re.compile ('^\s*#\s*Subnet:\s*(\w.[\w-]*)\s*,\s*ovsPort:\s*([0-9]+)\s*,\s*interface:\s*(\w+)\s*$',
+    # # Subnet: testsubnet001, ovsBridge: brmn001, ovsPort: 3, interface: enxac7f3ee61832
+    # # Subnet: wired-micronet-1, ovsBridge: brmn001, ovsPort: 3, interface: enp3s0
+    dhcp_range_prefix_re = re.compile ('^\s*#\s*Subnet:\s*(\w.[\w-]*)\s*,\s*ovsBridge:\s*(\w+)\s*,'
+                                       '\s*ovsPort:\s*([0-9]+)\s*,\s*interface:\s*(\w+)\s*$',
                                        re.ASCII)
 
     # dhcp-range=set:testsubnet001,10.40.0.0,static,255.255.255.0,3m
@@ -79,8 +81,9 @@ class DnsMasqAdapter:
             dhcp_range_prefix_match_result = self.dhcp_range_prefix_re.match (line)
             if (dhcp_range_prefix_match_result):
                 prefix_subnet_id = dhcp_range_prefix_match_result.group (1)
-                prefix_ovs_port = int (dhcp_range_prefix_match_result.group (2))
-                prefix_interface = dhcp_range_prefix_match_result.group (3)
+                prefix_ovs_bridge = dhcp_range_prefix_match_result.group (2)
+                prefix_ovs_port = int (dhcp_range_prefix_match_result.group (3))
+                prefix_interface = dhcp_range_prefix_match_result.group (4)
                 continue
             if (comment_line_re.match (line)):
                 continue
@@ -94,6 +97,7 @@ class DnsMasqAdapter:
                 subnet_lease_duration = dhcp_range_match_result.group (4)
                 if prefix_subnet_id != subnet_id:
                     raise Exception(f"Found dhcp-range with mismatched subnet id ({subnet_id} != {prefix_subnet_id})")
+                prefix_subnet_id = None
                 network = IPv4Network (subnet_network + "/" + subnet_netmask, strict=True)
                 logger.debug ("DnsMasqAdapter.parse_conffile: Found subnet range: {} {} {} {}"
                               .format (subnet_id, subnet_network, subnet_netmask, subnet_lease_duration))
@@ -106,6 +110,7 @@ class DnsMasqAdapter:
                 subnet = {}
                 subnet ['subnetId'] = subnet_id
                 subnet ['ipv4Network'] = {'network' : str (network.network_address), 'mask' : str (network.netmask)}
+                subnet ['ovsBridge'] = prefix_ovs_bridge
                 subnet ['ovsPort'] = prefix_ovs_port
                 subnet ['interface'] = prefix_interface
                 subnets [subnet_id] = subnet
@@ -208,9 +213,11 @@ class DnsMasqAdapter:
     def write_subnets (self, outfile, subnets):
         for subnet_id, subnet in subnets.items ():
             # # Subnet: wired-micronet-1, ovsPort: 3, interface: enp3s0
+            ovs_switch = subnet ['ovsBridge']
             ovs_port = subnet ['ovsPort']
             interface = subnet ['interface']
-            outfile.write ("# Subnet: {}, ovsPort: {}, interface: {}\n".format (subnet_id, ovs_port, interface))
+            outfile.write ("# Subnet: {}, ovsBridge: {}, ovsPort: {}, interface: {}\n"
+                           .format (subnet_id, ovs_switch, ovs_port, interface))
             ipv4_params = subnet ['ipv4Network']
             network_addr = ipv4_params['network']
             netmask = ipv4_params ['mask']
