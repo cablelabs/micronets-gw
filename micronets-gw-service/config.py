@@ -11,7 +11,8 @@ class BaseConfig:
     LISTEN_PORT = 5000
     MIN_DHCP_UPDATE_INTERVAL_S = 5
     DEFAULT_LEASE_PERIOD = '10m'
-    SERVER_BIN_DIR = pathlib.Path (__file__).parent.joinpath ("bin")
+    SERVER_BASE_DIR = pathlib.Path (__file__).parent
+    SERVER_BIN_DIR = SERVER_BASE_DIR.joinpath ("bin")
     WEBSOCKET_CONNECTION_ENABLED = False
     WEBSOCKET_SERVER_ADDRESS = "74.207.229.106"
     WEBSOCKET_SERVER_PORT = 5050
@@ -19,6 +20,8 @@ class BaseConfig:
     # NOTE: WEBSOCKET_SERVER_PATH should be unique to the gateway/subscriber if using the proxy
     WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
+    FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces"
+    FLOW_ADAPTER_ENABLED = True
 
 #
 # Mock Adapter Configurations
@@ -73,6 +76,8 @@ class BaseDnsmasqConfig (BaseConfig):
     DNSMASQ_CONF_FILE = '/etc/dnsmasq.d/micronets'
     DNSMASQ_RESTART_COMMAND = ['sudo','/etc/init.d/dnsmasq','restart']
     DNSMASQ_LEASE_SCRIPT = BaseConfig.SERVER_BIN_DIR.joinpath ("dnsmasq_lease_notify.py")
+    FLOW_ADAPTER_NETWORK_INTERFACES_PATH = 'lib/micronets-ws-root.cert.pem'
+
 
 class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
     LISTEN_HOST = "127.0.0.1"
@@ -80,6 +85,8 @@ class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
     LOGFILE_MODE = None
     DNSMASQ_CONF_FILE = 'doc/dnsmasq-config.sample'
     DNSMASQ_RESTART_COMMAND = []
+    FLOW_ADAPTER_NETWORK_INTERFACES_PATH = BaseConfig.SERVER_BASE_DIR.parent\
+                                                     .joinpath("filesystem/opt/micronets-gw/doc/interfaces.sample")
     DEBUG = True
 
 class DnsmasqDevelopmentConfigWithWebsocket (DnsmasqDevelopmentConfig):

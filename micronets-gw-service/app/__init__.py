@@ -99,10 +99,19 @@ except Exception as ex:
 
 from .dhcp_conf import DHCPConf
 
+flow_adapter = None
+try:
+    if app.config['FLOW_ADAPTER_ENABLED']:
+        from .open_flow_adapter import OpenFlowAdapter
+
+        flow_adapter = OpenFlowAdapter (app.config)
+except Exception as ex:
+    logger.warning ("Error staring flow adapter:", exc_info=True)
+
 try:
     min_dhcp_conf_update_int_s = app.config ['MIN_DHCP_UPDATE_INTERVAL_S']
     logger.info (f"Minimum DHCP update interval (seconds): {min_dhcp_conf_update_int_s}")
-    dhcp_conf_model = DHCPConf (ws_connection, dhcp_adapter, min_dhcp_conf_update_int_s)
+    dhcp_conf_model = DHCPConf (ws_connection, dhcp_adapter, flow_adapter, min_dhcp_conf_update_int_s)
 except Exception as ex:
     logger.info ("Error starting with adapter:", exc_info=True)
     exit (1)
