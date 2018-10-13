@@ -21,6 +21,8 @@ class BaseConfig:
     WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces"
+    # For this command, the first parameter will be the bridge name and the second the flow filename
+    FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl --bundle add-flows "{}" "{}"'
     FLOW_ADAPTER_ENABLED = True
 
 #
