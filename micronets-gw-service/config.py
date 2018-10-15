@@ -23,7 +23,7 @@ class BaseConfig:
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces"
     # For this command, the first parameter will be the bridge name and the second the flow filename
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl --bundle add-flows "{}" "{}"'
-    FLOW_ADAPTER_ENABLED = True
+    FLOW_ADAPTER_ENABLED = False
 
 #
 # Mock Adapter Configurations
@@ -97,6 +97,7 @@ class DnsmasqDevelopmentConfigWithWebsocket (DnsmasqDevelopmentConfig):
 
 class DnsmasqTestingConfig (BaseDnsmasqConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
+    FLOW_ADAPTER_ENABLED = True
     DEBUG = True
 
 class DnsmasqProductionConfig (BaseDnsmasqConfig):
