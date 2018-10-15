@@ -105,6 +105,8 @@ try:
         from .open_flow_adapter import OpenFlowAdapter
 
         flow_adapter = OpenFlowAdapter (app.config)
+    else:
+        logger.info("Not starting OpenFlowAdapter (adapter disabled in config)")
 except Exception as ex:
     logger.warning ("Error staring flow adapter:", exc_info=True)
 

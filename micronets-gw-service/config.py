@@ -78,7 +78,6 @@ class BaseDnsmasqConfig (BaseConfig):
     DNSMASQ_CONF_FILE = '/etc/dnsmasq.d/micronets'
     DNSMASQ_RESTART_COMMAND = ['sudo','/etc/init.d/dnsmasq','restart']
     DNSMASQ_LEASE_SCRIPT = BaseConfig.SERVER_BIN_DIR.joinpath ("dnsmasq_lease_notify.py")
-    FLOW_ADAPTER_NETWORK_INTERFACES_PATH = 'lib/micronets-ws-root.cert.pem'
 
 
 class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
