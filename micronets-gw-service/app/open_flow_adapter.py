@@ -67,10 +67,10 @@ class OpenFlowAdapter:
             port_filter_table = 20
             logger.info(f"created temporary file {flow_file_path}")
             flow_file.write ("del\n") # This will clear all flows
-            target_bridge = None
+            target_bridge = "brmn001"
 
             # Walk the subnets
-            subnet_table = 100
+            cur_subnet_table = 100
             for subnet_id, subnet in subnet_list.items ():
                 subnet_int = subnet ['interface']
                 subnet_bridge = subnet ['ovsBridge']
@@ -87,16 +87,16 @@ class OpenFlowAdapter:
                                      "in configured micronet interfaces ({self.ovs_micronet_interfaces})")
                 disabled_interfaces.remove (subnet_int)
                 flow_file.write (f"add table={start_table},priority=10,in_port={subnet_int} "
-                                 f"actions=resubmit(,{subnet_table})\n")
+                                 f"actions=resubmit(,{cur_subnet_table})\n")
                 # Walk the devices and create a device filter table for each interface
                 for device_id, device in device_lists [subnet_id].items ():
                     device_mac = device ['macAddress']['eui48']
                     logger.info (f"Looking at device {device_id}: {device}")
-                    flow_file.write (f"add table={subnet_table},priority=10,dl_src={device_mac} "
+                    flow_file.write (f"add table={cur_subnet_table},priority=10,dl_src={device_mac} "
                                      f"actions=resubmit(,{port_filter_table})\n")
-                flow_file.write (f"add table={subnet_table},priority=5 "
+                flow_file.write (f"add table={cur_subnet_table},priority=5 "
                                  f"actions=drop\n")
-                subnet_table += 1
+                cur_subnet_table += 1
             for interface in disabled_interfaces:
                 logger.info (f"Disabling flow for interface {interface}")
                 flow_file.write (f"add table={start_table},priority=10,in_port={interface} "
