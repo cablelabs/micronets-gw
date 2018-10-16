@@ -63,23 +63,23 @@ class OpenFlowAdapter:
 
     def determine_port_mappings (self):
         # TODO: Consider using ovsdb-query to get the port mappings
-        self.interface_for_port = None
-        self.port_for_interface = None
+        self.interface_for_port = {}
+        self.port_for_interface = {}
         cp = subprocess.run(["/usr/bin/ovs-dpctl", "show"], stdout=subprocess.PIPE)
         if not cp or not cp.stdout:
             raise Exception (f"Error running ovs-dpctl: no stdout")
-        lines = cp.stdout.decode (encoding="utf-8")
+        dpctl_out = cp.stdout.decode (encoding="utf-8")
 
-        logger.info("Port interfaces:")
-        logger.info("------------------------------------------------------------------------")
-        logger.info(lines)
-        logger.info("------------------------------------------------------------------------")
+        logger.info ("Port interfaces:\n"
+                     "------------------------------------------------------------------------\n"
+                     + dpctl_out)
+        lines = dpctl_out.split ("\n")
         for line in lines:
             match = self.port_intface_re.match (line)
-            port = match.group (1)
-            interface = match.group (2)
             if match:
-                logger.info("Found port {port} for interface {interface}")
+                port = match.group (1)
+                interface = match.group (2)
+                logger.info(f"Found port {port} for interface {interface}")
                 self.interface_for_port[port] = interface
                 self.port_for_interface[interface] = port
 
