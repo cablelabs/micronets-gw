@@ -1,4 +1,4 @@
-import re, logging, tempfile
+import re, logging, tempfile, subprocess
 
 from pathlib import Path
 from .utils import blank_line_re, comment_line_re
@@ -13,6 +13,7 @@ class OpenFlowAdapter:
     #   ovs_bridge_uplink_port enp3s0
     interfaces_ovs_bridge_uplink_re = re.compile ('^\s*ovs_bridge_uplink_port\s+(\w+)\s*$')
     interfaces_ovs_ports_re = re.compile ('\s*ovs_ports\s+([\w ]+)\s*$')
+    port_intface_re = re.compile('^\s*port ([0-9]+): (\w+).*$')
 
     def __init__ (self, config):
         self.interfaces_file_path = Path (config ['FLOW_ADAPTER_NETWORK_INTERFACES_PATH'])
@@ -21,11 +22,16 @@ class OpenFlowAdapter:
         with self.interfaces_file_path.open ('r') as infile:
             try:
                 infile.line_no = 0
-                logger.info (f"IscDhcpdAdapter: Loading bridge port {self.interfaces_file_path.absolute ()}")
+                logger.info (f"OpenFlowAdapter: Loading bridge port {self.interfaces_file_path.absolute ()}")
                 self.read_interfaces_file (infile)
             except Exception as e:
-                raise Exception ("IscDhcpdAdapter: Error on line {} of {}: {}"
+                raise Exception ("OpenFlowAdapter: Error on line {} of {}: {}"
                                  .format (infile.line_no, self.interfaces_file_path.absolute (), e))
+
+        try:
+            self.determine_port_mappings ()
+        except Exception as e:
+            raise Exception ("OpenFlowAdapter: Error determining port mppings: {}".format (e))
 
     def read_interfaces_file (self, infile):
         self.ovs_micronet_interfaces = None
@@ -54,6 +60,28 @@ class OpenFlowAdapter:
         self.ovs_micronet_interfaces.remove (self.ovs_uplink_interface)
         logger.info (f"OpenFlowAdapter.read_interfaces_file: ovs_micronet_ports: {self.ovs_micronet_interfaces}")
         logger.info (f"OpenFlowAdapter.read_interfaces_file: ovs_uplink_port: {self.ovs_uplink_interface}")
+
+    def determine_port_mappings (self):
+        # TODO: Consider using ovsdb-query to get the port mappings
+        self.interface_for_port = None
+        self.port_for_interface = None
+        cp = subprocess.run(["/usr/bin/ovs-dpctl", "show"], stdout=subprocess.PIPE)
+        if not cp or not cp.stdout:
+            raise Exception (f"Error running ovs-dpctl: no stdout")
+        lines = cp.stdout.decode (encoding="utf-8")
+
+        logger.info("Port interfaces:")
+        logger.info("------------------------------------------------------------------------")
+        logger.info(lines)
+        logger.info("------------------------------------------------------------------------")
+        for line in lines:
+            match = self.port_intface_re.match (line)
+            port = match.group (1)
+            interface = match.group (2)
+            if match:
+                logger.info("Found port {port} for interface {interface}")
+                self.interface_for_port[port] = interface
+                self.port_for_interface[interface] = port
 
     def update (self, subnet_list, device_lists):
         logger.info (f"OpenFlowAdapter.update ()")
