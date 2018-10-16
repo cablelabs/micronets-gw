@@ -114,7 +114,8 @@ class OpenFlowAdapter:
                     raise Exception (f"interface {subnet_int} in subnet {subnet_id} not found "
                                      "in configured micronet interfaces ({self.ovs_micronet_interfaces})")
                 disabled_interfaces.remove (subnet_int)
-                flow_file.write (f"add table={start_table},priority=10,in_port={subnet_int} "
+                subnet_port = self.port_for_interface [subnet_int]
+                flow_file.write (f"add table={start_table},priority=10,in_port={subnet_port} "
                                  f"actions=resubmit(,{cur_subnet_table})\n")
                 # Walk the devices and create a device filter table for each interface
                 for device_id, device in device_lists [subnet_id].items ():
@@ -127,7 +128,8 @@ class OpenFlowAdapter:
                 cur_subnet_table += 1
             for interface in disabled_interfaces:
                 logger.info (f"Disabling flow for interface {interface}")
-                flow_file.write (f"add table={start_table},priority=10,in_port={interface} "
+                subnet_port = self.port_for_interface [interface]
+                flow_file.write (f"add table={start_table},priority=10,in_port={subnet_port} "
                                  f"actions=drop\n")
             # All requests that aren't associated with a micronet go to NORMAL
             flow_file.write (f"add table={start_table},priority=5 "
