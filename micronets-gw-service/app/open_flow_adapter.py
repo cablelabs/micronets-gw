@@ -120,7 +120,6 @@ class OpenFlowAdapter:
                 # Walk the devices and create a device filter table for each interface
                 for device_id, device in device_lists [subnet_id].items ():
                     device_mac = device ['macAddress']['eui48']
-                    logger.info (f"Looking at device {device_id}: {device}")
                     flow_file.write (f"add table={cur_subnet_table},priority=10,dl_src={device_mac} "
                                      f"actions=resubmit(,{port_filter_table})\n")
                 flow_file.write (f"add table={cur_subnet_table},priority=5 "
