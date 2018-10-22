@@ -62,13 +62,13 @@ class DnsMasqAdapter:
         with self.conffile_path.open ('r') as infile:
             try:
                 infile.line_no = 0
-                logger.info (f"IscDhcpdAdapter: Loading subnet data from {self.conffile_path.absolute ()}")
+                logger.info (f"DnsMasqAdapter: Loading subnet data from {self.conffile_path.absolute ()}")
                 read_conf = self.parse_conffile (infile)
                 subnets = read_conf ['subnets']
                 devices = read_conf ['devices']
                 return {"subnets": subnets, "devices": devices}
             except Exception as e:
-                raise Exception ("IscDhcpdAdapter: Error on line {} of {}: {}"
+                raise Exception ("DnsMasqAdapter: Error on line {} of {}: {}"
                                  .format (infile.line_no, self.conffile_path.absolute (), e))
 
     def parse_conffile (self, infile):

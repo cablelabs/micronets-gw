@@ -13,9 +13,10 @@ import logging
 logger = logging.getLogger ('micronets-gw-service')
 
 class DHCPConf:
-    def __init__ (self, ws_connection, dhcp_adapter, min_update_interval_s):
+    def __init__ (self, ws_connection, dhcp_adapter, flow_adapter, min_update_interval_s):
         self.ws_connection = ws_connection
         self.dhcp_adapter = dhcp_adapter
+        self.flow_adapter = flow_adapter
         self.min_update_interval_s = min_update_interval_s
         self.update_timer = None
         read_conf = dhcp_adapter.read_from_conf ()
@@ -26,6 +27,8 @@ class DHCPConf:
         logger.info (json.dumps (self.subnet_list, indent=2))
         logger.info ("Device lists:")
         logger.info (json.dumps (self.device_lists, indent=2))
+        if flow_adapter:
+            flow_adapter.update (self.subnet_list, self.device_lists)
 
     def update_conf (self):
         if (self.min_update_interval_s and self.min_update_interval_s > 0):
@@ -38,6 +41,8 @@ class DHCPConf:
 
     def update_conf_now (self):
         self.dhcp_adapter.save_to_conf (self.subnet_list, self.device_lists)
+        if self.flow_adapter:
+            self.flow_adapter.update (self.subnet_list, self.device_lists)
 
     #
     # Subnet Operations
