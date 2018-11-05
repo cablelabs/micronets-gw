@@ -22,6 +22,12 @@ source /usr/share/virtualenvwrapper/virtualenvwrapper.sh
 
 and Python 3.6 can be installed by running `sudo apt-get install python3.6` on Ubuntu 16.10+. For Ubuntu 16.04, follow the instructions here:
 
+```
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt-get update
+sudo apt-get install python3.6
+```
+
 For the Mac, the virtualenvwrapper can be installed by installing macports (see https://www.macports.org/install.php) and then running:
 
 ```
