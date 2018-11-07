@@ -201,8 +201,10 @@ def check_mac_address_field (json_obj, mac_addr_field, required):
         raise InvalidUsage (400, message=f"Supplied MAC '{mac_field}' in '{mac_addr_field}' is not valid")
     return mac_field
 
+lease_duration_re = re.compile ('^([0-9]+)([hms]?)$', re.ASCII)
+
 def check_device (device, required):
-    check_for_unrecognized_entries (device, ['deviceId','macAddress','networkAddress'])
+    check_for_unrecognized_entries (device, ['deviceId','macAddress','networkAddress','leaseDuration'])
     device_id = check_field (device, 'deviceId', str, required)
     if device_id:
         device_id = device_id.lower ()
@@ -223,6 +225,16 @@ def check_device (device, required):
     else:
         check_for_unrecognized_entries (network_address, ['ipv4'])
         check_ipv4_address_field (network_address, 'ipv4', required)
+
+    lease_duration_field = check_field (device, 'leaseDuration', str, False)
+    if lease_duration_field:
+        lease_dur_match = lease_duration_re.match(lease_duration_field)
+        if not lease_dur_match:
+            raise InvalidUsage (400, message=f"Invalid lease duration field value \"{lease_duration_field}\""
+                                             " (must be an int followed by optional time unit h,m, or s)")
+        lease_duration = int (lease_dur_match.group (1))
+        if lease_duration <= 0:
+            raise InvalidUsage (400, message=f"Invalid lease duration \"{lease_duration}\" (must be greater than 1)")
 
 def check_devices (devices, required):
     for device in devices:
