@@ -101,7 +101,7 @@ class WSConnector:
         self.websocket = await websockets.connect (dest_uri, ssl=ssl_context)
         logger.info (f"WSConnector: init_connect opened {dest_uri}.")
         logger.info (f"WSConnector Sending HELLO message...")
-        await self.send_hello_message (self.ws_server_path)
+        await self.send_hello_message (f"gw service {id(self)}")
         logger.info (f"WSConnector: Waiting for HELLO messages...")
         await self.wait_for_hello_message ()
         self.hello_received = True
