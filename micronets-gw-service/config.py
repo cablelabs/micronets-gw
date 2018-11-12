@@ -11,7 +11,8 @@ class BaseConfig:
     LISTEN_PORT = 5000
     MIN_DHCP_UPDATE_INTERVAL_S = 5
     DEFAULT_LEASE_PERIOD = '10m'
-    SERVER_BIN_DIR = pathlib.Path (__file__).parent.joinpath ("bin")
+    SERVER_BASE_DIR = pathlib.Path (__file__).parent
+    SERVER_BIN_DIR = SERVER_BASE_DIR.joinpath ("bin")
     WEBSOCKET_CONNECTION_ENABLED = False
     WEBSOCKET_SERVER_ADDRESS = "ws-proxy.micronets.in"
     WEBSOCKET_SERVER_PORT = 5050
@@ -19,6 +20,10 @@ class BaseConfig:
     WEBSOCKET_SERVER_PATH = '/micronets/v1/ws-proxy/micronets-gw-0001'
     WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
+    FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces"
+    # For this command, the first parameter will be the bridge name and the second the flow filename
+    FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {} {}'
+    FLOW_ADAPTER_ENABLED = False
 
 #
 # Mock Adapter Configurations
@@ -74,12 +79,15 @@ class BaseDnsmasqConfig (BaseConfig):
     DNSMASQ_RESTART_COMMAND = ['sudo','/etc/init.d/dnsmasq','restart']
     DNSMASQ_LEASE_SCRIPT = BaseConfig.SERVER_BIN_DIR.joinpath ("dnsmasq_lease_notify.py")
 
+
 class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
     LISTEN_HOST = "127.0.0.1"
     LOGFILE_PATH = None
     LOGFILE_MODE = None
     DNSMASQ_CONF_FILE = 'doc/dnsmasq-config.sample'
     DNSMASQ_RESTART_COMMAND = []
+    FLOW_ADAPTER_NETWORK_INTERFACES_PATH = BaseConfig.SERVER_BASE_DIR.parent\
+                                                     .joinpath("filesystem/opt/micronets-gw/doc/interfaces.sample")
     DEBUG = True
 
 class DnsmasqDevelopmentConfigWithWebsocket (DnsmasqDevelopmentConfig):
@@ -88,6 +96,7 @@ class DnsmasqDevelopmentConfigWithWebsocket (DnsmasqDevelopmentConfig):
 
 class DnsmasqTestingConfig (BaseDnsmasqConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
+    FLOW_ADAPTER_ENABLED = True
     DEBUG = True
 
 class DnsmasqProductionConfig (BaseDnsmasqConfig):
