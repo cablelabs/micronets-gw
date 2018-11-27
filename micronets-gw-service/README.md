@@ -12,7 +12,7 @@ mkvirtualenv -r requirements.txt -a $PWD -p $(which python3) micronets-gw-servic
 workon micronets-gw-service
 ```
 
-Note that this requires Pyton 3 to be installed and the virtuanenv wrappers.
+Note that this package requires Python 3.6 and the virtuanenv wrapper tools to be installed.
 
 For Linux, the virtualenvwrapper can be installed using:
 ```
