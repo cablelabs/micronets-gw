@@ -119,7 +119,7 @@ def check_nameservers (container, field_name, required):
     return nameservers
 
 def check_subnet (subnet, subnet_id=None, required=True):
-    check_for_unrecognized_entries (subnet, ['subnetId','ipv4Network','nameservers','ovsBridge','ovsPort','interface'])
+    check_for_unrecognized_entries (subnet, ['subnetId','ipv4Network','nameservers','ovsBridge','interface'])
     body_subnet_id = check_field (subnet, 'subnetId', str, required)
     if subnet_id and body_subnet_id:
         if subnet_id != body_subnet_id:
@@ -132,7 +132,6 @@ def check_subnet (subnet, subnet_id=None, required=True):
     check_ipv4_network (subnet, subnet_id, required)
     check_nameservers (subnet, 'nameservers', required)
     check_field (subnet, 'ovsBridge', str, required)
-    check_field (subnet, 'ovsPort', int, required)
     check_field (subnet, 'interface', str, required)
 
 def check_subnets (subnets, required):

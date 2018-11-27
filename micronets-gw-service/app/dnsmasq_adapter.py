@@ -15,10 +15,10 @@ logger = logging.getLogger ('micronets-gw-service')
 class DnsMasqAdapter:
     lease_duration_re = 'infinite|[0-9]+[hm]?'
 
-    # # Subnet: testsubnet001, ovsBridge: brmn001, ovsPort: 3, interface: enxac7f3ee61832
-    # # Subnet: wired-micronet-1, ovsBridge: brmn001, ovsPort: 3, interface: enp3s0
+    # # Subnet: testsubnet001, ovsBridge: brmn001, interface: enxac7f3ee61832
+    # # Subnet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
     dhcp_range_prefix_re = re.compile ('^\s*#\s*Subnet:\s*(\w.[\w-]*)\s*,\s*ovsBridge:\s*(\w+)\s*,'
-                                       '\s*ovsPort:\s*([0-9]+)\s*,\s*interface:\s*(\w+)\s*$',
+                                       '\s*,\s*interface:\s*(\w+)\s*$',
                                        re.ASCII)
 
     # dhcp-range=set:testsubnet001,10.40.0.0,static,255.255.255.0,3m
@@ -111,7 +111,6 @@ class DnsMasqAdapter:
                 subnet ['subnetId'] = subnet_id
                 subnet ['ipv4Network'] = {'network' : str (network.network_address), 'mask' : str (network.netmask)}
                 subnet ['ovsBridge'] = prefix_ovs_bridge
-                subnet ['ovsPort'] = prefix_ovs_port
                 subnet ['interface'] = prefix_interface
                 subnets [subnet_id] = subnet
                 devices_list [subnet_id] = {}
@@ -212,12 +211,11 @@ class DnsMasqAdapter:
 
     def write_subnets (self, outfile, subnets):
         for subnet_id, subnet in subnets.items ():
-            # # Subnet: wired-micronet-1, ovsPort: 3, interface: enp3s0
+            # # Subnet: wired-micronet-1, interface: enp3s0
             ovs_switch = subnet ['ovsBridge']
-            ovs_port = subnet ['ovsPort']
             interface = subnet ['interface']
-            outfile.write ("# Subnet: {}, ovsBridge: {}, ovsPort: {}, interface: {}\n"
-                           .format (subnet_id, ovs_switch, ovs_port, interface))
+            outfile.write ("# Subnet: {}, ovsBridge: {}, interface: {}\n"
+                           .format (subnet_id, ovs_switch, interface))
             ipv4_params = subnet ['ipv4Network']
             network_addr = ipv4_params['network']
             netmask = ipv4_params ['mask']
