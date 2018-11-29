@@ -46,6 +46,6 @@ where "{ver}" is the version number built above with the `make` command. (e.g. "
 
 See [the "Dependencies" section of the micronets-gw README](micronets-gw-service/README.md#Dependencies) for details on installing the micronets-gw-service dependancies. 
 
-Once the Micronets Gateway service is installed, the `/etc/network/interfaces` file needs to be customized for your setup. [An example interfaces file can be found in filesystem/opt/micronets-gw/doc](filesystem/opt/micronets-gw/doc/interfaces.sample). Note that changes to this file typically (currently?) require a system restart to be made effective. 
+Once the Micronets Gateway service is installed, the `/etc/network/interfaces` file needs to be customized for your setup. [An example interfaces file can be found in filesystem/opt/micronets-gw/doc](filesystem/opt/micronets-gw/doc/interfaces.sample). Changes to this file require restart of the networking service (e.g. `sudo /etc/init.d/networking restart`). As this is not always reliable/tested (currently), a system restart is recommended after changing the interfaces file.
 
 The Micronets Gateway service configuration can be found in `/opt/micronets-gw/config.py`. Almost all of the settings should be able to left at their defaults - with the exception of the `WEBSOCKET_SERVER_PATH` directory. This should be set to include a gateway identifier. For development purposes, something like `/micronets/v1/ws-proxy/bobs-test-gateway` should suffice.
