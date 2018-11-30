@@ -1,7 +1,7 @@
 import re, logging, tempfile, subprocess
 
 from pathlib import Path
-from .utils import blank_line_re, comment_line_re
+from .utils import blank_line_re, comment_line_re, unroll_host_list
 from subprocess import call
 
 logger = logging.getLogger ('micronets-gw-service')
@@ -86,26 +86,43 @@ class OpenFlowAdapter:
     def update (self, subnet_list, device_lists):
         logger.info (f"OpenFlowAdapter.update ()")
         logger.info (f"OpenFlowAdapter.update: device_lists: {device_lists}")
+
+        # Note: These flows are a work-in-progress
+
         disabled_interfaces = self.ovs_micronet_interfaces.copy ()
         logger.info (f"OpenFlowAdapter.update: configured interfaces: {disabled_interfaces}")
 
         with tempfile.NamedTemporaryFile (mode='wt') as flow_file:
             flow_file_path = Path (flow_file.name)
-            start_table = 0
-            port_filter_table = 20
             logger.info(f"created temporary file {flow_file_path}")
+            start_table = 0
+            trunk_table = 2
+            unrestricted_device_table = 3
             flow_file.write ("del\n") # This will clear all flows
-            target_bridge = "brmn001"
+
+            flow_file.write(f"add table={start_table},priority=20,dl_dst=01:80:c2:00:00:00/ff:ff:ff:ff:ff:f0, "
+                            f"actions=drop\n")
+            flow_file.write(f"add table={start_table},priority=20,dl_src=01:00:00:00:00:00/01:00:00:00:00:00, "
+                            f"actions=drop\n")
+            # This NORMAL action for LOCAL means the packet will be delivered
+            flow_file.write(f"add table={start_table},priority=10,in_port=LOCAL "
+                            f"actions=NORMAL\n")
+            flow_file.write(f"add table={start_table},priority=10,in_port=1 "
+                            f"actions=NORMAL\n")
 
             # Walk the subnets
-            cur_subnet_table = 100
+            cur_table = 10
             for subnet_id, subnet in subnet_list.items ():
                 subnet_int = subnet ['interface']
                 subnet_bridge = subnet ['ovsBridge']
-                logger.info (f"Enabling flow for subnet {subnet_id} (interface {subnet_int})")
+                subnet_network = subnet ['ipv4Network']['network']
+                cur_subnet_table = cur_table
+                cur_table += 1
+                logger.info (f"Creating flow table {cur_subnet_table} for subnet {subnet_id} (interface {subnet_int})")
                 if not target_bridge:
                     target_bridge = subnet_bridge
                 else:
+                    # Currently only support all subnets on the same bridge
                     if subnet_bridge != target_bridge:
                         raise Exception(f"subnet {subnet_id} has a different ovsBridge ('{subnet_bridge}')"
                                         f"than other subnets ({target_bridge})")
@@ -117,32 +134,71 @@ class OpenFlowAdapter:
                 subnet_port = self.port_for_interface [subnet_int]
                 flow_file.write (f"add table={start_table},priority=10,in_port={subnet_port} "
                                  f"actions=resubmit(,{cur_subnet_table})\n")
-                # Walk the devices and create a device filter table for each interface
+                # Walk the devices in the interface and create appropriate device filter tables
+                flow_file.write (f"  # TABLE {cur_subnet_table}: micronet {subnet_id}"
+                                 f" (interface {subnet_int}, subnet {subnet_network})")
                 for device_id, device in device_lists [subnet_id].items ():
                     device_mac = device ['macAddress']['eui48']
-                    flow_file.write (f"add table={cur_subnet_table},priority=10,dl_src={device_mac} "
-                                     f"actions=resubmit(,{port_filter_table})\n")
+
+                    if 'allowHosts' in device:
+                        device_allow_hosts = device['allowHosts']
+                        host_spec_list = unroll_host_list (device_allow_hosts)
+                        host_action = "NORMAL"
+                        default_host_action = "drop"
+                    elif 'denyHosts' in device:
+                        device_deny_hosts = device ['denyHosts']
+                        host_spec_list = unroll_host_list (device_deny_hosts)
+                        host_action = "drop"
+                        default_host_action = "NORMAL"
+
+                    if host_spec_list:
+                        cur_dev_table = cur_table
+                        cur_table += 1
+                        flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
+                                         f"actions=resubmit(,{cur_dev_table})\n")
+                        flow_file.write (f"    # TABLE {cur_dev_table}: allow hosts for device {device_id} (MAC {device_mac})")
+                        flow_file.write (f"    add table={cur_dev_table},priority=20,udp,tp_dst=67 "
+                                         f"actions=LOCAL\n")
+                        flow_file.write (f"    add table={cur_dev_table},priority=20,arp "
+                                         f"actions={host_action}\n")
+                        for host_spec in host_spec_list:
+                            flow_file.write(f"    add table={cur_dev_table},priority=10,ip,ip_dst={host_spec} "
+                                            f"actions=NORMAL\n")
+                        flow_file.write (f"    add table={cur_dev_table},priority=5 "
+                                         f"actions={default_host_action}\n")
+                    else:
+                        flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
+                                         f"actions=resubmit(,{unrestricted_device_table})\n")
                 flow_file.write (f"add table={cur_subnet_table},priority=5 "
                                  f"actions=drop\n")
-                cur_subnet_table += 1
             for interface in disabled_interfaces:
                 logger.info (f"Disabling flow for interface {interface}")
                 subnet_port = self.port_for_interface [interface]
                 flow_file.write (f"add table={start_table},priority=10,in_port={subnet_port} "
                                  f"actions=drop\n")
-            # All requests that aren't associated with a micronet go to NORMAL
-            flow_file.write (f"add table={start_table},priority=5 "
-                             f"actions=NORMAL\n")
             # The common port filtering rules (after a packet has flowed through the
             #  interface and mac tables
 
-            # Don't allow DHCP requests to flow out of the gateway
+            # Table for all trunk traffic
+            flow_file.write (f"add table={start_table},priority=10,im_port={trunk_port} "
+                             f"actions=resubmit(,{trunk_table})\n")
+            flow_file.write(f"# TABLE {trunk_table}: Trunk ingress table")
+            flow_file.write (f"add table={trunk_table},priority=10,udp,tp_dst=67 "
+                             f"actions=LOCAL\n")
+            flow_file.write (f"add table={trunk_table},priority=5 "
+                             f"actions=drop\n")
+            flow_file.flush ()
+
+            # All requests that don't match a known port are dropped (like a cold stone)
+            flow_file.write (f"add table={start_table},priority=5 "
+                             f"actions=drop\n")
+
+            # Table for all devices with no restrictions (no allowHosts/denyHosts)
+            flow_file.write(f"# TABLE {port_filter_table}: Unrestricted device table (no allowHosts/denyHosts)")
             flow_file.write (f"add table={port_filter_table},priority=10,udp,tp_dst=67 "
                              f"actions=LOCAL\n")
-            # TODO: Consider blocking other traffic (all broadcast packets?)
             flow_file.write (f"add table={port_filter_table},priority=5 "
-                             f"actions=NORMAL\n")
-            flow_file.flush ()
+                             f"actions=drop\n")
 
             with flow_file_path.open('r') as infile:
                 infile.line_no = 0
