@@ -1,12 +1,12 @@
 # THIS CONF FILE IS MANAGED BY MICRONETS-DHCP
 # MODIFICATIONS TO THIS FILE WILL BE OVER-WRITTEN
 
-# Subnet: testsubnet001, ovsBridge: brmn001, ovsPort: 3, interface: enxac7f3ee61832
+# Subnet: testsubnet001, ovsBridge: brmn001, interface: enxac7f3ee61832
 dhcp-range=set:testsubnet001,10.40.0.0,static,255.255.255.0,10m
 dhcp-option=tag:testsubnet001, option:router,10.40.0.1
 dhcp-option=tag:testsubnet001, option:dns-server,8.8.8.8,4.4.4.4
 
-# Subnet: testsubnet002, ovsBridge: brmn001, ovsPort: 4, interface: enx00e04c534458
+# Subnet: testsubnet002, ovsBridge: brmn001, interface: enx00e04c534458
 dhcp-range=set:testsubnet002,10.50.0.0,static,255.255.255.0,10m
 dhcp-option=tag:testsubnet002, option:router,10.50.0.1
 dhcp-option=tag:testsubnet002, option:dns-server,8.8.8.8,4.4.4.4

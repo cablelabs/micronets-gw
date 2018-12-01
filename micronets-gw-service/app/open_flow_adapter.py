@@ -18,6 +18,11 @@ class OpenFlowAdapter:
     def __init__ (self, config):
         self.interfaces_file_path = Path (config ['FLOW_ADAPTER_NETWORK_INTERFACES_PATH'])
         self.apply_openflow_command = config['FLOW_ADAPTER_APPLY_FLOWS_COMMAND']
+        if 'FLOW_ADAPTER_DPCTL_SHOW_FILE' in config:
+            # Really just for development/test
+            self.ovs_dpctl_show_filename = config['FLOW_ADAPTER_DPCTL_SHOW_FILE']
+        else:
+            self.ovs_dpctl_show_command = config['FLOW_ADAPTER_DPCTL_SHOW_COMMAND']
 
         with self.interfaces_file_path.open ('r') as infile:
             try:
@@ -31,7 +36,7 @@ class OpenFlowAdapter:
         try:
             self.determine_port_mappings ()
         except Exception as e:
-            raise Exception ("OpenFlowAdapter: Error determining port mppings: {}".format (e))
+            raise Exception ("OpenFlowAdapter: Error determining port mappings: {}".format (e))
 
     def read_interfaces_file (self, infile):
         self.ovs_micronet_interfaces = None
@@ -65,10 +70,18 @@ class OpenFlowAdapter:
         # TODO: Consider using ovsdb-query to get the port mappings
         self.interface_for_port = {}
         self.port_for_interface = {}
-        cp = subprocess.run(["/usr/bin/ovs-dpctl", "show"], stdout=subprocess.PIPE)
-        if not cp or not cp.stdout:
-            raise Exception (f"Error running ovs-dpctl: no stdout")
-        dpctl_out = cp.stdout.decode (encoding="utf-8")
+        if self.ovs_dpctl_show_filename:
+            ovs_dpctl_show_filepath = Path (self.ovs_dpctl_show_filename)
+            with ovs_dpctl_show_filepath.open('r') as infile:
+                try:
+                    dpctl_out = infile.read()
+                except Exception as e:
+                    raise Exception("OpenFlowAdapter: Error reading dpctl-show file: {}".format(e))
+        else:
+            cp = subprocess.run(["/usr/bin/ovs-dpctl", "show"], stdout=subprocess.PIPE)
+            if not cp or not cp.stdout:
+                raise Exception (f"Error running ovs-dpctl: no stdout")
+            dpctl_out = cp.stdout.decode (encoding="utf-8")
 
         logger.info ("Port interfaces:\n"
                      "------------------------------------------------------------------------\n"
@@ -95,6 +108,7 @@ class OpenFlowAdapter:
         with tempfile.NamedTemporaryFile (mode='wt') as flow_file:
             flow_file_path = Path (flow_file.name)
             logger.info(f"created temporary file {flow_file_path}")
+            target_bridge = None
             start_table = 0
             trunk_table = 2
             unrestricted_device_table = 3
@@ -136,10 +150,10 @@ class OpenFlowAdapter:
                                  f"actions=resubmit(,{cur_subnet_table})\n")
                 # Walk the devices in the interface and create appropriate device filter tables
                 flow_file.write (f"  # TABLE {cur_subnet_table}: micronet {subnet_id}"
-                                 f" (interface {subnet_int}, subnet {subnet_network})")
+                                 f" (interface {subnet_int}, subnet {subnet_network})\n")
                 for device_id, device in device_lists [subnet_id].items ():
                     device_mac = device ['macAddress']['eui48']
-
+                    host_spec_list = None
                     if 'allowHosts' in device:
                         device_allow_hosts = device['allowHosts']
                         host_spec_list = unroll_host_list (device_allow_hosts)
@@ -156,7 +170,7 @@ class OpenFlowAdapter:
                         cur_table += 1
                         flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
                                          f"actions=resubmit(,{cur_dev_table})\n")
-                        flow_file.write (f"    # TABLE {cur_dev_table}: allow hosts for device {device_id} (MAC {device_mac})")
+                        flow_file.write (f"    # TABLE {cur_dev_table}: allow hosts for device {device_id} (MAC {device_mac})\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=20,udp,tp_dst=67 "
                                          f"actions=LOCAL\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=20,arp "
@@ -169,7 +183,7 @@ class OpenFlowAdapter:
                     else:
                         flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
                                          f"actions=resubmit(,{unrestricted_device_table})\n")
-                flow_file.write (f"add table={cur_subnet_table},priority=5 "
+                flow_file.write (f"  add table={cur_subnet_table},priority=5 "
                                  f"actions=drop\n")
             for interface in disabled_interfaces:
                 logger.info (f"Disabling flow for interface {interface}")
@@ -180,32 +194,32 @@ class OpenFlowAdapter:
             #  interface and mac tables
 
             # Table for all trunk traffic
-            flow_file.write (f"add table={start_table},priority=10,im_port={trunk_port} "
+            flow_file.write (f"add table={start_table},priority=10,in_port={self.ovs_uplink_interface} "
                              f"actions=resubmit(,{trunk_table})\n")
-            flow_file.write(f"# TABLE {trunk_table}: Trunk ingress table")
-            flow_file.write (f"add table={trunk_table},priority=10,udp,tp_dst=67 "
+            flow_file.write(f"  # TABLE {trunk_table}: Trunk ingress table\n")
+            flow_file.write (f"  add table={trunk_table},priority=10,udp,tp_dst=67 "
                              f"actions=LOCAL\n")
-            flow_file.write (f"add table={trunk_table},priority=5 "
+            flow_file.write (f"  add table={trunk_table},priority=5 "
                              f"actions=drop\n")
-            flow_file.flush ()
 
             # All requests that don't match a known port are dropped (like a cold stone)
             flow_file.write (f"add table={start_table},priority=5 "
                              f"actions=drop\n")
 
             # Table for all devices with no restrictions (no allowHosts/denyHosts)
-            flow_file.write(f"# TABLE {port_filter_table}: Unrestricted device table (no allowHosts/denyHosts)")
-            flow_file.write (f"add table={port_filter_table},priority=10,udp,tp_dst=67 "
+            flow_file.write(f"  # TABLE {unrestricted_device_table}: Unrestricted device table (no allowHosts/denyHosts)\n")
+            flow_file.write (f"  add table={unrestricted_device_table},priority=10,udp,tp_dst=67 "
                              f"actions=LOCAL\n")
-            flow_file.write (f"add table={port_filter_table},priority=5 "
+            flow_file.write (f"  add table={unrestricted_device_table},priority=5 "
                              f"actions=drop\n")
+            flow_file.flush ()
 
             with flow_file_path.open('r') as infile:
                 infile.line_no = 0
                 logger.info ("Issuing new flows:")
                 logger.info ("------------------------------------------------------------------------")
                 for line in infile:
-                    logger.info (line)
+                    logger.info (line[0:-1])
                 logger.info ("------------------------------------------------------------------------")
 
             run_cmd = self.apply_openflow_command.format (target_bridge, flow_file_path)

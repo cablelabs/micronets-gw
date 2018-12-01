@@ -18,7 +18,7 @@ class DnsMasqAdapter:
     # # Subnet: testsubnet001, ovsBridge: brmn001, interface: enxac7f3ee61832
     # # Subnet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
     dhcp_range_prefix_re = re.compile ('^\s*#\s*Subnet:\s*(\w.[\w-]*)\s*,\s*ovsBridge:\s*(\w+)\s*,'
-                                       '\s*,\s*interface:\s*(\w+)\s*$',
+                                       '\s*interface:\s*(\w+)\s*$',
                                        re.ASCII)
 
     # dhcp-range=set:testsubnet001,10.40.0.0,static,255.255.255.0,3m
@@ -82,8 +82,7 @@ class DnsMasqAdapter:
             if (dhcp_range_prefix_match_result):
                 prefix_subnet_id = dhcp_range_prefix_match_result.group (1)
                 prefix_ovs_bridge = dhcp_range_prefix_match_result.group (2)
-                prefix_ovs_port = int (dhcp_range_prefix_match_result.group (3))
-                prefix_interface = dhcp_range_prefix_match_result.group (4)
+                prefix_interface = dhcp_range_prefix_match_result.group (3)
                 continue
             if (comment_line_re.match (line)):
                 continue
