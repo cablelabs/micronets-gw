@@ -649,7 +649,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Creating a device:
+* Creating another device:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -718,6 +718,39 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     Expected output: (status code 204)
 
     None
+
+* Creating a device restricted to communicating with certain external hosts:
+
+    ```
+    curl -X POST -H "Content-Type: application/json" -d '{
+           "device": {
+               "deviceId": "MyDevice03",
+               "macAddress": {
+                   "eui48": "b8:27:eb:75:a4:8a"
+               },
+               "networkAddress": {
+                   "ipv4": "192.168.1.42"
+               },
+               "allowHosts": ["8.8.8.8", "12.34.56.0/24", "www.yahoo.com"]
+           }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+    ```
+
+    Expected output: (status code 201)
+
+    ```json
+    {
+        "device": {
+            "deviceId": "MyDevice01",
+            "macAddress": {
+               "eui48": "00:23:12:0f:b0:26"
+            },
+            "networkAddress": {
+                "ipv4": "192.168.1.42"
+            }
+        }
+    }
+    ```
 
 #### Negative Device Test Cases:
 

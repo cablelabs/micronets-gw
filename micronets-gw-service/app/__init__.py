@@ -108,7 +108,7 @@ try:
     else:
         logger.info("Not starting OpenFlowAdapter (adapter disabled in config)")
 except Exception as ex:
-    logger.warning ("Error staring flow adapter:", exc_info=True)
+    logger.warning ("Error starting flow adapter:", exc_info=True)
 
 try:
     min_dhcp_conf_update_int_s = app.config ['MIN_DHCP_UPDATE_INTERVAL_S']

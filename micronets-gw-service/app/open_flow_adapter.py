@@ -1,4 +1,4 @@
-import re, logging, tempfile, subprocess
+import re, logging, tempfile, subprocess, asyncio
 
 from pathlib import Path
 from .utils import blank_line_re, comment_line_re, unroll_host_list
@@ -96,7 +96,7 @@ class OpenFlowAdapter:
                 self.interface_for_port[port] = interface
                 self.port_for_interface[interface] = port
 
-    def update (self, subnet_list, device_lists):
+    async def update (self, subnet_list, device_lists):
         logger.info (f"OpenFlowAdapter.update ()")
         logger.info (f"OpenFlowAdapter.update: device_lists: {device_lists}")
 
@@ -156,12 +156,12 @@ class OpenFlowAdapter:
                     host_spec_list = None
                     if 'allowHosts' in device:
                         device_allow_hosts = device['allowHosts']
-                        host_spec_list = unroll_host_list (device_allow_hosts)
+                        host_spec_list = await unroll_host_list (device_allow_hosts)
                         host_action = "NORMAL"
                         default_host_action = "drop"
                     elif 'denyHosts' in device:
                         device_deny_hosts = device ['denyHosts']
-                        host_spec_list = unroll_host_list (device_deny_hosts)
+                        host_spec_list = await unroll_host_list (device_deny_hosts)
                         host_action = "drop"
                         default_host_action = "NORMAL"
 
