@@ -155,13 +155,13 @@ class OpenFlowAdapter:
                     device_mac = device ['macAddress']['eui48']
                     host_spec_list = None
                     if 'allowHosts' in device:
-                        device_allow_hosts = device['allowHosts']
-                        host_spec_list = await unroll_host_list (device_allow_hosts)
+                        hosts = device['allowHosts']
+                        host_spec_list = await unroll_host_list (hosts)
                         host_action = "NORMAL"
                         default_host_action = "drop"
                     elif 'denyHosts' in device:
-                        device_deny_hosts = device ['denyHosts']
-                        host_spec_list = await unroll_host_list (device_deny_hosts)
+                        hosts = device ['denyHosts']
+                        host_spec_list = await unroll_host_list (hosts)
                         host_action = "drop"
                         default_host_action = "NORMAL"
 
@@ -170,11 +170,12 @@ class OpenFlowAdapter:
                         cur_table += 1
                         flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
                                          f"actions=resubmit(,{cur_dev_table})\n")
-                        flow_file.write (f"    # TABLE {cur_dev_table}: allow hosts for device {device_id} (MAC {device_mac})\n")
+                        flow_file.write (f"    # TABLE {cur_dev_table}: hosts allowed/denied for device {device_id} (MAC {device_mac})\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=20,udp,tp_dst=67 "
                                          f"actions=LOCAL\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=20,arp "
                                          f"actions={host_action}\n")
+                        flow_file.write (f"    #   hosts: {hosts}\n")
                         for host_spec in host_spec_list:
                             flow_file.write(f"    add table={cur_dev_table},priority=10,ip,ip_dst={host_spec} "
                                             f"actions=NORMAL\n")

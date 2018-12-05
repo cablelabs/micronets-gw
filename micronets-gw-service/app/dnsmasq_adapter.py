@@ -40,6 +40,10 @@ class DnsMasqAdapter:
     # dhcp-hostsfile=/home/micronut/projects/micronets/micronets-dhcp/dnsmasq-hosts
     dhcp_hostfile_re = re.compile ('dhcp-hostsfile\s*=\s*(.+)$')
 
+    # # Subnet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
+    dhcp_device_prefix_re = re.compile ('^\s*#\sDevice:\s*(\w.[\w-]*)\s*,(\[[^\[\]]*\]),(\[[^\[\]]*\])\s*$',
+                                        re.ASCII)
+
     # 08:00:27:e5:77:c5,micronet-client-1,set:micronet-client-1,10.40.0.71,2m
     dhcp_host_re = re.compile ('^\s*dhcp-host\s*=\s*(' + mac_addr_pattern + ')\s*,\s*(\w.[\w-]*)\s*,'
                                + '\s*set:\s*(\w.[\w-]*)\s*,\s*('
@@ -74,6 +78,9 @@ class DnsMasqAdapter:
     def parse_conffile (self, infile):
         subnets = {}
         devices_list = {}
+        prefix_subnet_id = None
+        prefix_host_id = None
+
         for line in infile:
             infile.line_no += 1
             if (blank_line_re.match (line)):
@@ -84,6 +91,18 @@ class DnsMasqAdapter:
                 prefix_ovs_bridge = dhcp_range_prefix_match_result.group (2)
                 prefix_interface = dhcp_range_prefix_match_result.group (3)
                 continue
+            dhcp_host_prefix_match = self.dhcp_device_prefix_re.match (line)
+            if dhcp_host_prefix_match:
+                prefix_host_id = dhcp_host_prefix_match.group(1)
+                prefix_host_allow_hosts_str = dhcp_host_prefix_match.group(2)
+                prefix_host_deny_hosts_str = dhcp_host_prefix_match.group(3)
+                logger.info(f"DnsMasqAdapter.parse_conffile:  Found host {prefix_host_id}: "
+                            f"allowHosts:{prefix_host_allow_hosts_str}, denyHosts:{prefix_host_deny_hosts_str}")
+
+                prefix_host_allow_hosts = json.loads(prefix_host_allow_hosts_str)
+                prefix_host_deny_hosts = json.loads(prefix_host_deny_hosts_str)
+                logger.info(f"DnsMasqAdapter.parse_conffile:  Found host {prefix_host_id}: "
+                            f"allowHosts:{prefix_host_allow_hosts}, denyHosts:{prefix_host_deny_hosts}")
             if (comment_line_re.match (line)):
                 continue
             dhcp_range_match_result = self.dhcp_range_re.match (line)
@@ -113,6 +132,7 @@ class DnsMasqAdapter:
                 subnet ['interface'] = prefix_interface
                 subnets [subnet_id] = subnet
                 devices_list [subnet_id] = {}
+                prefix_subnet_id = None
                 continue
             dhcp_range_router_match = self.dhcp_range_router_re.match (line)
             if (dhcp_range_router_match):
@@ -153,14 +173,16 @@ class DnsMasqAdapter:
                 continue
             dhcp_host_match = self.dhcp_host_re.match (line)
             if (dhcp_host_match):
+                if not prefix_host_id:
+                    raise Exception ("Found dhcp-host without preceding '# Device:' line")
                 dhcp_host_mac = dhcp_host_match.group (1)
                 dhcp_host_id = dhcp_host_match.group (2)
                 dhcp_host_tag = dhcp_host_match.group (3)
                 dhcp_host_ip = dhcp_host_match.group (4)
-                dhcp_host_lease_durection = dhcp_host_match.group (5)
+                dhcp_host_lease_duration = dhcp_host_match.group (5)
                 logger.debug ("DnsMasqAdapter.parse_conffile: Found dhcp host entry: {} {} {} {} {}"
-                              .format (dhcp_host_mac, dhcp_host_id, dhcp_host_ip, dhcp_host_tag, 
-                                       dhcp_host_lease_durection))
+                              .format (dhcp_host_mac, dhcp_host_id, dhcp_host_ip, dhcp_host_tag,
+                                       dhcp_host_lease_duration))
                 if not netaddr.valid_mac (dhcp_host_mac):
                     raise Exception ("Invalid host MAC address '{}'".format (dhcp_host_mac))
                 eui_mac_addr = EUI (dhcp_host_mac)
@@ -171,11 +193,14 @@ class DnsMasqAdapter:
                 subnet_id = find_subnet_id_for_host (subnets, dhcp_host_ip)
                 if not subnet_id:
                     raise Exception ("Could not find a subnet compatible with host '{}'".format (addr))
-                device = {'deviceId': dhcp_host_id}
+                device = {'deviceId': prefix_host_id}
                 device ['macAddress'] = {'eui48': str(eui_mac_addr)}
                 device ['networkAddress'] = {'ipv4': str (addr)}
+                device ['allowHosts'] = prefix_host_allow_hosts
+                device ['denyHosts'] = prefix_host_deny_hosts
                 device_list = devices_list [subnet_id]
-                device_list [dhcp_host_id] = device
+                device_list [prefix_host_id] = device
+                prefix_host_id = None
                 continue
             dhcp_hostfile_match = self.dhcp_hostfile_re.match (line)
             if (dhcp_hostfile_match):
@@ -199,6 +224,7 @@ class DnsMasqAdapter:
         logger.debug ("DnsMasqAdapter.save_to_conf")
         with self.conffile_path.open ('w') as outfile:
             logger.info (f"DnsMasqAdapter: Saving subnet data to {self.conffile_path.absolute ()}")
+            outfile.write ("# THIS CONF FILE IS MANAGED BY THE MICRONETS GW SERVICE\n\n")
             outfile.write ("# MODIFICATIONS TO THIS FILE WILL BE OVER-WRITTEN\n\n")
             outfile.write ("dhcp-script={}\n\n".format (self.lease_script.absolute ()))
             self.write_subnets (outfile, subnets)
@@ -210,7 +236,7 @@ class DnsMasqAdapter:
 
     def write_subnets (self, outfile, subnets):
         for subnet_id, subnet in subnets.items ():
-            # # Subnet: wired-micronet-1, interface: enp3s0
+            # # Subnet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
             ovs_switch = subnet ['ovsBridge']
             interface = subnet ['interface']
             outfile.write ("# Subnet: {}, ovsBridge: {}, interface: {}\n"
@@ -246,10 +272,22 @@ class DnsMasqAdapter:
                     lease_period = device ['leasePeriod']
                 else:
                     lease_period = self.default_lease_period
-                outfile.write ("\n# Device: {}\n".format (device_id))
+                if 'allowHosts' in device:
+                    allow_hosts = json.dumps(device['allowHosts'])
+                else:
+                    allow_hosts = []
+                if 'denyHosts' in device:
+                    deny_hosts = json.dumps(device['denyHosts'])
+                else:
+                    deny_hosts = []
+                if (len(device_id) <= 12):
+                    short_device_id = device_id
+                else:
+                    short_device_id = device_id[0:8]+device_id[-4:]
+                outfile.write ("\n# Device: {},{},{}\n".format (device_id, allow_hosts, deny_hosts))
                 # 08:00:27:3c:ae:02,micronet-client-2,set:micronet-client-2,10.50.0.43,2m
                 outfile.write ("dhcp-host={},{},set:{},{},{}\n"
-                               .format (mac_addr, device_id[0:11], device_id, ip_addr, lease_period))
+                               .format (mac_addr, short_device_id, device_id, ip_addr, lease_period))
             outfile.write ("\n")
 
 if __name__ == '__main__':
