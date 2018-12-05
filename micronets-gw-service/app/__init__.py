@@ -118,6 +118,9 @@ except Exception as ex:
     logger.info ("Error starting with adapter:", exc_info=True)
     exit (1)
 
+if flow_adapter:
+    asyncio.ensure_future(dhcp_conf_model.update_conf())
+
 # Initialize the API
 from . import dhcp_api
 
