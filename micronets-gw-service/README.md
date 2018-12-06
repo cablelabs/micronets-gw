@@ -97,19 +97,23 @@ Currently only data type _application/json_ is supported.
     },
     "nameservers": [
         string
-    ]
+    ],
+    "interface": string,
+    "ovsBridge": string
 }
 ```
 
 | Property name            | Value           | Required | Description                           | Example      |
 | ------------------------ | --------------- | -------- | ------------------------------------- | ------------- 
-| subnetId                 | string          | Y        | Unique ID for the subnet | 192.168.0 |
+| subnetId                 | string          | Y        | Unique ID for the subnet | "192.168.0" |
 | ipv4Network              | nested object   | Y        | The definition of a IPv4 network ||
-| ipv4Network.network      | string          | Y        | The IPv4 network definition (dotted IP) | 192.168.1.0 |
-| ipv4Network.mask         | string          | Y        | The netmask for the network (dotted IP) | 255.255.255.0 |
-| ipv4Network.gateway      | string          | N        | The IPv4 address of the network gateway | 192.168.1.1 |
-| ipv4Network.broadcast    | string          | N        | The IPv4 address for broadcast | 192.168.1.255 |
-| nameservers              | list            | N        | The IP addresses of nameservers for the subnet | 8.8.8.8, 4.4.4.4|
+| ipv4Network.network      | string          | Y        | The IPv4 network definition (dotted IP) | "192.168.1.0" |
+| ipv4Network.mask         | string          | Y        | The netmask for the network (dotted IP) | "255.255.255.0" |
+| ipv4Network.gateway      | string          | N        | The IPv4 address of the network gateway | "192.168.1.1" |
+| ipv4Network.broadcast    | string          | N        | The IPv4 address for broadcast | "192.168.1.255" |
+| nameservers              | list (string)   | N        | The IP addresses of nameservers for the subnet | ["8.8.8.8", "4.4.4.4"] |
+| interface                | string          | Y        | The network interface on the gateway the subnet is associated with | "wlp2s0"
+| ovsBridge                | string          | Y        | The OpenVSwitch bridge the interface is connected to on the gateway | "brmn001"
 
 #### DHCP Subnet Endpoints/Operations
 
@@ -141,18 +145,26 @@ Currently only data type _application/json_ is supported.
     "networkAddress": {
        "ipv4": string,
        "ipv6": string
-    }
+    },
+    "allowHosts": [
+       string
+    ],
+    "denyHosts": [
+       string
+    ]
 }
 ```
 
 | Property name            | Value         | Required | Description                           | Example      |
 | ------------------------ | ------------- | -------- | ------------------------------------- | ------------- 
-| deviceId                 | string        | Y        | An alphanumeric device identifier (max 64 characters) ||
+| deviceId                 | string        | Y        | An alphanumeric device identifier (max 64 characters) | "device-1234"|
 | macAddress               | nested object | Y        | The device MAC address
-| macAddress.eui48         | string        | Y        | An EUI-48 format MAC address |          00:23:12:0f:b0:26 |
+| macAddress.eui48         | string        | Y        | An EUI-48 format MAC address | "00:23:12:0f:b0:26" |
 | networkAddress           | nested object | Y        | The network address definition. Either **_ipv4_** or **_ipv6_** must be specified ||
-| networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | 192.168.1.42 |
-| networkAddress.ipv6      | string        | N        | The IPv6 network definition | fe80::104c:20b6:f71a:4e55 |
+| networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | "192.168.1.42" |
+| networkAddress.ipv6      | string        | N        | The IPv6 network definition | "fe80::104c:20b6:f71a:4e55" |
+| allowHosts               | list (string) | N        | A list of hosts that the device is allowed to connect to exclusively (either dotted IP address, CIDR format, or DNS name) | ["8.8.8.8", "12.34.56.0/24", "www.example.com"] |
+| denyHosts                | list (string) | N        | A list of hosts that the device is not allowed to connect to (either dotted IP address, CIDR format, or DNS name) | ["8.8.8.8", "12.34.56.0/24", "www.example.com"] |
 
 #### DHCP Device Reservation Endpoints/Operations
 
@@ -181,7 +193,7 @@ Currently only data type _application/json_ is supported.
     "leaseChangeEvent": {
         "action": string, 
         "macAddress": {
-            eui48": string
+            "eui48": string
         }, 
         "networkAddress": {
             "ipv4": string,
@@ -194,12 +206,12 @@ Currently only data type _application/json_ is supported.
 
 | Property name            | Value         | Required | Description                           | Example      |
 | ------------------------ | ------------- | -------- | ------------------------------------- | ------------- 
-| action                   | string        | Y        | One of "leaseAcquired" or "leaseExpired" ||
+| action                   | string        | Y        | One of "leaseAcquired" or "leaseExpired" | "leaseAcquired"|
 | macAddress               | nested object | Y        | The device MAC address
-| macAddress.eui48         | string        | Y        | An EUI-48 format MAC address |          00:23:12:0f:b0:26 |
+| macAddress.eui48         | string        | Y        | An EUI-48 format MAC address |          "00:23:12:0f:b0:26" |
 | networkAddress           | nested object | Y        | The network address definition. Either **_ipv4_** or **_ipv6_** must be specified ||
-| networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | 192.168.1.42 |
-| networkAddress.ipv6      | string        | N        | The IPv6 network definition | fe80::104c:20b6:f71a:4e55 |
+| networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | "192.168.1.42" |
+| networkAddress.ipv6      | string        | N        | The IPv6 network definition | "fe80::104c:20b6:f71a:4e55" |
 
 #### DHCP Device Reservation Endpoints/Operations
 

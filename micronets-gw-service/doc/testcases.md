@@ -23,6 +23,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "mask": "255.255.255.0",
                     "gateway":"192.168.1.1"
                 },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001",
                 "nameservers": ["1.2.3.4","1.2.3.5"]
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
@@ -34,6 +36,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     {
         "subnet": {
             "subnetId": "mocksubnet007",
+            "interface": "wlp2s0",
+            "ovsBridge": "brmn001",
             "ipv4Network": {
                 "network": "192.168.1.0",
                 "mask": "255.255.255.0",
@@ -56,7 +60,9 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "ipv4Network": {
                     "network": "192.168.2.0",
                     "mask": "255.255.255.0"
-                }
+                },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001"
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
@@ -70,7 +76,9 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
             "ipv4Network": {
                 "network": "192.168.1.0",
                 "mask": "255.255.255.0"
-            }
+            },
+            "interface": "wlp2s0",
+            "ovsBridge": "brmn001"
         }
     }
     ```
@@ -87,6 +95,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "mask": "255.255.255.0",
                     "gateway": "192.168.8.1"
                 },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001",
                 "nameservers": [
                     "4.4.4.4",
                     "8.8.8.8"
@@ -98,7 +108,9 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "network": "192.168.9.0",
                     "mask": "255.255.255.0",
                     "gateway": "192.168.9.1"
-                }
+                },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001"
             }
         ] }
         ' http://localhost:5000/micronets/v1/dhcp/subnets
@@ -117,6 +129,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "gateway": "192.168.8.1",
                 "broadcast": "192.168.8.255"
             },
+            "interface": "wlp2s0",
+            "ovsBridge": "brmn001",
             "nameservers": [
                 "4.4.4.4",
                 "8.8.8.8"
@@ -152,6 +166,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "mask": "255.255.255.0",
                     "gateway": "192.168.8.1"
                 },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001",
                 "nameservers": [
                     "4.4.4.4",
                     "8.8.8.8"
@@ -163,7 +179,9 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "network": "192.168.9.0",
                     "mask": "255.255.255.0",
                     "gateway": "192.168.9.1"
-                }
+                },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001"
             }
         ]
     }
@@ -195,6 +213,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "mask": "255.255.255.0",
                 "gateway": "192.168.1.2"
             },
+            "interface": "wlp2s0",
+            "ovsBridge": "brmn001",
             "nameservers": [
                 "1.2.3.4",
                 "1.2.3.5"
@@ -222,6 +242,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "mask": "255.255.255.0",
                 "gateway": "192.168.1.2"
             },
+            "interface": "wlp2s0",
+            "ovsBridge": "brmn001",
             "nameservers": [
                 "1.2.3.4",
                 "1.2.3.5"
@@ -251,6 +273,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "mask": "255.255.255.0",
                 "gateway": "192.168.1.3"
             },
+            "interface": "wlp2s0",
+            "ovsBridge": "brmn001",
             "nameservers": [
                 "1.2.3.4",
                 "1.2.3.5"
@@ -292,6 +316,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "mask": "255.255.255.0",
                     "gateway":"192.168.1.1"
                 },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001",
                 "nameservers": ["1.2.3.4","1.2.3.5"]
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
@@ -315,6 +341,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0"
                 },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001",
                 "nameservers": ["1.2.3.4","1.2.3.5"]
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
@@ -328,7 +356,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Create a subnet with a missing required field:
+* Create a subnet with a missing subnetId field:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -337,6 +365,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0"
                 },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001",
                 "nameservers": ["1.2.3.4","1.2.3.5"]
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
@@ -350,13 +380,17 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
+* Create a subnet with a missing network mask field:
+
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
            "subnet": {
                 "subnetId": "MySubnet",
                 "ipv4Network": {
                     "network": "192.168.1.0"
-                }
+                },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001"
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
@@ -379,7 +413,9 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0",
                     "gateway":"192.168.2.1"
-                }
+                },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001"
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
@@ -402,7 +438,9 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0",
                     "gateway":"192.168.1.1"
-                }
+                },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001"
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
@@ -414,7 +452,9 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "network": "192.168.0.0",
                     "mask": "255.255.0.0",
                     "gateway":"192.168.2.1"
-                }
+                },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001"
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets
     ```
@@ -437,7 +477,9 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0",
                     "gateway":"192.168.1.2"
-                }
+                },
+                "interface": "wlp2s0",
+                "ovsBridge": "brmn001"
             }
         }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
     ```
@@ -615,7 +657,6 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-
 * Retrieving all devices defined for a subnet:
 
     ```
@@ -719,7 +760,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     None
 
-* Creating a device restricted to communicating with certain external hosts:
+* Creating a device restricted to communicating with certain hosts:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -747,7 +788,42 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
             },
             "networkAddress": {
                 "ipv4": "192.168.1.42"
-            }
+            },
+            "allowHosts": ["8.8.8.8", "12.34.56.0/24", "www.yahoo.com"]
+        }
+    }
+    ```
+
+* Creating a device which is prevented from communicating with certain hosts:
+
+    ```
+    curl -X POST -H "Content-Type: application/json" -d '{
+           "device": {
+               "deviceId": "MyDevice03",
+               "macAddress": {
+                   "eui48": "b8:27:eb:75:a4:8a"
+               },
+               "networkAddress": {
+                   "ipv4": "192.168.1.42"
+               },
+               "denyHosts": ["8.8.8.8", "12.34.56.0/24", "www.example.com"]
+           }
+        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+    ```
+
+    Expected output: (status code 201)
+
+    ```json
+    {
+        "device": {
+            "deviceId": "MyDevice01",
+            "macAddress": {
+               "eui48": "00:23:12:0f:b0:26"
+            },
+            "networkAddress": {
+                "ipv4": "192.168.1.42"
+            },
+            "denyHosts": ["8.8.8.8", "12.34.56.0/24", "www.example.com"]
         }
     }
     ```
