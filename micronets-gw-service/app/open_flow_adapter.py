@@ -182,11 +182,11 @@ class OpenFlowAdapter:
                         flow_file.write (f"    add table={cur_dev_table},priority=20,udp,tp_dst=67 "
                                          f"actions=LOCAL\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=20,arp "
-                                         f"actions={host_action}\n")
+                                         f"actions=NORMAL\n")
                         flow_file.write (f"    #   hosts: {hosts}\n")
                         for host_spec in host_spec_list:
                             flow_file.write(f"    add table={cur_dev_table},priority=10,ip,ip_dst={host_spec} "
-                                            f"actions=NORMAL\n")
+                                            f"actions={host_action}\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=5 "
                                          f"actions={default_host_action}\n")
                     else:
