@@ -1,26 +1,29 @@
-# THIS CONF FILE IS MANAGED BY MICRONETS-DHCP
+# THIS CONF FILE IS MANAGED BY THE MICRONETS GW SERVICE
+
 # MODIFICATIONS TO THIS FILE WILL BE OVER-WRITTEN
 
-# Subnet: testsubnet001, ovsBridge: brmn001, ovsPort: 3, interface: enxac7f3ee61832
+dhcp-script=/Users/craig/projects/micronets/micronets-gw/micronets-gw-service/bin/dnsmasq_lease_notify.py
+
+# Subnet: testsubnet001, ovsBridge: brmn001, interface: enxac7f3ee61832
 dhcp-range=set:testsubnet001,10.40.0.0,static,255.255.255.0,10m
 dhcp-option=tag:testsubnet001, option:router,10.40.0.1
 dhcp-option=tag:testsubnet001, option:dns-server,8.8.8.8,4.4.4.4
 
-# Subnet: testsubnet002, ovsBridge: brmn001, ovsPort: 4, interface: enx00e04c534458
+# Subnet: testsubnet002, ovsBridge: brmn001, interface: enx00e04c534458
 dhcp-range=set:testsubnet002,10.50.0.0,static,255.255.255.0,10m
 dhcp-option=tag:testsubnet002, option:router,10.50.0.1
 dhcp-option=tag:testsubnet002, option:dns-server,8.8.8.8,4.4.4.4
 
 # DEVICES FOR SUBNET: testsubnet001
 
-# Device: micronet-client-1
-dhcp-host=08:00:27:e5:77:c5,micronet-client-1,set:micronet-client-1,10.40.0.71,10m
+# Device: micronet-device-1,["8.8.8.8", "12.34.56.0/24", "www.yahoo.com"],[]
+dhcp-host=08:00:27:e5:77:c5,micronetce-1,set:micronet-device-1,10.40.0.71,10m
 
-# Device: mydevice-1
-dhcp-host=00:23:12:0f:b0:26,mydevice-1,set:mydevice-1,10.40.0.42,10m
+# Device: micronet-device-2,[],["4.4.4.4", "34.56.78.0/24", "www.amazon.com"]
+dhcp-host=00:23:12:0f:b0:26,micronetce-2,set:micronet-device-2,10.40.0.42,10m
 
 # DEVICES FOR SUBNET: testsubnet002
 
-# Device: micronet-client-2
-dhcp-host=08:00:27:3c:ae:02,micronet-client-2,set:micronet-client-2,10.50.0.43,10m
+# Device: micronet-device-3,[],[]
+dhcp-host=08:00:27:3c:ae:02,micronetce-3,set:micronet-device-3,10.50.0.43,10m
 

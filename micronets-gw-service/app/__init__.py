@@ -108,7 +108,7 @@ try:
     else:
         logger.info("Not starting OpenFlowAdapter (adapter disabled in config)")
 except Exception as ex:
-    logger.warning ("Error staring flow adapter:", exc_info=True)
+    logger.warning ("Error starting flow adapter:", exc_info=True)
 
 try:
     min_dhcp_conf_update_int_s = app.config ['MIN_DHCP_UPDATE_INTERVAL_S']
@@ -117,6 +117,9 @@ try:
 except Exception as ex:
     logger.info ("Error starting with adapter:", exc_info=True)
     exit (1)
+
+if flow_adapter:
+    asyncio.ensure_future(dhcp_conf_model.update_conf())
 
 # Initialize the API
 from . import dhcp_api

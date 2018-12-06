@@ -1,0 +1,10 @@
+system@ovs-system:
+	lookups: hit:205746 missed:58144 lost:0
+	flows: 3
+	masks: hit:1017718 total:3 hit/pkt:3.86
+	port 0: ovs-system (internal)
+	port 1: brmn001 (internal)
+	port 2: enp3s0
+	port 3: enxac7f3ee61832
+	port 4: enx00e04c534458
+	port 5: wlp2s0

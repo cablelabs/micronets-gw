@@ -4,6 +4,7 @@ from threading import Timer
 from ipaddress import IPv4Network, IPv4Address, AddressValueError, NetmaskValueError
 from netaddr import EUI
 
+import asyncio
 import json
 import copy
 import logging
@@ -18,7 +19,7 @@ class DHCPConf:
         self.dhcp_adapter = dhcp_adapter
         self.flow_adapter = flow_adapter
         self.min_update_interval_s = min_update_interval_s
-        self.update_timer = None
+        self.update_conf_task = None
         read_conf = dhcp_adapter.read_from_conf ()
         self.subnet_list = read_conf ['subnets']
         self.device_lists = read_conf ['devices']
@@ -27,22 +28,19 @@ class DHCPConf:
         logger.info (json.dumps (self.subnet_list, indent=2))
         logger.info ("Device lists:")
         logger.info (json.dumps (self.device_lists, indent=2))
-        if flow_adapter:
-            flow_adapter.update (self.subnet_list, self.device_lists)
 
-    def update_conf (self):
-        if (self.min_update_interval_s and self.min_update_interval_s > 0):
-            if self.update_timer:
-                self.update_timer.cancel ()
-            self.update_timer = Timer (self.min_update_interval_s, self.update_conf_now)
-            self.update_timer.start ()
-        else:
-            self.update_conf_now ()
+    async def update_conf (self):
+        if self.update_conf_task:
+            self.update_conf_task.cancel ()
+        self.update_conf_task = asyncio.ensure_future (self.update_conf_delayed())
 
-    def update_conf_now (self):
+    async def update_conf_delayed (self):
+        await asyncio.sleep(self.min_update_interval_s)
+
+        self.update_conf_task = None
         self.dhcp_adapter.save_to_conf (self.subnet_list, self.device_lists)
         if self.flow_adapter:
-            self.flow_adapter.update (self.subnet_list, self.device_lists)
+            await self.flow_adapter.update(self.subnet_list, self.device_lists)
 
     #
     # Subnet Operations
@@ -85,11 +83,11 @@ class DHCPConf:
             raise InvalidUsage (400, message=f"Error validating subnet '{subnet_id}' "
                                              f"(network {netaddr}/{netmask}): {ve}")
 
-    def get_all_subnets (self):
+    async def get_all_subnets (self):
         logger.info (f"DHCPConf.get_all_subnets ()")
         return jsonify ({'subnets': list (self.subnet_list.values ())}), 200
 
-    def create_subnets (self, subnets):
+    async def create_subnets (self, subnets):
         # Check that all the supplied subnets are unique and valid before incorporating them
         for subnet in subnets:
             self.check_subnet_unique (subnet)
@@ -98,26 +96,26 @@ class DHCPConf:
             subnet_id = subnet ['subnetId'].lower ()
             self.subnet_list [subnet_id] = subnet
             self.device_lists [subnet_id] = {}
-        self.update_conf ()
+        await self.update_conf ()
         return jsonify ({'subnets': subnets}), 201
 
-    def create_subnet (self, subnet):
+    async def create_subnet (self, subnet):
         self.check_subnet_unique (subnet)
         self.check_subnet_params (subnet)
         subnet_id = subnet ['subnetId'].lower ()
         self.subnet_list [subnet_id] = subnet
         self.device_lists [subnet_id] = {}
-        self.update_conf ()
+        await self.update_conf ()
         return jsonify ({'subnet': subnet}), 201
 
-    def delete_all_subnets (self):
+    async def delete_all_subnets (self):
         logger.info (f"DHCPConf.delete_all_devices: Subnet list: {self.subnet_list}")
         self.subnet_list.clear()
         self.device_lists.clear()
-        self.update_conf ()
+        await self.update_conf ()
         return '', 204
 
-    def update_subnet (self, subnet_update, subnet_id):
+    async def update_subnet (self, subnet_update, subnet_id):
         logger.info (f"DHCPConf.update_subnet ({subnet_update}, {subnet_id})")
         self.check_subnet_reference (subnet_id)
         target_subnet = self.subnet_list [subnet_id]
@@ -134,22 +132,22 @@ class DHCPConf:
 
         self.subnet_list [subnet_id] = updated_subnet
 
-        self.update_conf ()
+        await self.update_conf ()
         return jsonify ({'subnet': updated_subnet}), 200
 
-    def get_subnet (self, subnet_id):
+    async def get_subnet (self, subnet_id):
         logger.info (f"DHCPConf.get_subnet ({subnet_id})")
         if subnet_id not in self.subnet_list:
             raise InvalidUsage (404, message=f"Subnet '{subnet_id}' not found")
         subnet = self.subnet_list [subnet_id]
         return jsonify ({'subnet': subnet}), 200
 
-    def delete_subnet (self, subnet_id):
+    async def delete_subnet (self, subnet_id):
         logger.info (f"DHCPConf.delete_subnet ({subnet_id})")
         self.check_subnet_reference (subnet_id)
         del self.subnet_list [subnet_id]
         del self.device_lists [subnet_id]
-        self.update_conf ()
+        await self.update_conf ()
         return '', 204
 
     #
@@ -216,7 +214,7 @@ class DHCPConf:
                                                  f"is not unique (IP address {addr_to_check} found "
                                                  f"in device '{device_id}')")
 
-    def get_subnetid_deviceid_for_mac (self, mac_address):
+    async def get_subnetid_deviceid_for_mac (self, mac_address):
         addr_to_check = EUI (mac_address)
         for subnet_id, device_list in self.device_lists.items ():
             for device_id, device in device_list.items ():
@@ -226,25 +224,25 @@ class DHCPConf:
                     return {'subnetId': subnet_id, 'deviceId': device_id}
         return None
 
-    def dump_mock_lists (self):
+    async def dump_mock_lists (self):
         logger.info ("mock_subnets:")
         logger.info (json.dumps (self.subnet_list, indent=4))
         logger.info ("device_lists:")
         logger.info (json.dumps (self.device_lists, indent=4))
 
-    def get_all_devices (self, subnet_id):
+    async def get_all_devices (self, subnet_id):
         logger.info (f"DHCPConf.get_all_devices ({subnet_id})")
         self.check_subnet_reference (subnet_id)
         return jsonify ({'devices': list (self.device_lists [subnet_id].values ())}), 200
 
-    def delete_all_devices (self, subnet_id):
+    async def delete_all_devices (self, subnet_id):
         logger.info (f"DHCPConf.delete_all_devices ({subnet_id})")
         self.check_subnet_reference (subnet_id)
         self.device_lists [subnet_id].clear ()
-        self.update_conf ()
+        await self.update_conf ()
         return '', 204
 
-    def create_device (self, device, subnet_id):
+    async def create_device (self, device, subnet_id):
         logger.info (f"DHCPConf.create_device ({device}, {subnet_id})")
         self.check_subnet_reference (subnet_id)
         device_list = self.device_lists [subnet_id]
@@ -255,10 +253,10 @@ class DHCPConf:
         self.check_device_mac_unique (device)
         self.check_device_ip_unique (device, subnet_id)
         device_list [device_id] = device
-        self.update_conf ()
+        await self.update_conf ()
         return jsonify ({'device': device}), 201
 
-    def create_devices (self, devices, subnet_id):
+    async def create_devices (self, devices, subnet_id):
         logger.info (f"DHCPConf.create_devices ({devices}, {subnet_id})")
         self.check_subnet_reference (subnet_id)
         subnet = self.subnet_list [subnet_id]
@@ -274,10 +272,10 @@ class DHCPConf:
         for device in devices:
             device_id = device ['deviceId'].lower ()
             device_list [device_id] = device
-        self.update_conf ()
+        await self.update_conf ()
         return jsonify ({'devices': devices}), 201
 
-    def update_device (self, device_update, subnet_id, device_id):
+    async def update_device (self, device_update, subnet_id, device_id):
         logger.info (f"DHCPConf.update_device ({device_update}, {subnet_id}, {device_id})")
         self.check_subnet_reference (subnet_id)
         self.check_device_reference (subnet_id, device_id)
@@ -297,22 +295,22 @@ class DHCPConf:
         self.check_device_ip_unique (updated_device, subnet_id, excluded_device_id = device_id)
 
         device_list [device_id] = updated_device
-        self.update_conf ()
+        await self.update_conf ()
         return jsonify ({'device': updated_device}), 200
 
-    def get_device (self, subnet_id, device_id):
+    async def get_device (self, subnet_id, device_id):
         logger.info (f"DHCPConf.get_device ({subnet_id}, {device_id})")
         logger.info (json.dumps (self.device_lists, indent=4))
         self.check_subnet_reference (subnet_id)
         self.check_device_reference (subnet_id, device_id)
         return jsonify ({'device': self.device_lists [subnet_id] [device_id]}), 200
 
-    def delete_device (self, subnet_id, device_id):
+    async def delete_device (self, subnet_id, device_id):
         logger.info (f"DHCPConf.delete_device ({subnet_id}, {device_id})")
         self.check_subnet_reference (subnet_id)
         self.check_device_reference (subnet_id, device_id)
         del self.device_lists [subnet_id] [device_id]
-        self.update_conf ()
+        await self.update_conf ()
         return '', 204
 
     async def process_dhcp_lease_event (self, dhcp_lease_event):

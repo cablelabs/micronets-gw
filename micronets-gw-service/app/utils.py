@@ -1,7 +1,9 @@
 import collections
 import re
+import asyncio
+import socket
 from copy import deepcopy
-from ipaddress import IPv4Network, AddressValueError, NetmaskValueError
+from ipaddress import IPv4Address, IPv4Network, AddressValueError, NetmaskValueError
 
 ip_addr_pattern = '(?:\\d{1,3}\\.){3}\\d{1,3}'
 
@@ -64,3 +66,27 @@ class InvalidUsage (Exception):
         rv ['message'] = self.message
         rv ['status_code'] = self.status_code
         return rv
+
+async def unroll_host_list (host_list):
+    unrolled_host_list = []
+    for hostspec in host_list:
+        addrs_for_spec = await get_ipv4_addrs_for_hostspec (hostspec)
+        unrolled_host_list += addrs_for_spec
+    return unrolled_host_list
+
+async def get_ipv4_addrs_for_hostspec (hostspec):
+    if not hostspec:
+        return []
+    try:
+        net = IPv4Network (hostspec)
+        if net:
+            return [str(net)]
+    except Exception as ex:
+        print ("Caught exception: " + str(ex))
+    # If it doesn't work as an IP4 dotted host/network, assume it's a hostname
+    addrs = await asyncio.get_event_loop().getaddrinfo (hostspec, None, family=socket.AF_INET, proto=socket.IPPROTO_TCP)
+    address_list = []
+    for addr in addrs:
+        address_list.append (addr[4][0])  # This is just the IP address portion of what's returned
+    return address_list
+
