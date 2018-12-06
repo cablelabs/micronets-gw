@@ -19,7 +19,6 @@ class DHCPConf:
         self.dhcp_adapter = dhcp_adapter
         self.flow_adapter = flow_adapter
         self.min_update_interval_s = min_update_interval_s
-        self.update_call_handle = None
         self.update_conf_task = None
         read_conf = dhcp_adapter.read_from_conf ()
         self.subnet_list = read_conf ['subnets']
@@ -38,7 +37,7 @@ class DHCPConf:
     async def update_conf_delayed (self):
         await asyncio.sleep(self.min_update_interval_s)
 
-        self.update_call_handle = None
+        self.update_conf_task = None
         self.dhcp_adapter.save_to_conf (self.subnet_list, self.device_lists)
         if self.flow_adapter:
             await self.flow_adapter.update(self.subnet_list, self.device_lists)
