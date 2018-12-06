@@ -2,12 +2,12 @@
 
 This repository is for development of the micronets-gw.service.
 
-More documentation at the [GitHub Wiki](https://github.com/cablelabs/micronets-gw/wiki).
+More documentation can be found in the [GitHub Wiki](https://github.com/cablelabs/micronets-gw/wiki).
 
 ## Top Level Directory Contents
 
  - micronets-gw-service: The Python 3.6 micronets-gw daemon development directory.
- - distribution: The directory wherehere the installation package is built into distrobution/target via make.
+ - distribution: The directory where the installation package is built into distribution/target via make.
  - filesystem: The replica static installation package file system. Files put here will be in the package install.
  - LICENSE: MIT License
  - README.md: This file.
@@ -44,7 +44,7 @@ dpkg -i micronets-gw/distribution/target/micronets-gw-{ver}.deb
 
 where "{ver}" is the version number built above with the `make` command. (e.g. "micronets-gw-1.0.28.deb")
 
-See [the "Dependencies" section of the micronets-gw README](micronets-gw-service/README.md#Dependencies) for details on installing the micronets-gw-service dependancies. 
+See [the "Dependencies" section of the Micronets Gateway Service README](micronets-gw-service/README.md#Dependencies) for details on installing the gateway service dependancies. 
 
 Once the Micronets Gateway service is installed, the `/etc/network/interfaces` file needs to be customized for your setup. [An example interfaces file can be found in filesystem/opt/micronets-gw/doc](filesystem/opt/micronets-gw/doc/interfaces.sample). Changes to this file require restart of the networking service (e.g. `sudo /etc/init.d/networking restart`). As this is not always reliable/tested (currently), a system restart is recommended after changing the interfaces file.
 
