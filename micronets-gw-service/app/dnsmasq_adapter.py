@@ -196,8 +196,10 @@ class DnsMasqAdapter:
                 device = {'deviceId': prefix_host_id}
                 device ['macAddress'] = {'eui48': str(eui_mac_addr)}
                 device ['networkAddress'] = {'ipv4': str (addr)}
-                device ['allowHosts'] = prefix_host_allow_hosts
-                device ['denyHosts'] = prefix_host_deny_hosts
+                if len(prefix_host_allow_hosts) > 0:
+                    device ['allowHosts'] = prefix_host_allow_hosts
+                if len(prefix_host_deny_hosts) > 0:
+                    device ['denyHosts'] = prefix_host_deny_hosts
                 device_list = devices_list [subnet_id]
                 device_list [prefix_host_id] = device
                 prefix_host_id = None

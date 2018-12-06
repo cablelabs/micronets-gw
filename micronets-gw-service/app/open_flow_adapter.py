@@ -14,6 +14,8 @@ class OpenFlowAdapter:
     interfaces_ovs_bridge_uplink_re = re.compile ('^\s*ovs_bridge_uplink_port\s+(\w+)\s*$')
     interfaces_ovs_ports_re = re.compile ('\s*ovs_ports\s+([\w ]+)\s*$')
     port_intface_re = re.compile('^\s*port ([0-9]+): (\w+).*$')
+    ovs_dpctl_show_filename = None
+    ovs_dpctl_show_command = None
 
     def __init__ (self, config):
         self.interfaces_file_path = Path (config ['FLOW_ADAPTER_NETWORK_INTERFACES_PATH'])
@@ -159,6 +161,12 @@ class OpenFlowAdapter:
                         host_spec_list = await unroll_host_list (hosts)
                         host_action = "NORMAL"
                         default_host_action = "drop"
+                        # Add critical hosts to the allow list
+                        host_spec_list.append(subnet['ipv4Network']['gateway'])
+                        if 'nameservers' in subnet:
+                            host_spec_list += subnet['nameservers']
+                        if 'nameservers' in device:
+                            host_spec_list += device['nameservers']
                     elif 'denyHosts' in device:
                         hosts = device ['denyHosts']
                         host_spec_list = await unroll_host_list (hosts)
@@ -201,7 +209,7 @@ class OpenFlowAdapter:
             flow_file.write (f"  add table={trunk_table},priority=10,udp,tp_dst=67 "
                              f"actions=LOCAL\n")
             flow_file.write (f"  add table={trunk_table},priority=5 "
-                             f"actions=drop\n")
+                             f"actions=NORMAL\n")
 
             # All requests that don't match a known port are dropped (like a cold stone)
             flow_file.write (f"add table={start_table},priority=5 "
