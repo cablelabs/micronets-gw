@@ -1,7 +1,7 @@
 import re, logging, tempfile, netifaces
 
 from pathlib import Path
-from .utils import blank_line_re, comment_line_re, unroll_host_list
+from .utils import blank_line_re, comment_line_re, unroll_hostportspec_list
 from subprocess import call
 
 logger = logging.getLogger ('micronets-gw-service')
@@ -169,12 +169,12 @@ class OpenFlowAdapter:
                     host_spec_list = None
                     if 'allowHosts' in device:
                         hosts = device['allowHosts']
-                        host_spec_list = await unroll_host_list (hosts)
+                        hostport_spec_list = await unroll_hostportspec_list (hosts)
                         host_action = "NORMAL"
                         default_host_action = "drop"
                     elif 'denyHosts' in device:
                         hosts = device ['denyHosts']
-                        host_spec_list = await unroll_host_list (hosts)
+                        hostport_spec_list = await unroll_hostportspec_list (hosts)
                         host_action = "drop"
                         default_host_action = "NORMAL"
 
@@ -199,8 +199,13 @@ class OpenFlowAdapter:
                         flow_file.write (f"    add table={cur_dev_table},priority=20,arp "
                                          f"actions=NORMAL\n")
                         flow_file.write (f"    #   hosts: {hosts}\n")
-                        for host_spec in host_spec_list:
-                            flow_file.write(f"    add table={cur_dev_table},priority=10,ip,ip_dst={host_spec} "
+                        for hostport_spec in hostport_spec_list:
+                            hostport_split = hostport_spec.split(':')
+                            hostspec = hostport_split[0]
+                            if len(hostport_split) > 1:
+                                portspec = hostport_split[1]
+                                portfilter = f",tp_dst={portspec}"
+                            flow_file.write(f"    add table={cur_dev_table},priority=10,ip,ip_dst={hostport_spec}{portfilter} "
                                             f"actions={host_action}\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=5 "
                                          f"actions={default_host_action}\n")

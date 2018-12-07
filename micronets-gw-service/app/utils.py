@@ -67,26 +67,57 @@ class InvalidUsage (Exception):
         rv ['status_code'] = self.status_code
         return rv
 
-async def unroll_host_list (host_list):
+async def unroll_hostportspec_list (hostportspec_list):
     unrolled_host_list = []
-    for hostspec in host_list:
-        addrs_for_spec = await get_ipv4_addrs_for_hostspec (hostspec)
+    for hostportspec in hostportspec_list:
+        addrs_for_spec = await get_ipv4_hostports_for_hostportspec (hostportspec)
         unrolled_host_list += addrs_for_spec
     return unrolled_host_list
 
-async def get_ipv4_addrs_for_hostspec (hostspec):
-    if not hostspec:
+async def get_ipv4_hostports_for_hostportspec (hostandportspec):
+    if not hostandportspec:
         return []
+    hostandport = hostandportspec.split(':')
+    hostspec = hostandport[0]
+    if len(hostandport) > 1:
+        port_list = hostandport[1].split(',')
+    else:
+        port_list = None
+    host_addrs = []
     try:
         net = IPv4Network (hostspec)
         if net:
-            return [str(net)]
+            host_addrs = [str(net)]
     except Exception as ex:
-        print ("Caught exception: " + str(ex))
-    # If it doesn't work as an IP4 dotted host/network, assume it's a hostname
-    addrs = await asyncio.get_event_loop().getaddrinfo (hostspec, None, family=socket.AF_INET, proto=socket.IPPROTO_TCP)
-    address_list = []
-    for addr in addrs:
-        address_list.append (addr[4][0])  # This is just the IP address portion of what's returned
-    return address_list
+        # If it doesn't work as an IP4 dotted host/network, assume it's a hostname
+        addrs = await asyncio.get_event_loop().getaddrinfo (hostspec, None, family=socket.AF_INET, proto=socket.IPPROTO_TCP)
+        for addr in addrs:
+            host_addrs.append (addr[4][0])  # This is just the IP address portion of what's returned
+    hostandport_list = []
+    for addr in host_addrs:
+        if port_list:
+            for port in port_list:
+                hostandport_list.append(addr+":"+port)
+        else:
+            hostandport_list.append(addr)
+    return hostandport_list
 
+async def main():
+    print("Running utils tests...")
+    hpsl = ["1.2.3.4", "5.6.7.8:99", "example.com", "bogus.org:80", "www.yahoo.com:443,80,8080"]
+    for hostportspec in hpsl:
+        hostports = await get_ipv4_hostports_for_hostportspec(hostportspec)
+        print (f"hostportspecs for {hostportspec}: {hostports}")
+    print ("unrolled hosts for hostportspeclist {hps1}:")
+    hostports = await unroll_hostportspec_list(hpsl)
+    print (hostports)
+    print ("Done.")
+
+if __name__ == '__main__':
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(main())
+    finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
