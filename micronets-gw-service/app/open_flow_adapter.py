@@ -200,12 +200,29 @@ class OpenFlowAdapter:
                                          f"actions=NORMAL\n")
                         flow_file.write (f"    #   hosts: {hosts}\n")
                         for hostport_spec in hostport_spec_list:
+                            # hostport_spec examples: 1.2.3.4, 3.4.5.6/32:22, 1.2.3.4/32:80/tcp,443/tcp,7,39/udp
                             hostport_split = hostport_spec.split(':')
                             hostspec = hostport_split[0]
-                            if len(hostport_split) > 1:
+                            hp_filter_template = f"    add table={cur_dev_table},priority=10,{'{}'},ip_dst={hostspec}{'{}'} " \
+                                                 f"actions={host_action}\n"
+
+                            if len(hostport_split) == 1:
+                                # Need to create an ip-only filter
+                                flow_file.write(hp_filter_template.format("ip",""))
+                            else:
+                                # Need to create a ip+port filter(s)
                                 portspec = hostport_split[1]
-                                portfilter = f",tp_dst={portspec}"
-                            flow_file.write(f"    add table={cur_dev_table},priority=10,ip,ip_dst={hostport_spec}{portfilter} "
+                                portspec_split = portspec.split('/')
+                                if len(portspec_split) == 1:
+                                    # No protocol designation - block udp and tcp for the port number
+                                    flow_file.write(hp_filter_template.format("tcp",f",tcp_dst={portspec}"))
+                                    flow_file.write(hp_filter_template.format("udp",f",udp_dst={portspec}"))
+                                if len(portspec_split) > 1:
+                                    # Only block the port for the designated protocol
+                                    protocol = portspec_split[1]
+                                    flow_file.write(hp_filter_template.format(protocol,f",{protocol}_dst={portspec}"))
+                            # Write the default rule for the device
+                            flow_file.write(f"    add table={cur_dev_table},priority=10,{proto},ip_dst={hostport_spec}{portfilter} "
                                             f"actions={host_action}\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=5 "
                                          f"actions={default_host_action}\n")

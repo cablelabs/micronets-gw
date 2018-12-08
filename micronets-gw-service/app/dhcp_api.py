@@ -1,7 +1,7 @@
 from quart import request, jsonify
 from ipaddress import IPv4Address, IPv4Network
 from app import app, get_dhcp_conf_model
-from .utils import InvalidUsage, get_ipv4_addrs_for_hostspec
+from .utils import InvalidUsage, get_ipv4_hostports_for_hostportspec
 
 import re
 import netaddr
@@ -205,7 +205,7 @@ async def check_hostspecs (container, field_name, required):
     if hosts:
         for host in hosts:
             try:
-                hosts = await get_ipv4_addrs_for_hostspec (host)
+                hosts = await get_ipv4_hostports_for_hostportspec (host)
             except Exception as ex:
                 raise InvalidUsage (400, message=f"Supplied hostname '{host}' in field '{field_name}' "
                                     f"of '{container}' is not valid: {ex}")

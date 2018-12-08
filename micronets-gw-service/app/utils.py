@@ -74,15 +74,17 @@ async def unroll_hostportspec_list (hostportspec_list):
         unrolled_host_list += addrs_for_spec
     return unrolled_host_list
 
+hostportspec_re = re.compile ('^[0-9]+(/(tcp|udp))?$',re.ASCII)
+
 async def get_ipv4_hostports_for_hostportspec (hostandportspec):
     if not hostandportspec:
         return []
     hostandport = hostandportspec.split(':')
     hostspec = hostandport[0]
     if len(hostandport) > 1:
-        port_list = hostandport[1].split(',')
+        portspec_list = hostandport[1].split(',')
     else:
-        port_list = None
+        portspec_list = None
     host_addrs = []
     try:
         net = IPv4Network (hostspec)
@@ -90,14 +92,17 @@ async def get_ipv4_hostports_for_hostportspec (hostandportspec):
             host_addrs = [str(net)]
     except Exception as ex:
         # If it doesn't work as an IP4 dotted host/network, assume it's a hostname
-        addrs = await asyncio.get_event_loop().getaddrinfo (hostspec, None, family=socket.AF_INET, proto=socket.IPPROTO_TCP)
+        addrs = await asyncio.get_event_loop().getaddrinfo (hostspec, None, family=socket.AF_INET,
+                                                            proto=socket.IPPROTO_TCP)
         for addr in addrs:
             host_addrs.append (addr[4][0])  # This is just the IP address portion of what's returned
     hostandport_list = []
     for addr in host_addrs:
-        if port_list:
-            for port in port_list:
-                hostandport_list.append(addr+":"+port)
+        if portspec_list:
+            for portspec in portspec_list:
+                if not hostportspec_re.match(portspec):
+                    raise Exception(f"Port specification '{portspec}' in host specification '{hostandportspec}' is invalid")
+                hostandport_list.append(addr+":"+portspec)
         else:
             hostandport_list.append(addr)
     return hostandport_list
