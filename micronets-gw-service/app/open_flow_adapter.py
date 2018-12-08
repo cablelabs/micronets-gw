@@ -145,7 +145,7 @@ class OpenFlowAdapter:
 
                 if subnet_int not in self.ovs_micronet_interfaces:
                     raise Exception (f"interface {subnet_int} in subnet {subnet_id} not found "
-                                     "in configured micronet interfaces ({self.ovs_micronet_interfaces})")
+                                     f"in configured micronet interfaces ({self.ovs_micronet_interfaces})")
                 disabled_interfaces.remove (subnet_int)
                 subnet_port = self.port_for_interface [subnet_int]
                 flow_file.write (f"add table={start_table},priority=10,in_port={subnet_port} "
@@ -196,6 +196,9 @@ class OpenFlowAdapter:
                                  f"actions=drop\n")
             for interface in disabled_interfaces:
                 logger.info (f"Disabling flow for interface {interface}")
+                if interface not in self.port_for_interface:
+                    raise Exception(f"interface {interface} referenced in {self.interfaces_file_path} is not "
+                                    f"configured on bridge {target_bridge}")
                 subnet_port = self.port_for_interface [interface]
                 flow_file.write (f"add table={start_table},priority=10,in_port={subnet_port} "
                                  f"actions=drop\n")
