@@ -107,7 +107,6 @@ class OpenFlowAdapter:
         with tempfile.NamedTemporaryFile (mode='wt') as flow_file:
             flow_file_path = Path (flow_file.name)
             logger.info(f"created temporary file {flow_file_path}")
-            target_bridge = None
             start_table = 0
             trunk_table = 2
             unrestricted_device_table = 3
@@ -132,13 +131,9 @@ class OpenFlowAdapter:
                 cur_subnet_table = cur_table
                 cur_table += 1
                 logger.info (f"Creating flow table {cur_subnet_table} for subnet {subnet_id} (interface {subnet_int})")
-                if not target_bridge:
-                    target_bridge = subnet_bridge
-                else:
-                    # Currently only support all subnets on the same bridge
-                    if subnet_bridge != target_bridge:
-                        raise Exception(f"subnet {subnet_id} has a different ovsBridge ('{subnet_bridge}')"
-                                        f"than other subnets ({target_bridge})")
+                if subnet_bridge != self.bridge_name:
+                    raise Exception(f"subnet {subnet_id} has an unexpected bridge name ('{subnet_bridge}')"
+                                    f" - expected {self.bridge_name}")
 
                 if subnet_int not in self.ovs_micronet_interfaces:
                     raise Exception (f"interface {subnet_int} in subnet {subnet_id} not found "
@@ -231,7 +226,7 @@ class OpenFlowAdapter:
                     logger.info (line[0:-1])
                 logger.info ("------------------------------------------------------------------------")
 
-            run_cmd = self.apply_openflow_command.format (target_bridge, flow_file_path)
+            run_cmd = self.apply_openflow_command.format (self.bridge_name, flow_file_path)
             try:
                 logger.info ("Running: " + run_cmd)
                 status_code = call (run_cmd.split ())
