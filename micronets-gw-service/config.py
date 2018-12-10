@@ -20,7 +20,6 @@ class BaseConfig:
     WEBSOCKET_SERVER_PATH = '/micronets/v1/ws-proxy/micronets-gw-0001'
     WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
-    FLOW_ADAPTER_DPCTL_SHOW_COMMAND = "/usr/bin/ovs-dpctl", "show"
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces"
     # For this command, the first parameter will be the bridge name and the second the flow filename
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {} {}'
@@ -88,7 +87,6 @@ class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
     DNSMASQ_RESTART_COMMAND = []
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = BaseConfig.SERVER_BASE_DIR.parent\
                                            .joinpath("filesystem/opt/micronets-gw/doc/interfaces.sample")
-    FLOW_ADAPTER_DPCTL_SHOW_FILE = BaseConfig.SERVER_BASE_DIR.joinpath("doc/ovs-dpctl-show-output.sample")
     DEBUG = True
 
 class DnsmasqDevelopmentConfigWithWebsocket (DnsmasqDevelopmentConfig):

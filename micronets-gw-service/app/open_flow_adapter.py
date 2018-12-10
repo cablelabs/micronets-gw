@@ -11,20 +11,20 @@ class OpenFlowAdapter:
     #   ovs_type OVSBridge
     #   ovs_ports enp3s0 enxac7f3ee61832 enx00e04c534458
     #   ovs_bridge_uplink_port enp3s0
+    interfaces_iface_header_re = re.compile ('^iface\s+(\w+)\s.*$')
+    interfaces_ovs_type_re = re.compile ('^\s*ovs_type\s+(\w+)\s*$')
     interfaces_ovs_bridge_uplink_re = re.compile ('^\s*ovs_bridge_uplink_port\s+(\w+)\s*$')
     interfaces_ovs_ports_re = re.compile ('\s*ovs_ports\s+([\w ]+)\s*$')
-    port_intface_re = re.compile('^\s*port ([0-9]+): (\w+).*$')
-    ovs_dpctl_show_filename = None
-    ovs_dpctl_show_command = None
+    interfaces_ovs_ports_req_re = re.compile ('\s*ovs_port_req\s+([\w ]+)\s*$')
+
+    interface_for_port = {}
+    port_for_interface = {}
+    ovs_micronet_interfaces = None
+    ovs_uplink_interface = None
 
     def __init__ (self, config):
         self.interfaces_file_path = Path (config ['FLOW_ADAPTER_NETWORK_INTERFACES_PATH'])
         self.apply_openflow_command = config['FLOW_ADAPTER_APPLY_FLOWS_COMMAND']
-        if 'FLOW_ADAPTER_DPCTL_SHOW_FILE' in config:
-            # Really just for development/test
-            self.ovs_dpctl_show_filename = config['FLOW_ADAPTER_DPCTL_SHOW_FILE']
-        else:
-            self.ovs_dpctl_show_command = config['FLOW_ADAPTER_DPCTL_SHOW_COMMAND']
 
         with self.interfaces_file_path.open ('r') as infile:
             try:
@@ -35,28 +35,55 @@ class OpenFlowAdapter:
                 raise Exception ("OpenFlowAdapter: Error on line {} of {}: {}"
                                  .format (infile.line_no, self.interfaces_file_path.absolute (), e))
 
-        try:
-            self.determine_port_mappings ()
-        except Exception as e:
-            raise Exception ("OpenFlowAdapter: Error determining port mappings: {}".format (e))
-
     def read_interfaces_file (self, infile):
-        self.ovs_micronet_interfaces = None
-        self.ovs_uplink_interface = None
+        cur_interface_block = None
+        cur_interface_ovs_type = None
         for line in infile:
             infile.line_no += 1
             if (blank_line_re.match (line)):
                 continue
             if (comment_line_re.match (line)):
                 continue
+
+            interfaces_iface_header_match = self.interfaces_iface_header_re.match(line)
+            if interfaces_iface_header_match:
+                cur_interface_block = interfaces_iface_header_match.group(1)
+                cur_interface_ovs_type = None
+                continue
+
+            interfaces_ovs_type_match = self.interfaces_ovs_type_re.match(line)
+            if interfaces_ovs_type_match:
+                if not cur_interface_block:
+                    raise Exception(f"Found ovs_type line outside of interface block")
+                cur_interface_ovs_type = interfaces_ovs_type_match.group(1)
+                if cur_interface_ovs_type == "OVSBridge":
+                    self.bridge_name = cur_interface_block
+                    logger.info(f"Found OVS Bridge {self.bridge_name}")
+
+            interfaces_ovs_ports_req_match = self.interfaces_ovs_ports_req_re.match (line)
+            if interfaces_ovs_ports_req_match:
+                if not cur_interface_block:
+                    raise Exception(f"Found ovs_port_req line outside of interface block")
+                port = int(interfaces_ovs_ports_req_match.group(1))
+                logger.info(f"Found OVS Port {port} for interface {cur_interface_block}")
+                self.interface_for_port[port] = cur_interface_block
+                self.port_for_interface[cur_interface_block] = port
+
             interfaces_ovs_ports_match = self.interfaces_ovs_ports_re.match (line)
             if interfaces_ovs_ports_match:
+                if not cur_interface_block:
+                    raise Exception(f"Found ovs_ports line outside of interface block")
                 self.ovs_micronet_interfaces = interfaces_ovs_ports_match.group (1).split ()
                 continue
+
             interfaces_uplink_port = self.interfaces_ovs_bridge_uplink_re.match (line)
             if interfaces_uplink_port:
+                if not cur_interface_block:
+                    raise Exception(f"Found ovs_bridge_uplink line outside of interface block")
                 self.ovs_uplink_interface = interfaces_uplink_port.group (1)
+                logger.info(f"Found OVS Uplink Port {self.ovs_uplink_interface} for bridge {cur_interface_block}")
                 continue
+
             continue
 
         logger.info (f"OpenFlowAdapter.read_interfaces_file: Done reading {infile}")
@@ -67,36 +94,6 @@ class OpenFlowAdapter:
         self.ovs_micronet_interfaces.remove (self.ovs_uplink_interface)
         logger.info (f"OpenFlowAdapter.read_interfaces_file: ovs_micronet_ports: {self.ovs_micronet_interfaces}")
         logger.info (f"OpenFlowAdapter.read_interfaces_file: ovs_uplink_port: {self.ovs_uplink_interface}")
-
-    def determine_port_mappings (self):
-        # TODO: Consider using ovsdb-query to get the port mappings
-        self.interface_for_port = {}
-        self.port_for_interface = {}
-        if self.ovs_dpctl_show_filename:
-            ovs_dpctl_show_filepath = Path (self.ovs_dpctl_show_filename)
-            with ovs_dpctl_show_filepath.open('r') as infile:
-                try:
-                    dpctl_out = infile.read()
-                except Exception as e:
-                    raise Exception("OpenFlowAdapter: Error reading dpctl-show file: {}".format(e))
-        else:
-            cp = subprocess.run(["/usr/bin/ovs-dpctl", "show"], stdout=subprocess.PIPE)
-            if not cp or not cp.stdout:
-                raise Exception (f"Error running ovs-dpctl: no stdout")
-            dpctl_out = cp.stdout.decode (encoding="utf-8")
-
-        logger.info ("Port interfaces:\n"
-                     "------------------------------------------------------------------------\n"
-                     + dpctl_out)
-        lines = dpctl_out.split ("\n")
-        for line in lines:
-            match = self.port_intface_re.match (line)
-            if match:
-                port = match.group (1)
-                interface = match.group (2)
-                logger.info(f"Found port {port} for interface {interface}")
-                self.interface_for_port[port] = interface
-                self.port_for_interface[interface] = port
 
     async def update (self, subnet_list, device_lists):
         logger.info (f"OpenFlowAdapter.update ()")
@@ -110,7 +107,6 @@ class OpenFlowAdapter:
         with tempfile.NamedTemporaryFile (mode='wt') as flow_file:
             flow_file_path = Path (flow_file.name)
             logger.info(f"created temporary file {flow_file_path}")
-            target_bridge = None
             start_table = 0
             trunk_table = 2
             unrestricted_device_table = 3
@@ -135,17 +131,13 @@ class OpenFlowAdapter:
                 cur_subnet_table = cur_table
                 cur_table += 1
                 logger.info (f"Creating flow table {cur_subnet_table} for subnet {subnet_id} (interface {subnet_int})")
-                if not target_bridge:
-                    target_bridge = subnet_bridge
-                else:
-                    # Currently only support all subnets on the same bridge
-                    if subnet_bridge != target_bridge:
-                        raise Exception(f"subnet {subnet_id} has a different ovsBridge ('{subnet_bridge}')"
-                                        f"than other subnets ({target_bridge})")
+                if subnet_bridge != self.bridge_name:
+                    raise Exception(f"subnet {subnet_id} has an unexpected bridge name ('{subnet_bridge}')"
+                                    f" - expected {self.bridge_name}")
 
                 if subnet_int not in self.ovs_micronet_interfaces:
                     raise Exception (f"interface {subnet_int} in subnet {subnet_id} not found "
-                                     "in configured micronet interfaces ({self.ovs_micronet_interfaces})")
+                                     f"in configured micronet interfaces ({self.ovs_micronet_interfaces})")
                 disabled_interfaces.remove (subnet_int)
                 subnet_port = self.port_for_interface [subnet_int]
                 flow_file.write (f"add table={start_table},priority=10,in_port={subnet_port} "
@@ -196,6 +188,9 @@ class OpenFlowAdapter:
                                  f"actions=drop\n")
             for interface in disabled_interfaces:
                 logger.info (f"Disabling flow for interface {interface}")
+                if interface not in self.port_for_interface:
+                    raise Exception(f"interface {interface} referenced in {self.interfaces_file_path} is not "
+                                    f"configured on bridge {target_bridge}")
                 subnet_port = self.port_for_interface [interface]
                 flow_file.write (f"add table={start_table},priority=10,in_port={subnet_port} "
                                  f"actions=drop\n")
@@ -231,7 +226,7 @@ class OpenFlowAdapter:
                     logger.info (line[0:-1])
                 logger.info ("------------------------------------------------------------------------")
 
-            run_cmd = self.apply_openflow_command.format (target_bridge, flow_file_path)
+            run_cmd = self.apply_openflow_command.format (self.bridge_name, flow_file_path)
             try:
                 logger.info ("Running: " + run_cmd)
                 status_code = call (run_cmd.split ())
