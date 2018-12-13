@@ -166,7 +166,6 @@ class OpenFlowAdapter:
                                  f" (interface {subnet_int}, subnet {subnet_network})\n")
                 for device_id, device in device_lists [subnet_id].items ():
                     device_mac = device ['macAddress']['eui48']
-                    host_spec_list = None
                     if 'allowHosts' in device:
                         hosts = device['allowHosts']
                         hostport_spec_list = await unroll_hostportspec_list (hosts)
@@ -178,7 +177,10 @@ class OpenFlowAdapter:
                         host_action = "drop"
                         default_host_action = "NORMAL"
 
-                    if host_spec_list:
+                    if not hostport_spec_list:
+                        flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
+                                         f"actions=resubmit(,{unrestricted_device_table})\n")
+                    else:
                         cur_dev_table = cur_table
                         cur_table += 1
                         flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
@@ -208,29 +210,26 @@ class OpenFlowAdapter:
 
                             if len(hostport_split) == 1:
                                 # Need to create an ip-only filter
-                                flow_file.write(hp_filter_template.format("ip",""))
+                                flow_file.write(hp_filter_template.format("ip", ""))
                             else:
                                 # Need to create a ip+port filter(s)
                                 portspec = hostport_split[1]
                                 portspec_split = portspec.split('/')
                                 if len(portspec_split) == 1:
                                     # No protocol designation - block udp and tcp for the port number
-                                    flow_file.write(hp_filter_template.format("tcp",f",tcp_dst={portspec}"))
-                                    flow_file.write(hp_filter_template.format("udp",f",udp_dst={portspec}"))
+                                    flow_file.write(hp_filter_template.format("tcp", f",tcp_dst={portspec}"))
+                                    flow_file.write(hp_filter_template.format("udp", f",udp_dst={portspec}"))
                                 if len(portspec_split) > 1:
                                     # Only block the port for the designated protocol
                                     protocol = portspec_split[1]
-                                    flow_file.write(hp_filter_template.format(protocol,f",{protocol}_dst={portspec}"))
+                                    flow_file.write(hp_filter_template.format(protocol, f",{protocol}_dst={portspec}"))
                             # Write the default rule for the device
-                            flow_file.write(f"    add table={cur_dev_table},priority=10,{proto},ip_dst={hostport_spec}{portfilter} "
-                                            f"actions={host_action}\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=5 "
                                          f"actions={default_host_action}\n")
-                    else:
-                        flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
-                                         f"actions=resubmit(,{unrestricted_device_table})\n")
-                flow_file.write (f"  add table={cur_subnet_table},priority=5 "
-                                 f"actions=drop\n")
+                # Create the subnet flow entry for non-matching devices
+                flow_file.write(f"  add table={cur_subnet_table},priority=5 "
+                                f"actions=drop\n")
+
             for interface in disabled_interfaces:
                 logger.info (f"Disabling flow for interface {interface}")
                 if interface not in self.port_for_interface:
