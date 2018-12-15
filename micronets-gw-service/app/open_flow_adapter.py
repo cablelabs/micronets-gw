@@ -185,22 +185,9 @@ class OpenFlowAdapter:
                                          f"actions=resubmit(,{cur_dev_table})\n")
                         if default_host_action == "drop":
                             # Add rule to allow EAPoL packets
-                            if self.bridge_name in self.mac_for_interface:
-                                mac_for_bridge = self.mac_for_interface[self.bridge_name]
-                                flow_file.write(f"    # Adding rule to allow EAPoL traffic to {self.bridge_name} (MAC {mac_for_bridge})\n")
-                                flow_file.write(f"    add table={cur_dev_table},priority=20,dl_dst={mac_for_bridge},packet_type=(1,0x888e) "
-                                                f"actions=LOCAL\n")
-                            else:
-                                logger.warning(f"OpenFlowAdapter.update: Could not determine MAC address for bridge {self.bridge_name}")
-
-                            if subnet_int in self.mac_for_interface:
-                                mac_for_subnet = self.mac_for_interface[subnet_int]
-                                flow_file.write(f"    # Adding rule to allow traffic EAPoL to {subnet_int} (MAC {mac_for_subnet})\n")
-                                flow_file.write(f"    add table={cur_dev_table},priority=20,dl_dst={mac_for_subnet},packet_type=(1,0x888e) "
-                                                f"actions=LOCAL\n")
-                            else:
-                                logger.warning(f"OpenFlowAdapter.update: Could not determine MAC address for subnet interface {subnet_int}")
-
+                            flow_file.write(f"    # Adding rule to allow EAPoL traffic\n")
+                            flow_file.write(f"    add table={cur_dev_table},priority=20,packet_type=(1,0x888e) "
+                                            f"actions=NORMAL\n")
                             host_spec_list.append(subnet['ipv4Network']['gateway'])
                             if 'nameservers' in subnet:
                                 host_spec_list += subnet['nameservers']
