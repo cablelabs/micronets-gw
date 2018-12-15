@@ -39,8 +39,8 @@ class OpenFlowAdapter:
                                  .format (infile.line_no, self.interfaces_file_path.absolute (), e))
 
     def get_interface_info (self):
-        mac_for_interface = {}
-        ip_for_interface = {}
+        self.mac_for_interface = {}
+        self.ip_for_interface = {}
 
         for iface in netifaces.interfaces():
             logger.info(f"OpenFlowAdapter: Found interface {iface}")
@@ -48,11 +48,11 @@ class OpenFlowAdapter:
             if netifaces.AF_LINK in addrs:
                 mac = addrs[netifaces.AF_LINK][0]['addr']
                 logger.info(f"OpenFlowAdapter:   MAC: {mac}")
-                mac_for_interface[iface] = mac
+                self.mac_for_interface[iface] = mac
             if netifaces.AF_INET in addrs:
                 ip = addrs[netifaces.AF_INET][0]['addr']
                 logger.info(f"OpenFlowAdapter:   IP: {ip}")
-                ip_for_interface[iface] = ip
+                self.ip_for_interface[iface] = ip
 
     def read_interfaces_file (self, infile):
         cur_interface_block = None
