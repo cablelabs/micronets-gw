@@ -31,11 +31,14 @@ class DHCPConf:
 
     async def update_conf (self):
         if self.update_conf_task:
+            logger.info("Cancelling queued configuration update...")
             self.update_conf_task.cancel ()
+        logger.info ("Queueing configuration update...")
         self.update_conf_task = asyncio.ensure_future (self.update_conf_delayed())
 
     async def update_conf_delayed (self):
         await asyncio.sleep(self.min_update_interval_s)
+        logger.info ("Updating configuration...")
 
         self.update_conf_task = None
         self.dhcp_adapter.save_to_conf (self.subnet_list, self.device_lists)
@@ -326,7 +329,7 @@ class DHCPConf:
 
         mac_addr = event_fields ['macAddress']['eui48']
         net_addr = event_fields ['networkAddress']['ipv4']
-        ids = self.get_subnetid_deviceid_for_mac (mac_addr)
+        ids = await self.get_subnetid_deviceid_for_mac (mac_addr)
         if (not ids):
             logger.info (f"DHCPConf.process_lease_event: ERROR: Could not find device/subnet for mac {mac_addr}")
             raise InvalidUsage (404, message=f"No device found with mac address {mac_addr}")
