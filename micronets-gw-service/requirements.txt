@@ -30,6 +30,7 @@ MarkupSafe==1.0
 monkey==0.1
 multidict==4.3.1
 netaddr==0.7.19
+netifaces==0.10.7
 pathlib==1.0.1
 python-engineio==2.1.1
 python-socketio==1.9.0

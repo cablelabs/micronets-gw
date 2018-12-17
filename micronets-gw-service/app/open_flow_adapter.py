@@ -1,4 +1,4 @@
-import re, logging, tempfile, subprocess, asyncio
+import re, logging, tempfile, netifaces
 
 from pathlib import Path
 from .utils import blank_line_re, comment_line_re, unroll_host_list
@@ -19,6 +19,8 @@ class OpenFlowAdapter:
 
     interface_for_port = {}
     port_for_interface = {}
+    mac_for_interface = {}
+    address_for_interface = {}
     ovs_micronet_interfaces = None
     ovs_uplink_interface = None
 
@@ -26,6 +28,7 @@ class OpenFlowAdapter:
         self.interfaces_file_path = Path (config ['FLOW_ADAPTER_NETWORK_INTERFACES_PATH'])
         self.apply_openflow_command = config['FLOW_ADAPTER_APPLY_FLOWS_COMMAND']
 
+        self.get_interface_info()
         with self.interfaces_file_path.open ('r') as infile:
             try:
                 infile.line_no = 0
@@ -34,6 +37,22 @@ class OpenFlowAdapter:
             except Exception as e:
                 raise Exception ("OpenFlowAdapter: Error on line {} of {}: {}"
                                  .format (infile.line_no, self.interfaces_file_path.absolute (), e))
+
+    def get_interface_info (self):
+        self.mac_for_interface = {}
+        self.ip_for_interface = {}
+
+        for iface in netifaces.interfaces():
+            logger.info(f"OpenFlowAdapter: Found interface {iface}")
+            addrs = netifaces.ifaddresses(iface)
+            if netifaces.AF_LINK in addrs:
+                mac = addrs[netifaces.AF_LINK][0]['addr']
+                logger.info(f"OpenFlowAdapter:   MAC: {mac}")
+                self.mac_for_interface[iface] = mac
+            if netifaces.AF_INET in addrs:
+                ip = addrs[netifaces.AF_INET][0]['addr']
+                logger.info(f"OpenFlowAdapter:   IP: {ip}")
+                self.ip_for_interface[iface] = ip
 
     def read_interfaces_file (self, infile):
         cur_interface_block = None
@@ -153,12 +172,6 @@ class OpenFlowAdapter:
                         host_spec_list = await unroll_host_list (hosts)
                         host_action = "NORMAL"
                         default_host_action = "drop"
-                        # Add critical hosts to the allow list
-                        host_spec_list.append(subnet['ipv4Network']['gateway'])
-                        if 'nameservers' in subnet:
-                            host_spec_list += subnet['nameservers']
-                        if 'nameservers' in device:
-                            host_spec_list += device['nameservers']
                     elif 'denyHosts' in device:
                         hosts = device ['denyHosts']
                         host_spec_list = await unroll_host_list (hosts)
@@ -170,6 +183,16 @@ class OpenFlowAdapter:
                         cur_table += 1
                         flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
                                          f"actions=resubmit(,{cur_dev_table})\n")
+                        if default_host_action == "drop":
+                            # Add rule to allow EAPoL packets
+                            flow_file.write(f"    # Adding rule to allow EAPoL traffic\n")
+                            flow_file.write(f"    add table={cur_dev_table},priority=20,dl_type=0x888e "
+                                            f"actions=NORMAL\n")
+                            host_spec_list.append(subnet['ipv4Network']['gateway'])
+                            if 'nameservers' in subnet:
+                                host_spec_list += subnet['nameservers']
+                            if 'nameservers' in device:
+                                host_spec_list += device['nameservers']
                         flow_file.write (f"    # TABLE {cur_dev_table}: hosts allowed/denied for device {device_id} (MAC {device_mac})\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=20,udp,tp_dst=67 "
                                          f"actions=LOCAL\n")
