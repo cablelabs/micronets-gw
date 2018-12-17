@@ -186,7 +186,7 @@ class OpenFlowAdapter:
                         if default_host_action == "drop":
                             # Add rule to allow EAPoL packets
                             flow_file.write(f"    # Adding rule to allow EAPoL traffic\n")
-                            flow_file.write(f"    add table={cur_dev_table},priority=20,packet_type=(1,0x888e) "
+                            flow_file.write(f"    add table={cur_dev_table},priority=20,dl_type=0x888e "
                                             f"actions=NORMAL\n")
                             host_spec_list.append(subnet['ipv4Network']['gateway'])
                             if 'nameservers' in subnet:
