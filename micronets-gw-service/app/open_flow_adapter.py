@@ -215,7 +215,7 @@ class OpenFlowAdapter:
             flow_file.write (f"  add table={unrestricted_device_table},priority=10,udp,tp_dst=67 "
                              f"actions=LOCAL\n")
             flow_file.write (f"  add table={unrestricted_device_table},priority=5 "
-                             f"actions=drop\n")
+                             f"actions=NORMAL\n")
             flow_file.flush ()
 
             with flow_file_path.open('r') as infile:
