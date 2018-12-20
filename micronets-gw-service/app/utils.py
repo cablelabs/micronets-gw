@@ -109,11 +109,11 @@ async def get_ipv4_hostports_for_hostportspec (hostandportspec):
 
 async def main():
     print("Running utils tests...")
-    hpsl = ["1.2.3.4", "5.6.7.8:99", "example.com", "bogus.org:80", "www.yahoo.com:443,80,8080"]
+    hpsl = ["1.2.3.4", "5.6.7.8:99", "example.com", "bogus.org:80", "www.yahoo.com:443,80,8080", "www.example.com:443/tcp,80/tcp,7/udp"]
     for hostportspec in hpsl:
         hostports = await get_ipv4_hostports_for_hostportspec(hostportspec)
         print (f"hostportspecs for {hostportspec}: {hostports}")
-    print ("unrolled hosts for hostportspeclist {hps1}:")
+    print (f"unrolled hosts for hostportspeclist {hpsl}:")
     hostports = await unroll_hostportspec_list(hpsl)
     print (hostports)
     print ("Done.")
