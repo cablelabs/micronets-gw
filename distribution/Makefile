@@ -1,6 +1,6 @@
 .PHONY: all clean distclean deb scp
 
-VERSION=1.0.35
+VERSION=1.0.36
 FBASE=micronets-gw
 SDIRS=../filesystem
 IBASE=/opt
@@ -48,7 +48,7 @@ $(DEBPATH):
 	echo "Version: $(VERSION)" >> $(VDIR)/DEBIAN/control
 
 	# Build the $(DEBFILE).
-	dpkg-deb --build $(VDIR)
+	fakeroot dpkg-deb --build $(VDIR)
 
   # Move the $(DEBFILE) to its final location in the $(TARGETDIR) directory.
 	mv $(DEBFILE) $(DEBPATH)

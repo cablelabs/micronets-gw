@@ -14,7 +14,7 @@ class BaseConfig:
     SERVER_BASE_DIR = pathlib.Path (__file__).parent
     SERVER_BIN_DIR = SERVER_BASE_DIR.joinpath ("bin")
     WEBSOCKET_CONNECTION_ENABLED = False
-    WEBSOCKET_SERVER_ADDRESS = "ws-proxy.micronets.in"
+    WEBSOCKET_SERVER_ADDRESS = "ws-proxy-api.micronets.in"
     WEBSOCKET_SERVER_PORT = 5050
     # NOTE: The WEBSOCKET_SERVER_PATH should be unique to the gateway/subscriber if using the proxy
     WEBSOCKET_SERVER_PATH = '/micronets/v1/ws-proxy/micronets-gw-0001'
