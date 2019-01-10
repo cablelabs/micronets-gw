@@ -190,11 +190,11 @@ class OpenFlowAdapter:
                             flow_file.write(f"    # Adding rule to allow EAPoL traffic\n")
                             flow_file.write(f"    add table={cur_dev_table},priority=20,dl_type=0x888e "
                                             f"actions=NORMAL\n")
-                            host_spec_list.append(subnet['ipv4Network']['gateway'])
+                            hostport_spec_list.append(subnet['ipv4Network']['gateway'])
                             if 'nameservers' in subnet:
-                                host_spec_list += subnet['nameservers']
+                                hostport_spec_list += subnet['nameservers']
                             if 'nameservers' in device:
-                                host_spec_list += device['nameservers']
+                                hostport_spec_list += device['nameservers']
                         flow_file.write (f"    # TABLE {cur_dev_table}: hosts allowed/denied for device {device_id} (MAC {device_mac})\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=20,udp,tp_dst=67 "
                                          f"actions=LOCAL\n")
