@@ -1,5 +1,13 @@
 # Micronets Gateway Service README
 
+The Micronets Gateway incorporates a number of components necessary for creating and managing Micronets on the gateway, on-boarding devices, and for enforcing Micronets policy. 
+
+In particular, this repository includes:
+
+* Plug-in logic for the ifup/down subsystem - which allows the `/etc/network/interfaces` file to be annotated with Micronets-specific keywords. This mostly includes directives for configuring interfaces and bridges with OpenVSwitch at boot-up.
+* The Micronets Gateway Service - which is used to manage the connection with the Micronets Manager, provide REST endpoints for direct or websocket-based invocation, configure the DHCP server (dnsmasq or ISC DHCP), and issue openVSwitch/OpenFlow commands to enforce Micronet- and device-level policy.
+* Logic for creating a Debian installer files
+
 ## Development Setup
 
 To setup a dev environment for the Micronets gateway service, run the following steps:
