@@ -11,6 +11,8 @@ ARDIR=$(TARGETDIR)/ar
 SCPUSER=root
 SCPHOST=ovs01
 
+PUSHUSER=cpratt
+
 VDIR=$(FBASE)-$(VERSION)
 DEBFILE=$(VDIR).deb
 DEBPATH=$(TARGETDIR)/$(DEBFILE)
@@ -67,3 +69,6 @@ $(DEBPATH):
 
 scp: $(DEBPATH)
 	scp $(DEBPATH) $(SCPUSER)@$(SCPHOST):
+
+push-artifacts: $(DEBPATH)
+	curl -u$(PUSHUSER) -XPUT "https://community.cablelabs.com/mvn/micronets-dpkg/pool/micronets-gw;deb.distribution=xenial;deb.component=main;deb.architecture=all" -T "$(DEBPATH)"
