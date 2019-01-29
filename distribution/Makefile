@@ -71,4 +71,7 @@ scp: $(DEBPATH)
 	scp $(DEBPATH) $(SCPUSER)@$(SCPHOST):
 
 push-artifacts: $(DEBPATH)
-	curl -u$(PUSHUSER) -XPUT "https://community.cablelabs.com/mvn/micronets-dpkg/pool/micronets-gw;deb.distribution=xenial;deb.component=main;deb.architecture=all" -T "$(DEBPATH)"
+	curl -u$(PUSHUSER) -XPUT \
+		"https://community.cablelabs.com/mvn/micronets-dpkg/pool/$(DEBFILE);deb.distribution=xenial;deb.component=main;deb.architecture=all" \
+		-H "X-Checksum-Sha1: $(shell sha1sum $(DEBPATH) | cut -d' ' -f1)" \
+		-T "$(DEBPATH)"
