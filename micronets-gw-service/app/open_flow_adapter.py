@@ -1,7 +1,7 @@
 import re, logging, tempfile, netifaces
 
 from pathlib import Path
-from .utils import blank_line_re, comment_line_re, unroll_host_list
+from .utils import blank_line_re, comment_line_re, unroll_hostportspec_list
 from subprocess import call
 
 logger = logging.getLogger ('micronets-gw-service')
@@ -166,19 +166,21 @@ class OpenFlowAdapter:
                                  f" (interface {subnet_int}, subnet {subnet_network})\n")
                 for device_id, device in device_lists [subnet_id].items ():
                     device_mac = device ['macAddress']['eui48']
-                    host_spec_list = None
                     if 'allowHosts' in device:
                         hosts = device['allowHosts']
-                        host_spec_list = await unroll_host_list (hosts)
+                        hostport_spec_list = await unroll_hostportspec_list (hosts)
                         host_action = "NORMAL"
                         default_host_action = "drop"
                     elif 'denyHosts' in device:
                         hosts = device ['denyHosts']
-                        host_spec_list = await unroll_host_list (hosts)
+                        hostport_spec_list = await unroll_hostportspec_list (hosts)
                         host_action = "drop"
                         default_host_action = "NORMAL"
 
-                    if host_spec_list:
+                    if not hostport_spec_list:
+                        flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
+                                         f"actions=resubmit(,{unrestricted_device_table})\n")
+                    else:
                         cur_dev_table = cur_table
                         cur_table += 1
                         flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
@@ -188,27 +190,46 @@ class OpenFlowAdapter:
                             flow_file.write(f"    # Adding rule to allow EAPoL traffic\n")
                             flow_file.write(f"    add table={cur_dev_table},priority=20,dl_type=0x888e "
                                             f"actions=NORMAL\n")
-                            host_spec_list.append(subnet['ipv4Network']['gateway'])
+                            hostport_spec_list.append(subnet['ipv4Network']['gateway'])
                             if 'nameservers' in subnet:
-                                host_spec_list += subnet['nameservers']
+                                hostport_spec_list += subnet['nameservers']
                             if 'nameservers' in device:
-                                host_spec_list += device['nameservers']
+                                hostport_spec_list += device['nameservers']
                         flow_file.write (f"    # TABLE {cur_dev_table}: hosts allowed/denied for device {device_id} (MAC {device_mac})\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=20,udp,tp_dst=67 "
                                          f"actions=LOCAL\n")
                         flow_file.write (f"    add table={cur_dev_table},priority=20,arp "
                                          f"actions=NORMAL\n")
                         flow_file.write (f"    #   hosts: {hosts}\n")
-                        for host_spec in host_spec_list:
-                            flow_file.write(f"    add table={cur_dev_table},priority=10,ip,ip_dst={host_spec} "
-                                            f"actions={host_action}\n")
+                        for hostport_spec in hostport_spec_list:
+                            # hostport_spec examples: 1.2.3.4, 3.4.5.6/32:22, 1.2.3.4/32:80/tcp,443/tcp,7,39/udp
+                            hostport_split = hostport_spec.split(':')
+                            hostspec = hostport_split[0]
+                            hp_filter_template = f"    add table={cur_dev_table},priority=10,{'{}'},ip_dst={hostspec}{'{}'} " \
+                                                 f"actions={host_action}\n"
+
+                            if len(hostport_split) == 1:
+                                # Need to create an ip-only filter
+                                flow_file.write(hp_filter_template.format("ip", ""))
+                            else:
+                                # Need to create a ip+port filter(s)
+                                portspec = hostport_split[1]
+                                portspec_split = portspec.split('/')
+                                if len(portspec_split) == 1:
+                                    # No protocol designation - block udp and tcp for the port number
+                                    flow_file.write(hp_filter_template.format("tcp", f",tcp_dst={portspec}"))
+                                    flow_file.write(hp_filter_template.format("udp", f",udp_dst={portspec}"))
+                                if len(portspec_split) > 1:
+                                    # Only block the port for the designated protocol
+                                    protocol = portspec_split[1]
+                                    flow_file.write(hp_filter_template.format(protocol, f",{protocol}_dst={portspec}"))
+                            # Write the default rule for the device
                         flow_file.write (f"    add table={cur_dev_table},priority=5 "
                                          f"actions={default_host_action}\n")
-                    else:
-                        flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
-                                         f"actions=resubmit(,{unrestricted_device_table})\n")
-                flow_file.write (f"  add table={cur_subnet_table},priority=5 "
-                                 f"actions=drop\n")
+                # Create the subnet flow entry for non-matching devices
+                flow_file.write(f"  add table={cur_subnet_table},priority=5 "
+                                f"actions=drop\n")
+
             for interface in disabled_interfaces:
                 logger.info (f"Disabling flow for interface {interface}")
                 if interface not in self.port_for_interface:
