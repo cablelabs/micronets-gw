@@ -43,15 +43,15 @@ def merge_deep (dict1, dict2):
             result [key] = deepcopy (dict2 [key])
     return result
 
-def find_subnet_id_for_host (subnets, host_ip_address):
+def find_micronet_id_for_host (micronets, host_ip_address):
     host_network = IPv4Network (host_ip_address + "/255.255.255.255")
-    for subnet_id, subnet in subnets.items ():
-        ipv4_net_params = subnet ['ipv4Network']
+    for micronet_id, micronet in micronets.items ():
+        ipv4_net_params = micronet ['ipv4Network']
         netaddr = ipv4_net_params ['network']
         netmask = ipv4_net_params ['mask']
-        subnet_network = IPv4Network (netaddr + "/" + netmask, strict=True)
-        if subnet_network.overlaps (host_network):
-            return subnet_id
+        micronet_network = IPv4Network (netaddr + "/" + netmask, strict=True)
+        if micronet_network.overlaps (host_network):
+            return micronet_id
     return None
 
 class InvalidUsage (Exception):

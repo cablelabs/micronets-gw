@@ -135,7 +135,7 @@ class WSConnector:
     async def send_hello_message (self, peer_id):
         message = {'messageType': 'CONN:HELLO',
                    'requiresResponse': False,
-                   'peerClass': 'micronets-dhcp-service',
+                   'peerClass': 'micronets-gateway-service',
                    'peerId': peer_id }
         await self.send_message (message, must_be_ready=False)
 
@@ -182,7 +182,7 @@ class WSConnector:
 #             i = 1
 #             while (i <= 100):
 #                 await asyncio.sleep (10)
-#                 await self.send_info_message (self.websocket, f"dhcp-server test message #{i}")
+#                 await self.send_info_message (self.websocket, f"gateway-server test message #{i}")
 #                 i = i + 1
         finally:
             logger.debug ("WSConnector: sender: exiting.")

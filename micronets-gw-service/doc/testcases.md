@@ -4,20 +4,20 @@
 
     `python runner.py runserver`
 
-### DHCP SUBNET ENDPOINT TEST CASES:
+### MICRONET ENDPOINT TEST CASES:
 
 Note: JSON request/response object fields should not be assumed to be in any particular order (JSON object fields have no ordering requirements). e.g. `{"a":1, "b":2, "c":{"d":4, "e":5}}` is equivalent to `{"b":2, "c":{"e":5, "d":4}, "a":1}`.
 
 Note: For the sake of brevity, many of these test cases require consecutive execution. i.e. One test case depends on the execution of a previous one.
 
-#### Positive Subnet Test Cases:
+#### Positive Endpoint Test Cases:
 
-* Creating a subnet:
+* Creating a micronet:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnet": {
-                "subnetId": "mocksubnet007",
+            "micronet": {
+                "micronetId": "mockmicronet007",
                 "ipv4Network": {
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0",
@@ -27,15 +27,15 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "ovsBridge": "brmn001",
                 "nameservers": ["1.2.3.4","1.2.3.5"]
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets
+        }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
 
     Expected output: (status code 201)
 
     ```json
     {
-        "subnet": {
-            "subnetId": "mocksubnet007",
+        "micronet": {
+            "micronetId": "mockmicronet007",
             "interface": "wlp2s0",
             "ovsBridge": "brmn001",
             "ipv4Network": {
@@ -51,12 +51,12 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Creating another subnet:
+* Creating another micronet:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnet": {
-                "subnetId": "mocksubnet008",
+            "micronet": {
+                "micronetId": "mockmicronet008",
                 "ipv4Network": {
                     "network": "192.168.2.0",
                     "mask": "255.255.255.0"
@@ -64,15 +64,15 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "interface": "wlp2s0",
                 "ovsBridge": "brmn001"
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets
+        }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
 
     Expected output: (status code 201)
 
     ```json
     {
-        "subnet": {
-            "subnetId": "mocksubnet008",
+        "micronet": {
+            "micronetId": "mockmicronet008",
             "ipv4Network": {
                 "network": "192.168.1.0",
                 "mask": "255.255.255.0"
@@ -83,13 +83,13 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Creating multiple subnets via one POST:
+* Creating multiple micronets via one POST:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-        "subnets": [
+        "micronets": [
             {
-                "subnetId": "mocksubnet008",
+                "micronetId": "mockmicronet008",
                 "ipv4Network": {
                     "network": "192.168.8.0",
                     "mask": "255.255.255.0",
@@ -103,7 +103,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 ]
             },
             {
-                "subnetId": "mocksubnet009",
+                "micronetId": "mockmicronet009",
                 "ipv4Network": {
                     "network": "192.168.9.0",
                     "mask": "255.255.255.0",
@@ -113,16 +113,16 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "ovsBridge": "brmn001"
             }
         ] }
-        ' http://localhost:5000/micronets/v1/dhcp/subnets
+        ' http://localhost:5000/micronets/v1/gateway/micronets
     ```
 
     Expected output: (status code 201)
 
     ```json
 {
-    "subnets": [
+    "micronets": [
         {
-            "subnetId": "mocksubnet008",
+            "micronetId": "mockmicronet008",
             "ipv4Network": {
                 "network": "192.168.8.0",
                 "mask": "255.255.255.0",
@@ -137,7 +137,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
             ]
         },
         {
-            "subnetId": "mocksubnet009",
+            "micronetId": "mockmicronet009",
             "ipv4Network": {
                 "network": "192.168.9.0",
                 "mask": "255.255.255.0",
@@ -148,19 +148,19 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     ]
 }
 
-* Retrieve all subnets:
+* Retrieve all micronets:
 
     ```
-    curl http://localhost:5000/micronets/v1/dhcp/subnets
+    curl http://localhost:5000/micronets/v1/gateway/micronets
     ```
 
     Expected output: (status code 200)
 
     ```json
     {
-        "subnets": [
+        "micronets": [
             {
-                "subnetId": "mocksubnet008",
+                "micronetId": "mockmicronet008",
                 "ipv4Network": {
                     "network": "192.168.8.0",
                     "mask": "255.255.255.0",
@@ -174,7 +174,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 ]
             },
             {
-                "subnetId": "mocksubnet009",
+                "micronetId": "mockmicronet009",
                 "ipv4Network": {
                     "network": "192.168.9.0",
                     "mask": "255.255.255.0",
@@ -187,27 +187,27 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Updating a subnet:
+* Updating a micronet:
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-            "subnet": {
-                "subnetId": "mocksubnet007",
+            "micronet": {
+                "micronetId": "mockmicronet007",
                 "ipv4Network": {
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0",
                     "gateway":"192.168.1.2"
                 }
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
     ```
 
     Expected output: (status code 200)
 
     ```json
     {
-        "subnet": {
-            "subnetId": "mocksubnet007",
+        "micronet": {
+            "micronetId": "mockmicronet007",
             "ipv4Network": {
                 "network": "192.168.1.0",
                 "mask": "255.255.255.0",
@@ -225,18 +225,18 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-            "subnet": {
+            "micronet": {
                 "nameservers": ["1.2.3.4", "1.2.3.5"]
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
     ```json
 
     Expected output: (status code 200)
 
     ```json
     {
-        "subnet": {
-            "subnetId": "mocksubnet007",
+        "micronet": {
+            "micronetId": "mockmicronet007",
             "ipv4Network": {
                 "network": "192.168.1.0",
                 "mask": "255.255.255.0",
@@ -254,20 +254,20 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-            "subnet": {
+            "micronet": {
                 "ipv4Network": {
                     "gateway": "192.168.1.3"
                 }
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
     ```
 
     Expected output: (status code 200)
 
     ```json
     {
-        "subnet": {
-            "subnetId": "mocksubnet007",
+        "micronet": {
+            "micronetId": "mockmicronet007",
             "ipv4Network": {
                 "network": "192.168.1.0",
                 "mask": "255.255.255.0",
@@ -283,20 +283,20 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Deleting a subnet:
+* Deleting a micronet:
 
     ```
-    curl -X DELETE http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
+    curl -X DELETE http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
     ```
 
     Expected output: (status code 204)
 
     None
 
-* Deleting all subnets:
+* Deleting all micronets:
 
     ```
-    curl -X DELETE http://localhost:5000/micronets/v1/dhcp/subnets
+    curl -X DELETE http://localhost:5000/micronets/v1/gateway/micronets
     ```
 
     Expected output: (status code 204)
@@ -305,12 +305,12 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
 #### Negative Subnet Test Cases:
 
-* Create a second subnet with the same name:
+* Create a second micronet with the same name:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-            "subnet": {
-                "subnetId": "mocksubnet007",
+            "micronet": {
+                "micronetId": "mockmicronet007",
                 "ipv4Network": {
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0",
@@ -320,23 +320,23 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "ovsBridge": "brmn001",
                 "nameservers": ["1.2.3.4","1.2.3.5"]
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets
+        }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
 
     Expected output: (status code 409)
 
     ```json
     {
-        "message": "Supplied subnet ID 'mocksubnet007' already exists"
+        "message": "Supplied micronet ID 'mockmicronet007' already exists"
     }
     ```
 
-* Create a subnet with an invalid name:
+* Create a micronet with an invalid name:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "subnet": {
-                "subnetId": "bad subnet name",
+           "micronet": {
+                "micronetId": "bad micronet name",
                 "ipv4Network": {
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0"
@@ -345,22 +345,22 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "ovsBridge": "brmn001",
                 "nameservers": ["1.2.3.4","1.2.3.5"]
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets
+        }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
 
     Expected output: (status code 400)
 
     ```json
     {
-        "message": "Supplied subnet ID 'bad subnet name' in '{'subnetId': 'bad subnet name', 'ipv4Network': {'network': '192.168.1.0', 'mask': '255.255.255.0'}, 'nameservers': ['1.2.3.4', '1.2.3.5']}' is not alpha-numeric"
+        "message": "Supplied micronet ID 'bad micronet name' in '{'micronetId': 'bad micronet name', 'ipv4Network': {'network': '192.168.1.0', 'mask': '255.255.255.0'}, 'nameservers': ['1.2.3.4', '1.2.3.5']}' is not alpha-numeric"
     }
     ```
 
-* Create a subnet with a missing subnetId field:
+* Create a micronet with a missing micronetId field:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "subnet": {
+           "micronet": {
                 "ipv4Network": {
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0"
@@ -369,30 +369,30 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "ovsBridge": "brmn001",
                 "nameservers": ["1.2.3.4","1.2.3.5"]
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets
+        }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
 
     Expected output: (status code 400)
 
     ```json
     {
-        "message": "Required field 'subnetId' missing from {'ipv4Network': {'network': '192.168.1.0', 'mask': '255.255.255.0'}, 'nameservers': ['1.2.3.4', '1.2.3.5']}"
+        "message": "Required field 'micronetId' missing from {'ipv4Network': {'network': '192.168.1.0', 'mask': '255.255.255.0'}, 'nameservers': ['1.2.3.4', '1.2.3.5']}"
     }
     ```
 
-* Create a subnet with a missing network mask field:
+* Create a micronet with a missing network mask field:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "subnet": {
-                "subnetId": "MySubnet",
+           "micronet": {
+                "micronetId": "MySubnet",
                 "ipv4Network": {
                     "network": "192.168.1.0"
                 },
                 "interface": "wlp2s0",
                 "ovsBridge": "brmn001"
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets
+        }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
 
     Expected output: (status code 400)
@@ -403,12 +403,12 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Create a subnet with an invalid gateway address:
+* Create a micronet with an invalid gateway address:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "subnet": {
-                "subnetId": "mocksubnet007",
+           "micronet": {
+                "micronetId": "mockmicronet007",
                 "ipv4Network": {
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0",
@@ -417,23 +417,23 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "interface": "wlp2s0",
                 "ovsBridge": "brmn001"
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets
+        }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
 
     Expected output: (status code 400)
 
     ```json
     {
-        "message": "Gateway address 192.168.2.1 isn't in the 'mocksubnet019' subnet (192.168.1.0/24)"
+        "message": "Gateway address 192.168.2.1 isn't in the 'mockmicronet019' micronet (192.168.1.0/24)"
     }
     ```
 
-* Create a subnet that overlaps another subnet:
+* Create a micronet that overlaps another micronet:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "subnet": {
-                "subnetId": "mocksubnet007",
+           "micronet": {
+                "micronetId": "mockmicronet007",
                 "ipv4Network": {
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0",
@@ -442,12 +442,12 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "interface": "wlp2s0",
                 "ovsBridge": "brmn001"
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets
+        }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "subnet": {
-                "subnetId": "mocksubnet008",
+           "micronet": {
+                "micronetId": "mockmicronet008",
                 "ipv4Network": {
                     "network": "192.168.0.0",
                     "mask": "255.255.0.0",
@@ -456,23 +456,23 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "interface": "wlp2s0",
                 "ovsBridge": "brmn001"
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets
+        }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
 
     Expected output: (status code 400)
 
     ```json
     {
-        "message": "Subnet 'mocksubnet008' network 192.168.0.0/16 overlaps existing subnet 'mocksubnet007' (network 192.168.1.0/24)"
+        "message": "Subnet 'mockmicronet008' network 192.168.0.0/16 overlaps existing micronet 'mockmicronet007' (network 192.168.1.0/24)"
     }
     ```
 
-* Update a subnet with a mismatched name:
+* Update a micronet with a mismatched name:
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-           "subnet": {
-                "subnetId": "mocksubnet008",
+           "micronet": {
+                "micronetId": "mockmicronet008",
                 "ipv4Network": {
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0",
@@ -481,27 +481,27 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "interface": "wlp2s0",
                 "ovsBridge": "brmn001"
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
     ```
 
     Expected output: (status code 409)
 
     ```json
     {
-        "message": "Update can only update subnet 'mocksubnet007' ('mocksubnet008' provided)"
+        "message": "Update can only update micronet 'mockmicronet007' ('mockmicronet008' provided)"
     }
     ```
 
-* Update a subnet with a bad IP address:
+* Update a micronet with a bad IP address:
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-           "subnet": {
+           "micronet": {
                 "ipv4Network": {
                     "network": "192.168.1.1234"
                 }
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
     ```
 
     Expected output: (status code 400)
@@ -512,16 +512,16 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Update a subnet with a bad IP address:
+* Update a micronet with a bad IP address:
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-           "subnet": {
+           "micronet": {
                 "ipv4Network": {
                     "network": "127.0.0.1"
                 }
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
     ```
 
     Expected output: (status code 400)
@@ -532,22 +532,22 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Deleting a non-empty subnet:
+* Deleting a non-empty micronet:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "subnet": {
-                "subnetId": "mocksubnet007",
+           "micronet": {
+                "micronetId": "mockmicronet007",
                 "ipv4Network": {
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0"
                 }
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets
+        }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "subnet": {
+           "micronet": {
                "deviceId": "MyDevice01",
                "macAddress": {
                    "eui48": "00:23:12:0f:b0:26"
@@ -556,14 +556,14 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.42"
                }
            }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
 
     ```json
     {
-        "message": "Subnet 'mocksubnet007' still has active devices"
+        "message": "Subnet 'mockmicronet007' still has active devices"
     }
     ```
 
@@ -584,7 +584,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.42"
                }
            }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 201)
@@ -603,7 +603,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Creating multiple devices in a subnet:
+* Creating multiple devices in a micronet:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -627,7 +627,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     }
                 }
             ]
-    }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+    }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 201)
@@ -657,10 +657,10 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Retrieving all devices defined for a subnet:
+* Retrieving all devices defined for a micronet:
 
     ```
-    curl http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+    curl http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 200)
@@ -703,7 +703,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "ipv4": "192.168.42.43"
                 }
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 200)
@@ -731,7 +731,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "ipv4": "192.168.1.143"
                 }
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices/MyDevice01
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices/MyDevice01
     ```
 
     Expected output: (status code 200)
@@ -753,7 +753,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 * Deleting a device:
 
     ```
-    curl -X DELETE http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices/mydevice01
+    curl -X DELETE http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices/mydevice01
     ```
 
     Expected output: (status code 204)
@@ -774,7 +774,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                },
                "allowHosts": ["8.8.8.8", "12.34.56.0/24", "www.yahoo.com"]
            }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 201)
@@ -808,7 +808,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                },
                "denyHosts": ["8.8.8.8", "12.34.56.0/24", "www.example.com"]
            }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 201)
@@ -843,7 +843,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "ipv4": "192.168.1.4222"
                 }
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -863,7 +863,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 },
                 "networkAddress": "blah"
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -885,7 +885,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 },
                 "networkAddress": {}
             }
-          }'  http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+          }'  http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -904,7 +904,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "eui48": "00:23:12:0f:b0:26"
                 }
             }
-        }'  http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }'  http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -928,7 +928,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.42"
                }
            }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -950,7 +950,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.42"
                }
            }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -971,7 +971,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices/MyDevice01
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices/MyDevice01
     ```
 
     Expected output: (status code 400)
@@ -982,12 +982,12 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Creating a device with an address that's not part of the containing subnet:
+* Creating a device with an address that's not part of the containing micronet:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
-           "device": {
-                "subnetId": "mocksubnet007",
+           "micronet": {
+                "micronetId": "mockmicronet007",
                 "ipv4Network": {
                     "network": "192.168.1.0",
                     "mask": "255.255.255.0",
@@ -995,7 +995,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 },
                 "nameservers": ["1.2.3.4","1.2.3.5"]
             }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets
+        }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -1008,14 +1008,14 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.2.42"
                }
            }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
 
     ```json
     {
-        "message": "Device 'MyDevice01' address 192.168.2.42 isn't compatible with subnet 'mocksubnet007' (192.168.1.0/24)"
+        "message": "Device 'MyDevice01' address 192.168.2.42 isn't compatible with micronet 'mockmicronet007' (192.168.1.0/24)"
     }
     ```
 
@@ -1024,7 +1024,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
-               "subnetId": "mocksubnet007",
+               "micronetId": "mockmicronet007",
                "ipv4Network": {
                    "network": "192.168.1.0",
                    "mask": "255.255.255.0",
@@ -1032,7 +1032,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                },
                "nameservers": ["1.2.3.4","1.2.3.5"]
            }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets
+        }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -1045,7 +1045,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.42"
                }
            }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -1058,35 +1058,35 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.43"
                }
            }
-        }' http://localhost:5000/micronets/v1/dhcp/subnets/mocksubnet007/devices
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
 
     ```json
     {
-        "message": "MAC address of device 'MyDevice02' is not unique (MAC address 00:23:12:0f:b0:26 found in subnet 'mocksubnet007' device 'mydevice01')"
+        "message": "MAC address of device 'MyDevice02' is not unique (MAC address 00:23:12:0f:b0:26 found in micronet 'mockmicronet007' device 'mydevice01')"
     }
     ```
 
 ### LEASE NOTIFICATION TEST CASES:
 
-Lease change notifications can be performed by posting to the `/micronets/v1/dhcp/leases` endpoint.
+Lease change notifications can be performed by posting to the `/micronets/v1/gateway/leases` endpoint.
 
-    ```
-    curl -X PUT -H "Content-Type: application/json" -d '{
-        "leaseChangeEvent": {
-            "action": "leaseExpired", 
-            "macAddress": {
-                "eui48": "00:23:12:0f:b0:26"
-            }, 
-            "networkAddress": {
-                "ipv4": "192.168.1.42"
-            }, 
-            "hostname": "myhost"}
-        }' http://localhost:5000/micronets/v1/dhcp/leases
-    ```
+```json
+curl -X PUT -H "Content-Type: application/json" -d '{
+    "leaseChangeEvent": {
+        "action": "leaseExpired", 
+        "macAddress": {
+            "eui48": "00:23:12:0f:b0:26"
+        }, 
+        "networkAddress": {
+            "ipv4": "192.168.1.42"
+        }, 
+        "hostname": "myhost"}
+    }' http://localhost:5000/micronets/v1/gateway/leases
+```
 
-    Expected output: (status code 200)
+Expected output: (status code 200)
 
-    None
+None
