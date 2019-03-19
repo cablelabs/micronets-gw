@@ -29,12 +29,12 @@ arg_parser.add_argument ('--config', "-c", required=False, action='store', type=
                          help="The service configuration to use (e.g. config.MockDevelopmentConfig, config.DnsmasqTestingConfig)")
 args = arg_parser.parse_args ()
 
-dhcp_config_env = os.environ.get ('MICRONETS_DHCP_CONFIG')
+config_env = os.environ.get ('MICRONETS_GW_SERVICE_CONFIG')
 
 if (args.config):
     config = args.config
-elif (dhcp_config_env):
-    config = dhcp_config_env
+elif (config_env):
+    config = config_env
 else:
     config = 'config.MockDevelopmentConfig'
 
@@ -51,12 +51,12 @@ logger = logging.getLogger ('micronets-gw-service')
 
 logger.info (f"Loading app module using {config}")
 
-dhcp_conf_model = None
+conf_model = None
 dhcp_adapter = None
 ws_connection = None
 
-def get_dhcp_conf_model ():
-    return dhcp_conf_model
+def get_conf_model ():
+    return conf_model
 
 if not 'DHCP_ADAPTER' in app.config:
     exit (f"A DHCP_ADAPTER must be defined in the selected configuration ({app.config})")
@@ -97,7 +97,7 @@ except Exception as ex:
     logger.info ("Error starting websocket connector:", exc_info=True)
     exit (1)
 
-from .dhcp_conf import DHCPConf
+from .gateway_service_conf import GatewayServiceConf
 
 flow_adapter = None
 try:
@@ -113,14 +113,14 @@ except Exception as ex:
 try:
     min_dhcp_conf_update_int_s = app.config ['MIN_DHCP_UPDATE_INTERVAL_S']
     logger.info (f"Minimum DHCP update interval (seconds): {min_dhcp_conf_update_int_s}")
-    dhcp_conf_model = DHCPConf (ws_connection, dhcp_adapter, flow_adapter, min_dhcp_conf_update_int_s)
+    conf_model = GatewayServiceConf (ws_connection, dhcp_adapter, flow_adapter, min_dhcp_conf_update_int_s)
 except Exception as ex:
     logger.info ("Error starting with adapter:", exc_info=True)
     exit (1)
 
 if flow_adapter:
-    asyncio.ensure_future(dhcp_conf_model.update_conf())
+    asyncio.ensure_future(conf_model.update_conf())
 
 # Initialize the API
-from . import dhcp_api
+from . import gateway_service_api
 

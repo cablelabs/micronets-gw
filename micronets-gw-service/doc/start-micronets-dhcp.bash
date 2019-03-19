@@ -1,5 +1,5 @@
 #!/bin/bash
-BASENAME=micronets-dhcp
+BASENAME=micronets-gw-service
 PIDFILE=$BASENAME.pid
 LOGFILE=$BASENAME.log
 BASEDIR=$HOME/Projects/micronets
@@ -20,9 +20,9 @@ fi
 # This config is for listening on all interfaces but using the mock DHCPD adapter
 FLASK_ENV=config.MockTestingConfig
 
-source $HOME/.virtualenvs/micronets-dhcp/bin/activate
+source $HOME/.virtualenvs/micronets-gw-service/bin/activate
 
-nohup python micronets-dhcp/runner.py &
+nohup python micronets-gw-service/runner.py &
 
 new_pid=$!
 echo $new_pid > "$PIDFILE"

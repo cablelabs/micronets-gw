@@ -15,12 +15,12 @@ class IscDhcpdAdapter:
     block_start_re = re.compile ('^# %%MICRONET BLOCK START', re.ASCII)
     block_end_re = re.compile ('^# %%MICRONET BLOCK END', re.ASCII)
 
-    subnet_block_prefix_re = re.compile ('^# %%MICRONET SUBNET (\w.[\w-]*)', re.ASCII)
+    micronet_block_prefix_re = re.compile ('^# %%MICRONET SUBNET (\w.[\w-]*)', re.ASCII)
     open_curly_line_re = re.compile ('^\s*{\s*(#.*)?$')
     closed_curly_line_re = re.compile ('^\s*}\s*(#.*)?$')
 
-    # format: subnet <network address> netmask <network mask>
-    subnet_start_re = re.compile ('^\s*subnet\s+(' + ip_addr_pattern + ')\s+netmask\s+('
+    # format: micronet <network address> netmask <network mask>
+    micronet_start_re = re.compile ('^\s*micronet\s+(' + ip_addr_pattern + ')\s+netmask\s+('
                                   + ip_addr_pattern + ')\s*$', re.ASCII)
 
     # format: host <device/host name>
@@ -46,7 +46,7 @@ class IscDhcpdAdapter:
     def read_from_conf (self):
         with self.dhcpconf_path.open ('r') as infile:
             infile.line_no = 0
-            logger.info (f"IscDhcpdAdapter: Loading subnet data from {self.dhcpconf_path.absolute ()}")
+            logger.info (f"IscDhcpdAdapter: Loading micronet data from {self.dhcpconf_path.absolute ()}")
             return self.parse_dhcp_conf (infile)
 
     def parse_dhcp_conf (self, infile):
@@ -65,12 +65,12 @@ class IscDhcpdAdapter:
                     self.postfix_lines.append (line)
         logger.info (f"Done reading {self.dhcpconf_path.absolute()}")
         return { 'prefix': self.prefix_lines, 
-                 'subnets': self.micronet_block ['subnets'], 
+                 'micronets': self.micronet_block ['micronets'], 
                  'devices' : self.micronet_block ['devices'], 
                  'postfix': self.postfix_lines}
 
     def parse_micronet_block (self, infile):
-        subnets = {}
+        micronets = {}
         devices = {}
         for line in infile:
             infile.line_no += 1
@@ -78,29 +78,29 @@ class IscDhcpdAdapter:
                 break
             if (self.blank_line_re.match (line)):
                 continue
-            subnet_prefix_match_result = self.subnet_block_prefix_re.match (line)
-            if (subnet_prefix_match_result):
-                subnet_block_name = subnet_prefix_match_result.group (1)
-                # logger.debug ("  Found subnet prefix: {}".format (subnet_block_name))
-                subnet_block = self.parse_subnet_block (infile, subnet_block_name)
-                subnets [subnet_block_name] = subnet_block ['subnet']
-                devices [subnet_block_name] = subnet_block ['devices']
+            micronet_prefix_match_result = self.micronet_block_prefix_re.match (line)
+            if (micronet_prefix_match_result):
+                micronet_block_name = micronet_prefix_match_result.group (1)
+                # logger.debug ("  Found micronet prefix: {}".format (micronet_block_name))
+                micronet_block = self.parse_micronet_block (infile, micronet_block_name)
+                micronets [micronet_block_name] = micronet_block ['micronet']
+                devices [micronet_block_name] = micronet_block ['devices']
                 continue
             if (self.comment_line_re.match (line)):
                 continue
-        return {'subnets' : subnets, 'devices': devices}
+        return {'micronets' : micronets, 'devices': devices}
 
-    def parse_subnet_block (self, infile, subnet_name):
-        # The first line of a subnet block has to start with "subnet"
+    def parse_micronet_block (self, infile, micronet_name):
+        # The first line of a micronet block has to start with "micronet"
         line = infile.readline ()
         infile.line_no += 1
-        subnet_match_result = self.subnet_start_re.match (line)
-        if (not subnet_match_result):
+        micronet_match_result = self.micronet_start_re.match (line)
+        if (not micronet_match_result):
             return None
-        subnet = {}
-        subnet ['subnetId'] = subnet_name
-        subnet ['ipv4Network'] = {'network' : subnet_match_result.group (1), 
-                                  'mask' : subnet_match_result.group (2)}
+        micronet = {}
+        micronet ['micronetId'] = micronet_name
+        micronet ['ipv4Network'] = {'network' : micronet_match_result.group (1), 
+                                  'mask' : micronet_match_result.group (2)}
         devices = {}
         if (not self.open_curly_line_re.match (infile.readline ())):
             return None
@@ -115,7 +115,7 @@ class IscDhcpdAdapter:
             router_match_result = self.router_address_re.match (line)
             if (router_match_result):
                 router_address = router_match_result.group (1)
-                subnet ['gateway'] = router_address
+                micronet ['gateway'] = router_address
                 continue
             broadcast_match_result = self.broadcast_address_re.match (line)
             if (broadcast_match_result):
@@ -131,8 +131,8 @@ class IscDhcpdAdapter:
                 devices [device_result ['deviceId']] = device_result
                 continue
             # If none of the REs match, bail out
-            raise Exception ("Unrecognized subnet entry on line {}: {}".format (infile.line_no, line.rstrip ()))
-        return {'subnetId' : subnet_name, 'subnet': subnet, 'devices': devices}
+            raise Exception ("Unrecognized micronet entry on line {}: {}".format (infile.line_no, line.rstrip ()))
+        return {'micronetId' : micronet_name, 'micronet': micronet, 'devices': devices}
 
     def parse_device_block (self, infile, device_name):
         infile.line_no += 1
@@ -166,9 +166,9 @@ class IscDhcpdAdapter:
             return 'Error: Device {} is missing a fixed-address entry'.format (infile.fileno (), device_name)
         return device
 
-    def save_to_conf (self, subnets, devices):
+    def save_to_conf (self, micronets, devices):
         with self.dhcpconf_path.open ('w') as outfile:
-            logger.info ("IscDhcpdAdapter: Saving subnet data to {self.dhcpconf_path.absolute ()}")
+            logger.info ("IscDhcpdAdapter: Saving micronet data to {self.dhcpconf_path.absolute ()}")
             self.write_dhcp_conf (outfile)
         if self.dhcpd_restart_command:
             logger.info (f"Restarting ISC dhcp daemon ('{self.dhcpd_restart_command}')")
@@ -177,30 +177,30 @@ class IscDhcpdAdapter:
     def write_dhcp_conf (self, outfile):
         for line in self.prefix_lines:
             outfile.write (line)
-        self.write_subnets (outfile)
+        self.write_micronets (outfile)
         for line in self.postfix_lines:
             outfile.write (line)
 
-    def write_subnets (self, outfile):
+    def write_micronets (self, outfile):
         outfile.write ("# %%MICRONET BLOCK START\n")
         outfile.write ("# DO NOT modify anything between here and %%MICRONET BLOCK END\n")
-        for subnet_id, subnet in self.micronet_block ['subnets'].items ():
-            outfile.write ("\n# %%MICRONET SUBNET {}\n".format (subnet_id))
-            ipv4_params = subnet ['ipv4Network']
+        for micronet_id, micronet in self.micronet_block ['micronets'].items ():
+            outfile.write ("\n# %%MICRONET SUBNET {}\n".format (micronet_id))
+            ipv4_params = micronet ['ipv4Network']
             network_addr = ipv4_params['network']
             netmask = ipv4_params ['mask']
-            outfile.write ("subnet {} netmask {}\n".format (network_addr, netmask))
+            outfile.write ("micronet {} netmask {}\n".format (network_addr, netmask))
             outfile.write ("{\n")
             network = IPv4Network (network_addr + "/" + netmask)
             outfile.write ("  option broadcast-address {};\n".format (network.broadcast_address))
             if 'gateway' in ipv4_params:
                 outfile.write ("  option routers {};\n".format (ipv4_params['gateway']))
-            self.write_devices_for_subnet (outfile, subnet_id)
+            self.write_devices_for_micronet (outfile, micronet_id)
             outfile.write ("}\n")
         outfile.write ("# %%MICRONET BLOCK END\n")
 
-    def write_devices_for_subnet (self, outfile, subnetId):
-        device_list = self.micronet_block ['devices'] [subnetId].items ()
+    def write_devices_for_micronet (self, outfile, micronetId):
+        device_list = self.micronet_block ['devices'] [micronetId].items ()
         for device_id, device in device_list:
             mac_addr = EUI (device ['macAddress']['eui48'])
             mac_addr.dialect = netaddr.mac_unix_expanded
@@ -220,8 +220,8 @@ if __name__ == '__main__':
     print ("\nFound prefix:\n")
     for line in dhcp_conf ['prefix']:
         print (line.rstrip ())
-    print ("Found subnets:")
-    print (json.dumps (dhcp_conf ['subnets'], indent=2))
+    print ("Found micronets:")
+    print (json.dumps (dhcp_conf ['micronets'], indent=2))
     print ("Found devices:")
     print (json.dumps (dhcp_conf ['devices'], indent=2))
     print ("\Found postfix:\n")

@@ -114,7 +114,7 @@ class OpenFlowAdapter:
         logger.info (f"OpenFlowAdapter.read_interfaces_file: ovs_micronet_ports: {self.ovs_micronet_interfaces}")
         logger.info (f"OpenFlowAdapter.read_interfaces_file: ovs_uplink_port: {self.ovs_uplink_interface}")
 
-    async def update (self, subnet_list, device_lists):
+    async def update (self, micronet_list, device_lists):
         logger.info (f"OpenFlowAdapter.update ()")
         logger.info (f"OpenFlowAdapter.update: device_lists: {device_lists}")
 
@@ -141,30 +141,30 @@ class OpenFlowAdapter:
             flow_file.write(f"add table={start_table},priority=10,in_port=1 "
                             f"actions=NORMAL\n")
 
-            # Walk the subnets
+            # Walk the micronets
             cur_table = 10
-            for subnet_id, subnet in subnet_list.items ():
-                subnet_int = subnet ['interface']
-                subnet_bridge = subnet ['ovsBridge']
-                subnet_network = subnet ['ipv4Network']['network']
-                cur_subnet_table = cur_table
+            for micronet_id, micronet in micronet_list.items ():
+                micronet_int = micronet ['interface']
+                micronet_bridge = micronet ['ovsBridge']
+                micronet_network = micronet ['ipv4Network']['network']
+                cur_micronet_table = cur_table
                 cur_table += 1
-                logger.info (f"Creating flow table {cur_subnet_table} for subnet {subnet_id} (interface {subnet_int})")
-                if subnet_bridge != self.bridge_name:
-                    raise Exception(f"subnet {subnet_id} has an unexpected bridge name ('{subnet_bridge}')"
+                logger.info (f"Creating flow table {cur_micronet_table} for micronet {micronet_id} (interface {micronet_int})")
+                if micronet_bridge != self.bridge_name:
+                    raise Exception(f"micronet {micronet_id} has an unexpected bridge name ('{micronet_bridge}')"
                                     f" - expected {self.bridge_name}")
 
-                if subnet_int not in self.ovs_micronet_interfaces:
-                    raise Exception (f"interface {subnet_int} in subnet {subnet_id} not found "
+                if micronet_int not in self.ovs_micronet_interfaces:
+                    raise Exception (f"interface {micronet_int} in micronet {micronet_id} not found "
                                      f"in configured micronet interfaces ({self.ovs_micronet_interfaces})")
-                disabled_interfaces.remove (subnet_int)
-                subnet_port = self.port_for_interface [subnet_int]
-                flow_file.write (f"add table={start_table},priority=10,in_port={subnet_port} "
-                                 f"actions=resubmit(,{cur_subnet_table})\n")
+                disabled_interfaces.remove (micronet_int)
+                micronet_port = self.port_for_interface [micronet_int]
+                flow_file.write (f"add table={start_table},priority=10,in_port={micronet_port} "
+                                 f"actions=resubmit(,{cur_micronet_table})\n")
                 # Walk the devices in the interface and create appropriate device filter tables
-                flow_file.write (f"  # TABLE {cur_subnet_table}: micronet {subnet_id}"
-                                 f" (interface {subnet_int}, subnet {subnet_network})\n")
-                for device_id, device in device_lists [subnet_id].items ():
+                flow_file.write (f"  # TABLE {cur_micronet_table}: micronet {micronet_id}"
+                                 f" (interface {micronet_int}, micronet {micronet_network})\n")
+                for device_id, device in device_lists [micronet_id].items ():
                     device_mac = device ['macAddress']['eui48']
                     if 'allowHosts' in device:
                         hosts = device['allowHosts']
@@ -178,21 +178,21 @@ class OpenFlowAdapter:
                         default_host_action = "NORMAL"
 
                     if not hostport_spec_list:
-                        flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
+                        flow_file.write (f"  add table={cur_micronet_table},priority=20,dl_src={device_mac} "
                                          f"actions=resubmit(,{unrestricted_device_table})\n")
                     else:
                         cur_dev_table = cur_table
                         cur_table += 1
-                        flow_file.write (f"  add table={cur_subnet_table},priority=20,dl_src={device_mac} "
+                        flow_file.write (f"  add table={cur_micronet_table},priority=20,dl_src={device_mac} "
                                          f"actions=resubmit(,{cur_dev_table})\n")
                         if default_host_action == "drop":
                             # Add rule to allow EAPoL packets
                             flow_file.write(f"    # Adding rule to allow EAPoL traffic\n")
                             flow_file.write(f"    add table={cur_dev_table},priority=20,dl_type=0x888e "
                                             f"actions=NORMAL\n")
-                            hostport_spec_list.append(subnet['ipv4Network']['gateway'])
-                            if 'nameservers' in subnet:
-                                hostport_spec_list += subnet['nameservers']
+                            hostport_spec_list.append(micronet['ipv4Network']['gateway'])
+                            if 'nameservers' in micronet:
+                                hostport_spec_list += micronet['nameservers']
                             if 'nameservers' in device:
                                 hostport_spec_list += device['nameservers']
                         flow_file.write (f"    # TABLE {cur_dev_table}: hosts allowed/denied for device {device_id} (MAC {device_mac})\n")
@@ -226,8 +226,8 @@ class OpenFlowAdapter:
                             # Write the default rule for the device
                         flow_file.write (f"    add table={cur_dev_table},priority=5 "
                                          f"actions={default_host_action}\n")
-                # Create the subnet flow entry for non-matching devices
-                flow_file.write(f"  add table={cur_subnet_table},priority=5 "
+                # Create the micronet flow entry for non-matching devices
+                flow_file.write(f"  add table={cur_micronet_table},priority=5 "
                                 f"actions=drop\n")
 
             for interface in disabled_interfaces:
@@ -235,8 +235,8 @@ class OpenFlowAdapter:
                 if interface not in self.port_for_interface:
                     raise Exception(f"interface {interface} referenced in {self.interfaces_file_path} is not "
                                     f"configured on bridge {target_bridge}")
-                subnet_port = self.port_for_interface [interface]
-                flow_file.write (f"add table={start_table},priority=10,in_port={subnet_port} "
+                micronet_port = self.port_for_interface [interface]
+                flow_file.write (f"add table={start_table},priority=10,in_port={micronet_port} "
                                  f"actions=drop\n")
             # The common port filtering rules (after a packet has flowed through the
             #  interface and mac tables
