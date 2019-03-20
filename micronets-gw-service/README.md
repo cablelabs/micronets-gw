@@ -124,6 +124,14 @@ Note: Currently only data type _application/json_ is supported.
 | interface                | string          | Y        | The network interface on the gateway the subnet is associated with | "wlp2s0"
 | vlan                     | integer         | N        | The network interface on the gateway the subnet is associated with | "wlp2s0"
 | ovsBridge                | string          | Y        | The OpenVSwitch bridge the interface is connected to on the gateway | "brmn001"
+| outRestrictions          | list (object)   | N        | Micronet-Restrictions for outbound connections for devices in the micronet | “outRestrictions": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
+| inRestrictions           | list (object)   | N        | Micronet-Restrictions for inbound connections for devices in the micronet | “inRestrictions": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
+
+##### Notes:
+* **inRestrictions** and **outRestrictions** are processed in the order they are defined.
+* If **inRestrictions** or **outRestrictions** is non-empty, the default action is "deny"
+* If no **outRestrictions** are defined, all outgoing device connections/packets are allowed. 
+* If no **inRestrictions** are defined, no inbound connections are allowed other than data related to allowed outgoing connections.
 
 #### Micronet Network Endpoints/Operations
 
@@ -158,9 +166,6 @@ Note: Currently only data type _application/json_ is supported.
     },
     "restrictions": [
        object
-    ],
-    "denyHosts": [
-       string
     ]
 }
 ```
@@ -173,7 +178,15 @@ Note: Currently only data type _application/json_ is supported.
 | networkAddress           | nested object | Y        | The network address definition. Either **_ipv4_** or **_ipv6_** must be specified ||
 | networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | "192.168.1.42" |
 | networkAddress.ipv6      | string        | N        | The IPv6 network definition | "fe80::104c:20b6:f71a:4e55" |
-| restrictions             | list (object) | N        | A list of Micronet-Restriction | [{"action": "allow", }] |
+| outRestrictions          | list (object) | N        | Micronet-Restrictions for outbound connections | “outRestrictions": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
+| inRestrictions           | list (object) | N        | Micronet-Restrictions for inbound connections | “inRestrictions": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
+
+##### Notes:
+* **inRestrictions** and **outRestrictions** are processed in the order they are defined.
+* If **inRestrictions** or **outRestrictions** is non-empty, the default action is "deny"
+* If no **outRestrictions** are defined, all outgoing device connections/packets are allowed. 
+* If no **inRestrictions** are defined, no inbound connections are allowed other than data related to allowed outgoing connections.
+* If **inRestrictions** or **outRestictions** is defined, it overrides the corresponding definition in the contained micronet 
 
 #### Micronet Device Reservation Endpoints/Operations
 
@@ -236,25 +249,49 @@ All request URIs are prefixed by **/micronets/v1/dhcp** unless otherwise noted
 ```json
 {
     "action": string,
-    "sourceIP": [
+    "source": [
         string
     ],
     "sourcePort": string,
-    "destIP": [
+    "dest": [
         string
     ],
     "destPort": string
 }
 ```
 
-| Property name            | Value         | Required | Description                             | Example      |
-| ------------------------ | ------------- | -------- | --------------------------------------- | ------------- 
-| action                   | string        | Y        | One of "deny" or "allow"                | "allow"      |
-| sourceIP                 | array (string)| N        | Source IP address(es)/network(s),port(s). Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["8.8.8.8", "12.34.56.0/24", "www.cablelabs.com"] |
-| sourcePort               | string        | N        | Source port(s)                          | "22/tcp", "1234-1244/udp", "1111/tcp,2222/udp" |
-| destIP                   | array (string)| N        | Destination IP address(es)/network(s),port(s). Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["12.34.56.0/24", "www.ietf.org:80/tcp,443/tcp"] |
-| destPort                 | string        | N        | Destination port(s)                     | "2112/tcp", "1300-1400/udp", "1111/udp,2222/tcp"| 
+| Property name            | Value          | Required | Description                             | Example      |
+| ------------------------ | -------------- | -------- | --------------------------------------- | ------------- 
+| action                   | string         | Y        | One of "deny" or "allow"                | "allow"      |
+| source                   | array (string) | N        | Source hosts/address(es)/network(s). DNS hostname, Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["8.8.8.8", "12.34.56.0/24", "www.cablelabs.com"] |
+| sourcePort               | string         | N        | Source port(s)                          | "22/tcp", "1234-1244/udp", "1111/tcp,2222/udp" |
+| dest                     | array (string) | N        | Destination hosts/address(es)/network(s). Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["12.34.56.0/24", "www.ietf.org:80/tcp,443/tcp"] |
+| destPort                 | string         | N        | Destination port(s)                     | "2112/tcp", "1300-1400/udp", "1111/udp,2222/tcp"| 
 
+
+Examples of Micronet-Restriction lists:
+
+```json
+[
+   {"action": "allow", "destIp": "api.acme.com:443/tcp"},
+   {"action": "allow", "destIp": "1.2.3.0/24"},
+   {"action": "deny"}
+]
+```
+```json
+[
+   {"action": "allow", "sourceIp": "20.30.40.0/24", "destPort": "22/tcp"},
+   {"action": "deny"}
+]
+```
+```json
+[
+   {"action": "deny", "destPort": "1-1000"},
+   {"action": "allow"}
+]
+```
+
+```
 **Micronet-Error:**
 ```json
 {
