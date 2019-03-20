@@ -772,7 +772,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                },
-               "outRestrictions": [
+               "outRules": [
                   {"action": "allow", "dest": "8.8.8.8"},
                   {"action": "allow", "dest": "12.34.56.0/24"},
                   {"action": "allow", "dest": "www.ietf.org:443/tcp"},
@@ -793,10 +793,10 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
             "networkAddress": {
                 "ipv4": "192.168.1.42"
             },
-            "outRestrictions": [
+            "outRules": [
                 {"action": "allow", "dest": "8.8.8.8"},
                 {"action": "allow", "dest": "12.34.56.0/24"},
-                {"action": "allow", "dest": "www.ietf.org:443/tcp"},
+                {"action": "allow", "dest": "www.ietf.org", "destPort": "443/tcp"},
                 {"action": "deny"} ]
         }
     }
