@@ -124,14 +124,14 @@ Note: Currently only data type _application/json_ is supported.
 | interface                | string          | Y        | The network interface on the gateway the subnet is associated with | "wlp2s0"
 | vlan                     | integer         | N        | The network interface on the gateway the subnet is associated with | "wlp2s0"
 | ovsBridge                | string          | Y        | The OpenVSwitch bridge the interface is connected to on the gateway | "brmn001"
-| outRestrictions          | list (object)   | N        | Micronet-Restrictions for outbound connections for devices in the micronet | “outRestrictions": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
-| inRestrictions           | list (object)   | N        | Micronet-Restrictions for inbound connections for devices in the micronet | “inRestrictions": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
+| outRules                 | list (object)   | N        | Micronet-Rules for outbound connections for devices in the micronet | “outRules": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
+| inRules                  | list (object)   | N        | Micronet-Rules for inbound connections for devices in the micronet | “inRules": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
 
 ##### Notes:
-* **inRestrictions** and **outRestrictions** are processed in the order they are defined.
-* If **inRestrictions** or **outRestrictions** is non-empty, the default action is "deny"
-* If no **outRestrictions** are defined, all outgoing device connections/packets are allowed. 
-* If no **inRestrictions** are defined, no inbound connections are allowed other than data related to allowed outgoing connections.
+* **inRules** and **outRules** are processed in the order they are defined.
+* If **inRules** or **outRules** is non-empty, the default action is "deny"
+* If no **outRules** are defined, all outgoing device connections/packets are allowed. 
+* If no **inRules** are defined, no inbound connections are allowed other than data related to allowed outgoing connections.
 
 #### Micronet Network Endpoints/Operations
 
@@ -178,15 +178,15 @@ Note: Currently only data type _application/json_ is supported.
 | networkAddress           | nested object | Y        | The network address definition. Either **_ipv4_** or **_ipv6_** must be specified ||
 | networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | "192.168.1.42" |
 | networkAddress.ipv6      | string        | N        | The IPv6 network definition | "fe80::104c:20b6:f71a:4e55" |
-| outRestrictions          | list (object) | N        | Micronet-Restrictions for outbound connections | “outRestrictions": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
-| inRestrictions           | list (object) | N        | Micronet-Restrictions for inbound connections | “inRestrictions": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
+| outRules                 | list (object) | N        | Micronet-Rules for outbound connections | “outRules": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
+| inRules                  | list (object) | N        | Micronet-Rules for inbound connections | “inRules": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
 
 ##### Notes:
-* **inRestrictions** and **outRestrictions** are processed in the order they are defined.
-* If **inRestrictions** or **outRestrictions** is non-empty, the default action is "deny"
-* If no **outRestrictions** are defined, all outgoing device connections/packets are allowed. 
-* If no **inRestrictions** are defined, no inbound connections are allowed other than data related to allowed outgoing connections.
-* If **inRestrictions** or **outRestictions** is defined, it overrides the corresponding definition in the contained micronet 
+* **inRules** and **outRules** are processed in the order they are defined.
+* If **inRules** or **outRules** is non-empty, the default action is "deny"
+* If no **outRules** are defined, all outgoing device connections/packets are allowed. 
+* If no **inRules** are defined, no inbound connections are allowed other than data related to allowed outgoing connections.
+* If **inRules** or **outRules** is defined, it overrides the corresponding definition in the contained micronet 
 
 #### Micronet Device Reservation Endpoints/Operations
 
@@ -245,7 +245,7 @@ All request URIs are prefixed by **/micronets/v1/dhcp** unless otherwise noted
 
 ### COMMON DEFINITIONS
 
-**Micronet-Restriction:**
+**Micronets-Rule:**
 ```json
 {
     "action": string,
@@ -268,8 +268,13 @@ All request URIs are prefixed by **/micronets/v1/dhcp** unless otherwise noted
 | dest                     | array (string) | N        | Destination hosts/address(es)/network(s). Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["12.34.56.0/24", "www.ietf.org:80/tcp,443/tcp"] |
 | destPort                 | string         | N        | Destination port(s)                     | "2112/tcp", "1300-1400/udp", "1111/udp,2222/tcp"| 
 
+#### Notes:
 
-Examples of Micronet-Restriction lists:
+* hostnames will be expanded to one or more IP addresses via DNS
+* port designations may include "/tcp" or "/udp" to specify the protocol. If omitted, the rule will apply to both tcp and udp ports.
+* If no ports are specified in a rule, the rule applies to all ports on the host(s)
+
+Examples of Micronets-Rule lists:
 
 ```json
 [
