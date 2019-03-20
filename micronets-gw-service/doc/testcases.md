@@ -772,7 +772,11 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                },
-               "allowHosts": ["8.8.8.8", "12.34.56.0/24", "www.yahoo.com"]
+               "outRestrictions": [
+                  {"action": "allow", "dest": "8.8.8.8"},
+                  {"action": "allow", "dest": "12.34.56.0/24"},
+                  {"action": "allow", "dest": "www.ietf.org:443/tcp"},
+                  {"action": "deny"} ]
            }
         }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
@@ -789,7 +793,11 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
             "networkAddress": {
                 "ipv4": "192.168.1.42"
             },
-            "allowHosts": ["8.8.8.8", "12.34.56.0/24", "www.yahoo.com"]
+            "outRestrictions": [
+                {"action": "allow", "dest": "8.8.8.8"},
+                {"action": "allow", "dest": "12.34.56.0/24"},
+                {"action": "allow", "dest": "www.ietf.org:443/tcp"},
+                {"action": "deny"} ]
         }
     }
     ```
