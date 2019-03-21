@@ -794,15 +794,16 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "ipv4": "192.168.1.42"
             },
             "outRules": [
-                {"action": "allow", "dest": "8.8.8.8"},
-                {"action": "allow", "dest": "12.34.56.0/24"},
-                {"action": "allow", "dest": "www.ietf.org", "destPort": "443/tcp"},
-                {"action": "deny"} ]
+                {"action": "deny", "dest": "8.8.8.8"},
+                {"action": "deny", "dest": "12.34.56.0/24"},
+                {"action": "deny", "dest": "www.ietf.org"},
+                {"action": "deny", "destPort": "1024-20000"},
+                {"action": "allow"} ]
         }
     }
     ```
 
-* Creating a device which is prevented from communicating with certain hosts:
+* Creating a device which is prevented from communicating with certain hosts or certain ports:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -814,7 +815,12 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                },
-               "denyHosts": ["8.8.8.8", "12.34.56.0/24", "www.example.com"]
+               "outRules": [
+                  {"action": "deny", "dest": "8.8.8.8"},
+                  {"action": "deny", "dest": "12.34.56.0/24"},
+                  {"action": "deny", "dest": "www.ietf.org"},
+                  {"action": "deny", "destPort": "1024-20000"},
+                  {"action": "allow"} ]
            }
         }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
@@ -831,7 +837,11 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
             "networkAddress": {
                 "ipv4": "192.168.1.42"
             },
-            "denyHosts": ["8.8.8.8", "12.34.56.0/24", "www.example.com"]
+            "outRules": [
+                {"action": "deny", "dest": "8.8.8.8"},
+                {"action": "deny", "dest": "12.34.56.0/24"},
+                {"action": "deny", "dest": "www.ietf.org"},
+                {"action": "allow"} ]
         }
     }
     ```

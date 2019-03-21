@@ -74,7 +74,8 @@ async def unroll_hostportspec_list (hostportspec_list):
         unrolled_host_list += addrs_for_spec
     return unrolled_host_list
 
-hostportspec_re = re.compile ('^[0-9]+(/(tcp|udp))?$',re.ASCII)
+hostportspec_re = re.compile ('^(?P<startport>[0-9]+)(?:-(?P<endport>[0-9]+))?(?:/(?P<protocol>tcp|udp))?$',re.ASCII)
+
 
 async def get_ipv4_hostports_for_hostportspec (hostandportspec):
     if not hostandportspec:
@@ -106,6 +107,17 @@ async def get_ipv4_hostports_for_hostportspec (hostandportspec):
         else:
             hostandport_list.append(addr)
     return hostandport_list
+
+
+def parse_portspec (portspec):
+    m = hostportspec_re.match(portspec)
+    if not m:
+        raise Exception(f"Port specification '{portspec}' is invalid")
+    portspec_elems = m.groupdict() # Will return {'startport': x, 'endport': y, 'protocol': tcp/udp}
+    if 'startport' not in portspec_elems:
+        raise Exception(f"Port specification '{portspec}' does not have a port/start port number")
+    return
+
 
 async def main():
     print("Running utils tests...")

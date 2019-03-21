@@ -1,7 +1,7 @@
 from quart import request, jsonify
 from ipaddress import IPv4Address, IPv4Network
 from app import app, get_conf_model
-from .utils import InvalidUsage, get_ipv4_hostports_for_hostportspec
+from .utils import InvalidUsage, get_ipv4_hostports_for_hostportspec, parse_portspec
 
 import re
 import netaddr
@@ -200,19 +200,51 @@ def check_mac_address_field (json_obj, mac_addr_field, required):
         raise InvalidUsage (400, message=f"Supplied MAC '{mac_field}' in '{mac_addr_field}' is not valid")
     return mac_field
 
-async def check_hostspecs (container, field_name, required):
-    hosts = check_field (container, field_name, (list), required)
-    if hosts:
-        for host in hosts:
-            try:
-                hosts = await get_ipv4_hostports_for_hostportspec (host)
-            except Exception as ex:
-                raise InvalidUsage (400, message=f"Supplied hostname '{host}' in field '{field_name}' "
-                                    f"of '{container}' is not valid: {ex}")
-    return hosts
+async def check_rules (container, field_name, required):
+    rules = check_field (container, field_name, (list), required)
+    if rules:
+        for rule in rules:
+            await check_rule (rule)
+
+async def check_rule (rule):
+    check_for_unrecognized_entries (rule, ['action', 'source', 'sourcePort', 'dest', 'destPort'])
+    action = check_field (rule, 'action', str, True)
+    if not (action == "allow" or action == "deny"):
+        raise InvalidUsage(400, message=f"Supplied action '{action}' in rule '{rule}' is not valid "
+                                        "(allowed actions are 'allow" and 'deny')
+
+    await check_hostspec (rule, 'source', False)
+    check_portspec (rule, 'sourcePort', False)
+
+    await check_hostspec (rule, 'dest', False)
+    check_portspec (rule, 'destPort', False)
+
+    return rule
+
+async def check_hostspec (container, field_name, required):
+    hostspec = check_field (container, field_name, (str), required)
+    if not hostspec:
+        return None
+    try:
+        hosts = await get_ipv4_hostports_for_hostportspec (hostspec)
+    except Exception as ex:
+        raise InvalidUsage (400, message=f"Supplied hostname '{hostspec}' in field '{field_name}' "
+                            f"of '{container}' is not valid: {ex}")
+    return hostspec
+
+def check_portspec (container, field_name, required):
+    portspec = check_field (container, field_name, (str), required)
+    if not portspec:
+        return None
+    try:
+        portspec_fields = parse_portspec (portspec)
+    except Exception as ex:
+        raise InvalidUsage (400, message=f"Supplied port specification '{portspec}' in field '{field_name}' "
+                            f"of '{container}' is not valid: {ex}")
+    return portspec
 
 async def check_device (device, required):
-    check_for_unrecognized_entries (device, ['deviceId', 'macAddress', 'networkAddress', 'allowHosts', 'denyHosts'])
+    check_for_unrecognized_entries (device, ['deviceId', 'macAddress', 'networkAddress', 'outRules', 'inRules'])
     device_id = check_field (device, 'deviceId', str, required)
     if device_id:
         device_id = device_id.lower ()
@@ -234,8 +266,8 @@ async def check_device (device, required):
         check_for_unrecognized_entries (network_address, ['ipv4'])
         check_ipv4_address_field (network_address, 'ipv4', required)
 
-    await check_hostspecs (device, 'allowHosts', False)
-    await check_hostspecs (device, 'denyHosts', False)
+    await check_rules (device, 'outRules', False)
+    await check_rules (device, 'inRules', False)
 
 async def check_devices (devices, required):
     for device in devices:
