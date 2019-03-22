@@ -16,9 +16,9 @@ class DnsMasqAdapter:
     lease_duration_re = 'infinite|[0-9]+[hm]?'
 
     # # Micronet: testmicronet001, ovsBridge: brmn001, interface: enxac7f3ee61832
-    # # Micronet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
+    # # Micronet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0, vlan: 2112
     dhcp_range_prefix_re = re.compile ('^\s*#\s*Micronet:\s*(\w.[\w-]*)\s*,\s*ovsBridge:\s*(\w+)\s*,'
-                                       '\s*interface:\s*(\w+)\s*$',
+                                       '\s*interface:\s*(\w+)(?:\s*,\s*vlan:\s*([0-9]+))?\s*$',
                                        re.ASCII)
 
     # dhcp-range=set:testmicronet001,10.40.0.0,static,255.255.255.0,3m
@@ -87,9 +87,8 @@ class DnsMasqAdapter:
                 continue
             dhcp_range_prefix_match_result = self.dhcp_range_prefix_re.match (line)
             if (dhcp_range_prefix_match_result):
-                prefix_micronet_id = dhcp_range_prefix_match_result.group (1)
-                prefix_ovs_bridge = dhcp_range_prefix_match_result.group (2)
-                prefix_interface = dhcp_range_prefix_match_result.group (3)
+                (prefix_micronet_id, prefix_ovs_bridge, prefix_interface, prefix_vlan) \
+                    = dhcp_range_prefix_match_result.groups()
                 continue
             dhcp_host_prefix_match = self.dhcp_device_prefix_re.match (line)
             if dhcp_host_prefix_match:
@@ -130,6 +129,7 @@ class DnsMasqAdapter:
                 micronet ['ipv4Network'] = {'network' : str (network.network_address), 'mask' : str (network.netmask)}
                 micronet ['ovsBridge'] = prefix_ovs_bridge
                 micronet ['interface'] = prefix_interface
+                micronet ['vlan'] = prefix_vlan
                 micronets [micronet_id] = micronet
                 devices_list [micronet_id] = {}
                 prefix_micronet_id = None
@@ -241,8 +241,12 @@ class DnsMasqAdapter:
             # # Micronet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
             ovs_switch = micronet ['ovsBridge']
             interface = micronet ['interface']
-            outfile.write ("# Micronet: {}, ovsBridge: {}, interface: {}\n"
-                           .format (micronet_id, ovs_switch, interface))
+            if 'vlan' in micronet:
+                vlan = micronet ['vlan']
+            else:
+                vlan = None
+            outfile.write ("# Micronet: {}, ovsBridge: {}, interface: {}, vlan: {}\n"
+                           .format (micronet_id, ovs_switch, interface, vlan))
             ipv4_params = micronet ['ipv4Network']
             network_addr = ipv4_params['network']
             netmask = ipv4_params ['mask']
