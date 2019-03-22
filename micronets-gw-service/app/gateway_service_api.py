@@ -118,8 +118,17 @@ def check_nameservers (container, field_name, required):
                                                  f"{ipv4_address_error}")
     return nameservers
 
+
+def check_vlan (container, field_name, required):
+    vlan = check_field (container, field_name, int, required)
+    if vlan is not None:
+        if vlan < 1 or vlan > 4094:
+            raise InvalidUsage(400, message=f"Supplied vlan ID '{vlan}' in '{container}' field"
+                                    f"'{field_name}' is not valid: vlans must be between 1 and 4094")
+
+
 def check_micronet (micronet, micronet_id=None, required=True):
-    check_for_unrecognized_entries (micronet, ['micronetId','ipv4Network','nameservers','ovsBridge','interface'])
+    check_for_unrecognized_entries (micronet, ['micronetId','ipv4Network','nameservers','ovsBridge','interface','vlan'])
     body_micronet_id = check_field (micronet, 'micronetId', str, required)
     if micronet_id and body_micronet_id:
         if micronet_id != body_micronet_id:
@@ -133,6 +142,7 @@ def check_micronet (micronet, micronet_id=None, required=True):
     check_nameservers (micronet, 'nameservers', False)
     check_field (micronet, 'ovsBridge', str, required)
     check_field (micronet, 'interface', str, required)
+    check_vlan (micronet, 'vlan', False) # Optional
 
 def check_micronets (micronets, required):
     for micronet in micronets:
