@@ -4,13 +4,13 @@
 
 dhcp-script=/Users/craig/projects/micronets/micronets-gw/micronets-gw-service/bin/dnsmasq_lease_notify.py
 
-# Micronet: mockmicronet007, ovsBridge: brmn001, interface: wlp2s0
+# Micronet: mockmicronet007, ovsBridge: brmn001, interface: wlp2s0, vlan: 101
 dhcp-range=set:mockmicronet007,192.168.1.0,static,255.255.255.0,10m
 dhcp-option=tag:mockmicronet007, option:router,192.168.1.1
 dhcp-option=tag:mockmicronet007, option:dns-server,1.2.3.4,1.2.3.5
 
 # DEVICES FOR MICRONET: mockmicronet007
 
-# Device: mydevice03,[{"action": "deny", "dest": "8.8.8.8"}, {"action": "deny", "dest": "12.34.56.0/24"}, {"action": "deny", "dest": "www.ietf.org"}, {"action": "deny", "destPort": "1024-20000"}, {"action": "allow"}],[]
+# Device: mydevice03,[],[]
 dhcp-host=b8:27:eb:75:a4:8a,mydevice03,set:mydevice03,192.168.1.42,10m
 

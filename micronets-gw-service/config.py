@@ -22,7 +22,7 @@ class BaseConfig:
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces"
     # For this command, the first parameter will be the bridge name and the second the flow filename
-    FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {} {}'
+    FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {flow_file}'
     FLOW_ADAPTER_ENABLED = False
 
 #
@@ -94,7 +94,7 @@ class DnsmasqDevelopmentConfigWithWebsocket (DnsmasqDevelopmentConfig):
     WEBSOCKET_SERVER_ADDRESS = "localhost"
 
 class DnsmasqDevelopmentConfigWithFlowAdapter (DnsmasqDevelopmentConfig):
-    FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/bin/echo This is where I would add flows to bridge {} from {}'
+    FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/sort -t= -k 2n -k 3rn {flow_file}'
     FLOW_ADAPTER_ENABLED = True
 
 class DnsmasqTestingConfig (BaseDnsmasqConfig):
