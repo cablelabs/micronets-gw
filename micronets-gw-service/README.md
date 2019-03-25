@@ -62,7 +62,7 @@ If you want to access the REST API directly - running against the mock gateway a
 MICRONETS_GW_SERVICE_CONFIG=config.MockDevelopmentConfig python ./runner.py
 ```
 
-If you want to have the DHCP service connect to a websocket for access to the REST API and to receive notifications,
+If you want to have the gateway service connect to a websocket for access to the REST API and to receive notifications,
 configure the WEBSOCKET_SERVER_ADDRESS, WEBSOCKET_SERVER_PORT, and WEBSOCKET_SERVER_PATH to point to the websocket
 endpoint. Note that currently only wss is supported (TLS). So the WEBSOCKET_TLS_CERTKEY_FILE must refer to a cert
 and corresponding private key that the server trusts - and WEBSOCKET_TLS_CA_CERT_FILE must refer to the certificate
@@ -71,10 +71,10 @@ that can be used to verify the authenticity of the websocket server.
 In this case, you can start the Micronets gateway service using:
 
 ```
-MICRONETS_DHCP_CONFIG=config.MockDevelopmentConfigWithWebsocket python ./runner.py
+python ./runner.py -c config.MockDevelopmentConfigWithWebsocket
 ```
 
-To exit the virtual envonment use `deactivate`. You can continue working with the Micronets gateway service by running `workon micronets-gw-service`.
+To exit the virtual environment use `deactivate`. You can continue working with the Micronets gateway service by running `workon micronets-gw-service`.
 
 ## Micronets Gateway REST Interface
 
@@ -122,7 +122,7 @@ Note: Currently only data type _application/json_ is supported.
 | ipv4Network.broadcast    | string          | N        | The IPv4 address for broadcast | "192.168.1.255" |
 | nameservers              | list (string)   | N        | The IP addresses of nameservers for the subnet | ["8.8.8.8", "4.4.4.4"] |
 | interface                | string          | Y        | The network interface on the gateway the subnet is associated with | "wlp2s0"
-| vlan                     | integer         | N        | The network interface on the gateway the subnet is associated with | "wlp2s0"
+| vlan                     | integer         | N        | The network interface on the gateway the subnet is associated with | 201
 | ovsBridge                | string          | Y        | The OpenVSwitch bridge the interface is connected to on the gateway | "brmn001"
 | outRules                 | list (object)   | N        | Micronet-Rules for outbound connections for devices in the micronet | “outRules": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
 | inRules                  | list (object)   | N        | Micronet-Rules for inbound connections for devices in the micronet | “inRules": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
