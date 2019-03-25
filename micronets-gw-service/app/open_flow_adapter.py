@@ -1,7 +1,8 @@
-import re, logging, tempfile, netifaces
+import re, logging, tempfile, netifaces, asyncio
+
 
 from pathlib import Path
-from .utils import blank_line_re, comment_line_re, unroll_hostportspec_list
+from .utils import blank_line_re, comment_line_re, get_ipv4_hostports_for_hostportspec, parse_portspec
 from subprocess import call
 
 logger = logging.getLogger ('micronets-gw-service')
@@ -131,7 +132,7 @@ class OpenFlowAdapter:
         logger.info (f"OpenFlowAdapter.read_interfaces_file: ovs_micronet_interfaces: {self.ovs_micronet_interfaces}")
         logger.info (f"OpenFlowAdapter.read_interfaces_file: ovs_micronet_ports: {ovs_micronet_ports}")
 
-    def create_flows_for_rules(self, in_port, device_mac, device, micronet, outfile):
+    async def create_flows_for_rules(self, in_port, device_mac, device, micronet, outfile):
         in_rules = device.get('inRules', None)
         out_rules = device.get('outRules', None)
 
@@ -144,12 +145,24 @@ class OpenFlowAdapter:
                             f"actions=resubmit(,{self.output_to_localhost_table})\n\n")
         else:
             outfile.write(f" # Device {device['deviceId']} (mac {device_mac}) is out-restricted\n")
+            for rule in out_rules:
+                logger.info(f"OpenFlowAdapter.create_flows_for_rules: processing out-rule: {rule}")
+                rule_dest = rule.get('dest', None)
+                rule_dest_port = rule.get('destPort', None)
+                rule_action = rule['action']
+                if rule_dest:
+                    dest_list = await get_ipv4_hostports_for_hostportspec(rule_dest)
+
+                    for dest in dest_list:
+                        logger.info(f"OpenFlowAdapter.create_flows_for_rules:   dest: {dest}")
 
         if not in_rules:
             outfile.write(f" # Device {device['deviceId']} (mac {device_mac}) has no in-rules\n")
             # add table=210,priority=300, dl_dst=b8:27:eb:79:78:28,tcp,tcp_dst=22, actions=resubmit(,220)
         else:
             outfile.write(f" # Device {device['deviceId']} (mac {device_mac}) has in-rules\n")
+            for rule in in_rules:
+                logger.info(f"OpenFlowAdapter.create_flows_for_rules: processing in-rule: {rule}")
 
     async def update (self, micronet_list, device_lists):
         logger.info (f"OpenFlowAdapter.update ()")
@@ -305,7 +318,7 @@ class OpenFlowAdapter:
                                     f"actions=load:{device_port}->NXM_NX_REG1[],resubmit(,{self.filter_to_micronets_table})\n")
                     logger.info(
                         f"Creating flow rules for device {device_id} in micronet {micronet_id} (interface {micronet_int})")
-                    self.create_flows_for_rules(device_port, device_mac, device, micronet, flow_file)
+                    await self.create_flows_for_rules(device_port, device_mac, device, micronet, flow_file)
 
             flow_file.flush ()
 
