@@ -2,7 +2,7 @@ import re, logging, tempfile, netifaces, asyncio
 
 
 from pathlib import Path
-from .utils import blank_line_re, comment_line_re, get_ipv4_hostports_for_hostportspec, parse_portspec
+from .utils import blank_line_re, comment_line_re, get_ipv4_hostports_for_hostportspec, parse_portspec, parse_hostportspec
 from subprocess import call
 
 logger = logging.getLogger ('micronets-gw-service')
@@ -146,15 +146,20 @@ class OpenFlowAdapter:
         else:
             outfile.write(f" # Device {device['deviceId']} (mac {device_mac}) is out-restricted\n")
             for rule in out_rules:
-                logger.info(f"OpenFlowAdapter.create_flows_for_rules: processing out-rule: {rule}")
-                rule_dest = rule.get('dest', None)
-                rule_dest_port = rule.get('destPort', None)
-                rule_action = rule['action']
-                if rule_dest:
-                    dest_list = await get_ipv4_hostports_for_hostportspec(rule_dest)
+                try:
+                    logger.info(f"OpenFlowAdapter.create_flows_for_rules: processing out-rule: {rule}")
+                    rule_dest = rule.get('dest', None)
+                    rule_dest_port = rule.get('destPort', None)
+                    rule_action = rule['action']
+                    if rule_dest:
+                        dest_list = await get_ipv4_hostports_for_hostportspec(rule_dest)
+                        for dest in dest_list:
+                            logger.info(f"OpenFlowAdapter.create_flows_for_rules:   dest: {dest}")
+                            dest_fields = parse_hostportspec(dest)
+                            logger.info(f"OpenFlowAdapter.create_flows_for_rules:   dest_fields: {dest_fields}")
 
-                    for dest in dest_list:
-                        logger.info(f"OpenFlowAdapter.create_flows_for_rules:   dest: {dest}")
+                except Exception as ex:
+                    logger.warning(f"OpenFlowAdapter.create_flows_for_rules: Error processing rule {rule}: {ex}")
 
         if not in_rules:
             outfile.write(f" # Device {device['deviceId']} (mac {device_mac}) has no in-rules\n")

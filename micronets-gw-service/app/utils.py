@@ -75,10 +75,10 @@ async def unroll_hostportspec_list (hostportspec_list):
     return unrolled_host_list
 
 
-portspec_pattern = '(?:(?P<startport>[0-9]+)(?:-(?P<endport>[0-9]+))?)?(?:/(?P<protocol>tcp|udp))?'
+portspec_pattern = "(?:(?P<startport>[0-9]+)(?:-(?P<endport>[0-9]+))?)?(?:/(?P<protocol>tcp|udp))?"
 # e.g. 22/tcp, 1000-2000, 1200-1300/udp, /tcp
 
-portspec_re = re.compile ("^" + portspec_pattern + "$", re.ASCII)
+portspec_re = re.compile ("^" + portspec_pattern + "$")
 
 async def get_ipv4_hostports_for_hostportspec (hostandportspec):
     if not hostandportspec:
@@ -111,10 +111,10 @@ async def get_ipv4_hostports_for_hostportspec (hostandportspec):
             hostandport_list.append(addr)
     return hostandport_list
 
-hostportspec_pattern = "^(?P<ip_addr>" + ip_addr_pattern + "(?:/[0-9]+)?)" + "(?::" + portspec_pattern + ")$"
+hostportspec_pattern = "(?P<ip_addr>" + ip_addr_pattern + "(?:/\d{1,3})?)" + "(?::" + portspec_pattern + ")?"
 # e.g. 1.2.3.4, 1.2.3.4:22/tcp, 1.2.3.0/24:1-1024, 1.2.0.0/16:1024-2000/udp
 
-hostportspec_re = re.compile ("^" + portspec_pattern + "$")
+hostportspec_re = re.compile ("^" + hostportspec_pattern + "$")
 
 def parse_portspec (portspec):
     m = portspec_re.match(portspec)
@@ -126,13 +126,13 @@ def parse_portspec (portspec):
     return
 
 def parse_hostportspec (portspec):
-    m = portspec_re.match(portspec)
+    m = hostportspec_re.match(portspec)
     if not m:
         raise Exception(f"Port specification '{portspec}' is invalid")
     portspec_elems = m.groupdict() # Will return {'startport': x, 'endport': y, 'protocol': tcp/udp}
     if 'startport' not in portspec_elems:
-        raise Exception(f"Port specification '{portspec}' does not have a port/start port number")
-    return
+        raise Exception(f"host-port specification '{portspec}' does not have a port/start port number")
+    return portspec_elems
 
 
 async def main():
