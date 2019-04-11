@@ -8,6 +8,7 @@ import fcntl
 import os
 import subprocess
 import threading
+import traceback
 from queue import Queue, Empty
 from asyncio import BaseTransport, ReadTransport, WriteTransport, SubprocessTransport
 from subprocess import Popen, PIPE
@@ -48,7 +49,7 @@ class HostapdAdapter:
                 if not data:
                     logger.info(f"HostapdAdapter:read_process_data: Got EOF from hostapd_cli - exiting")
                     break
-                logger.debug(f"HostapdAdapter:read_process_data: Read data: {data.rstrip()}")
+                # logger.debug(f"HostapdAdapter:read_process_data: Read data: {data.rstrip()}")
                 if not command:
                     try:
                         command = self.command_queue.get(block=False)
@@ -138,38 +139,51 @@ class HelpCommand(HostapdCommand):
         return "help"
 
 
+class ListStationsCommand(HostapdCommand):
+    def __init__ (self, event_loop=asyncio.get_event_loop()):
+        super().__init__(event_loop)
+        self.sta_macs = []
+
+    def get_command_string(self):
+        return "list_sta"
+
+    async def process_response_data(self, response):
+        self.sta_macs = response.splitlines()
+        self.response_future.set_result(response)
+
+    async def get_sta_macs(self):
+        await self.get_response()
+        return self.sta_macs
+
+
 async def run_tests():
 #        hostapd_adapter = HostapdAdapter("/usr/bin/tail", ["-f", "-n", "1", "/var/log/syslog"])
         hostapd_adapter = HostapdAdapter("/opt/micronets-hostapd/bin/hostapd_cli", [])
         await hostapd_adapter.connect()
         logger.info (f"{__name__}: Connected.")
 
-        await asyncio.sleep(2)
-        logger.info (f"{__name__}: Issuing help command...")
-        help_cmd = HelpCommand()
-        await hostapd_adapter.send_command(help_cmd)
-        response = await help_cmd.get_response()
-        logger.info (f"{__name__}: Help command response: {response}")
+        # await asyncio.sleep(2)
+        # logger.info (f"{__name__}: Issuing help command...")
+        # help_cmd = await hostapd_adapter.send_command(HelpCommand())
+        # response = await help_cmd.get_response()
+        # logger.info (f"{__name__}: Help command response: {response}")
 
         await asyncio.sleep(2)
         logger.info (f"{__name__}: Issuing ping command...")
-        ping_cmd = PingCommand()
-        await hostapd_adapter.send_command(ping_cmd)
+        ping_cmd = await hostapd_adapter.send_command(PingCommand())
         response = await ping_cmd.get_response()
         logger.info (f"{__name__}: Ping response: \"{response}\"")
 
         await asyncio.sleep(2)
-        logger.info (f"{__name__}: Issuing ping command...")
-        ping_cmd = PingCommand()
-        await hostapd_adapter.send_command(ping_cmd)
-        response = await ping_cmd.get_response()
-        logger.info (f"{__name__}: Ping response: \"{response}\"")
+        logger.info (f"{__name__}: Issuing List Stations command...")
+        ping_cmd = await hostapd_adapter.send_command(ListStationsCommand())
+        stas = await ping_cmd.get_sta_macs()
+        logger.info (f"{__name__}: Station List: \"{stas}\"")
 
         logger.info (f"{__name__}: Issuing a flood of pings...")
         for x in range(1,10):
             logger.info (f"{__name__}: Issuing ping command #{x}...")
-            ping_cmd = PingCommand()
-            await hostapd_adapter.send_command(ping_cmd)
+            ping_cmd = await hostapd_adapter.send_command(PingCommand())
             response = await ping_cmd.get_response()
             logger.info (f"{__name__}: Ping response: \"{response}\"")
 
