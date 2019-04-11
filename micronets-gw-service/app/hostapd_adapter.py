@@ -8,6 +8,7 @@ import fcntl
 import os
 import subprocess
 import threading
+from queue import Queue, Empty
 from asyncio import BaseTransport, ReadTransport, WriteTransport, SubprocessTransport
 from subprocess import Popen, PIPE
 
@@ -20,11 +21,12 @@ class HostapdAdapter:
         self.hostapd_cli_args = hostapd_cli_args
         self.hostapd_cli_process = None
         self.process_reader_thread = None
-        self.current_command = None
+        self.command_queue = None
 
     async def connect(self):
         logger.info(f"HostapdAdapter:connect()")
         event_loop = asyncio.get_event_loop ()
+        self.command_queue = Queue()  # https://docs.python.org/3.6/library/queue.html
         logger.info(f"HostapdAdapter:connect: Running {self.hostapd_cli_path} {self.hostapd_cli_args}")
         
         self.hostapd_cli_process = Popen([self.hostapd_cli_path, *self.hostapd_cli_args],
@@ -36,66 +38,74 @@ class HostapdAdapter:
 
     def read_process_data(self):
         response_data = None
+        self.command_queue = Queue()
         logger.info(f"HostapdAdapter:read_process_data: Started")
+        command = None
         while True:
             try:
                 # https://docs.python.org/3/library/io.html
                 data = self.hostapd_cli_process.stdout.readline().decode("utf-8")
                 if not data:
+                    logger.info(f"HostapdAdapter:read_process_data: Got EOF from hostapd_cli - exiting")
                     break
-                logger.info(f"HostapdAdapter:read_process_data: Read data: {data.rstrip()}")
-                if self.current_command:
+                logger.debug(f"HostapdAdapter:read_process_data: Read data: {data.rstrip()}")
+                if not command:
+                    try:
+                        command = self.command_queue.get(block=False)
+                    except Empty:
+                        command = None
+
+                if command:
                     if response_data is None:
-                        # Don't store the first line (start aggregating on the next line)
+                        # Don't store the first line - which contains the command (start aggregating on the next line)
                         response_data = ""
                         continue
                     response_data = response_data + data
                     pos = response_data.find("\n> ")
                     if pos > 0:
-                        command = self.current_command
-                        logger.info (f"HostapdAdapter:read_process_data: aggregate response_data: {response_data}")
+                        # logger.debug (f"HostapdAdapter:read_process_data: aggregate response_data: {response_data}")
                         command_type = type(command).__name__
                         complete_response = response_data[:pos]
-                        logger.info (f"HostapdAdapter:read_process_data: Found command response for {command_type}: {complete_response}")
-                        response_future = asyncio.run_coroutine_threadsafe (command.process_response(complete_response), 
-                                                                            command.event_loop)
-                        logger.info (f"HostapdAdapter:read_process_data: Waiting for {command_type}.process_response() to complete...")
-                        response_future.result ()
-                        logger.info (f"HostapdAdapter:read_process_data: {command_type}.process_response() completed.")
+                        logger.debug (f"HostapdAdapter:read_process_data: Found command response for {command}: {complete_response}")
+                        asyncio.run_coroutine_threadsafe(command.process_response_data(complete_response), 
+                                                         command.event_loop)
                         response_data = None
-                        self.current_command = None
-                else:
-                    response_data = ""
+                        command = None
             except Exception as ex:
                 logger.warning(f"HostapdAdapter:read_process_data: Error processing data: {ex}")
 
     async def send_command(self, command):
         if not isinstance(command, HostapdCommand):
             raise TypeError
-        if self.current_command:
-            # TODO: Queue the command
-            raise Exception(f"send_command already processing {type(self.current_command).__name__} command")
-        self.current_command = command
+        self.command_queue.put(command)
         command_string = command.get_command_string()
-        logger.info (f"HostapdAdapter:send_command: issuing command: \"{command_string}\"")
+        logger.info (f"HostapdAdapter:send_command: issuing command: {command} (\"{command_string}\")")
         # Put 2 newlines on the end to force a newline on the output
         command_string = command_string + "\n\n"
         self.hostapd_cli_process.stdin.write(command_string.encode())
         self.hostapd_cli_process.stdin.flush()
 
+        return command
+
 
 class HostapdCommand:
     def __init__ (self, event_loop = asyncio.get_event_loop()):
         self.event_loop = event_loop
+        self.response_future = asyncio.Future(loop=event_loop)
 
     def get_command_string(self):
         """ Over-ride this method to provide the string that compromise the hostapd_cli command (without newline)"""
         pass
 
-    async def process_response(self, response):
+    async def process_response_data(self, response):
         """This is where the response can be parsed for meaningful data, parsed, and have
         memvars set to any values that want to be retained."""
-        pass
+        self.response_future.set_result(response)
+
+    async def get_response(self):
+        """Return the raw response data. Subclasses may provide accessors for specific data elements."""
+        return await self.response_future
+
 
 class GenericHostapdMessage(HostapdCommand):
     def __init__ (self, hostapd_command, hostapd_command_args=(), event_loop=asyncio.get_event_loop()):
@@ -111,24 +121,13 @@ class GenericHostapdMessage(HostapdCommand):
             compound_command = " " + compound_command
         return compound_command
 
-    async def process_response(self, response):
-        self.response = response
-
 
 class PingCommand(HostapdCommand):
     def __init__ (self, event_loop=asyncio.get_event_loop()):
         super().__init__(event_loop)
-        self.ping_response = None
 
     def get_command_string(self):
         return "ping"
-
-    async def process_response(self, response):
-        logger.info (f"{__name__}: Got ping response: {response.rstrip()}")
-        self.ping_response = response
-    
-    def get_response(self):
-        return self.ping_response
 
 
 class HelpCommand(HostapdCommand):
@@ -137,9 +136,6 @@ class HelpCommand(HostapdCommand):
 
     def get_command_string(self):
         return "help"
-
-    async def process_response(self, response):
-        logger.info (f"{__name__}: Got help response: {response.rstrip()}")
 
 
 async def run_tests():
@@ -150,17 +146,33 @@ async def run_tests():
 
         await asyncio.sleep(2)
         logger.info (f"{__name__}: Issuing help command...")
-        await hostapd_adapter.send_command(HelpCommand())
+        help_cmd = HelpCommand()
+        await hostapd_adapter.send_command(help_cmd)
+        response = await help_cmd.get_response()
+        logger.info (f"{__name__}: Help command response: {response}")
 
         await asyncio.sleep(2)
         logger.info (f"{__name__}: Issuing ping command...")
         ping_cmd = PingCommand()
-        await hostapd_adapter.send_command(PingCommand())
-        logger.info (f"{__name__}: Ping response: \"{ping_cmd.get_response()}\"")
+        await hostapd_adapter.send_command(ping_cmd)
+        response = await ping_cmd.get_response()
+        logger.info (f"{__name__}: Ping response: \"{response}\"")
 
         await asyncio.sleep(2)
         logger.info (f"{__name__}: Issuing ping command...")
-        await hostapd_adapter.send_command(PingCommand())
+        ping_cmd = PingCommand()
+        await hostapd_adapter.send_command(ping_cmd)
+        response = await ping_cmd.get_response()
+        logger.info (f"{__name__}: Ping response: \"{response}\"")
+
+        logger.info (f"{__name__}: Issuing a flood of pings...")
+        for x in range(1,10):
+            logger.info (f"{__name__}: Issuing ping command #{x}...")
+            ping_cmd = PingCommand()
+            await hostapd_adapter.send_command(ping_cmd)
+            response = await ping_cmd.get_response()
+            logger.info (f"{__name__}: Ping response: \"{response}\"")
+
 
 if __name__ == '__main__':
     print (f"{__name__}: Starting\n")
@@ -177,5 +189,6 @@ if __name__ == '__main__':
         logger.info (f"{__name__}: Event loop exited")
     except Exception as Ex:
         logger.warn (f"Caught an exception: {Ex}")
+        traceback.print_exc()
 
 
