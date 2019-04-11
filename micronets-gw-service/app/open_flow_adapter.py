@@ -151,12 +151,13 @@ class OpenFlowAdapter:
                     rule_dest = rule.get('dest', None)
                     rule_dest_port = rule.get('destPort', None)
                     rule_action = rule['action']
+                    logger.info(f"OpenFlowAdapter.create_flows_for_rules:   action: {rule_action}")
                     if rule_dest:
                         dest_list = await get_ipv4_hostports_for_hostportspec(rule_dest)
                         for dest in dest_list:
-                            logger.info(f"OpenFlowAdapter.create_flows_for_rules:   dest: {dest}")
+                            logger.info(f"OpenFlowAdapter.create_flows_for_rules:     dest: {dest}")
                             dest_fields = parse_hostportspec(dest)
-                            logger.info(f"OpenFlowAdapter.create_flows_for_rules:   dest_fields: {dest_fields}")
+                            logger.info(f"OpenFlowAdapter.create_flows_for_rules:     dest_fields: {dest_fields}")
 
                 except Exception as ex:
                     logger.warning(f"OpenFlowAdapter.create_flows_for_rules: Error processing rule {rule}: {ex}")
