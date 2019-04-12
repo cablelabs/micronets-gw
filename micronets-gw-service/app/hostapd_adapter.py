@@ -1,16 +1,10 @@
 import asyncio
 import logging
-import sys
 import locale
-import inspect
-import time
-import fcntl
-import os
 import subprocess
 import threading
 import traceback
 from queue import Queue, Empty
-from asyncio import BaseTransport, ReadTransport, WriteTransport, SubprocessTransport
 from subprocess import Popen, PIPE
 
 logger = logging.getLogger ('hostapd_adapter')

@@ -14,8 +14,8 @@ import logging
 logger = logging.getLogger ('micronets-gw-service')
 
 class DHCPConf:
-    def __init__ (self, ws_connection, dhcp_adapter, flow_adapter, min_update_interval_s):
-        self.ws_connection = ws_connection
+    def __init__ (self, ws_connector, dhcp_adapter, flow_adapter, min_update_interval_s):
+        self.ws_connector = ws_connector
         self.dhcp_adapter = dhcp_adapter
         self.flow_adapter = flow_adapter
         self.min_update_interval_s = min_update_interval_s
@@ -322,8 +322,8 @@ class DHCPConf:
         event_fields = dhcp_lease_event ['leaseChangeEvent']
         action = event_fields ['action']
 
-        if not self.ws_connection.is_ready ():
-            ws_uri = self.ws_connection.get_connect_uri ()
+        if not self.ws_connector.is_ready ():
+            ws_uri = self.ws_connector.get_connect_uri ()
             logger.info (f"DHCPConf.process_dhcp_lease_event: Cannot send {action} event - the websocket to {ws_uri} is not connected/ready")
             return f"The websocket connection to {ws_uri} is not connected/ready", 500
 
@@ -342,5 +342,5 @@ class DHCPConf:
                              }
         logger.info (f"DHCPConf.process_dhcp_lease_event: Sending: {action}")
         logger.info (json.dumps (lease_change_event, indent=4))
-        await self.ws_connection.send_event_message ("DHCP", action, lease_change_event)
+        await self.ws_connector.send_event_message ("DHCP", action, lease_change_event)
         return '', 200

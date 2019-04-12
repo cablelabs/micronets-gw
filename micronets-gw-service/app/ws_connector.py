@@ -11,6 +11,21 @@ from .utils import check_json_field
 
 logger = logging.getLogger ('micronets-gw-service')
 
+class WSHandler:
+    def __init__ (self, type_prefix):
+        self.type_prefix = type_prefix
+        self.ws_connector = None
+
+    async def handle_message(self, message):
+        pass
+
+    async def send_message(self, message):
+        message_body = message['message']
+        messageType = message_body['messageType']
+        message_body['messageType'] = self.type_prefix + ":" + messageType
+        self.ws_connector.send_message(message)
+
+
 class WSConnector:
     def __init__ (self, ws_server_address, ws_server_port, ws_server_path,
                         tls_certkey_file = None, tls_ca_file = None, retry_interval_s = 20):
@@ -18,6 +33,7 @@ class WSConnector:
         self.ws_server_address = ws_server_address
         self.ws_server_port = ws_server_port
         self.ws_server_path = ws_server_path
+        self.handler_table = {}
         self.websocket = None
         self.message_id = 0
         self.hello_received = False
@@ -37,6 +53,15 @@ class WSConnector:
     def is_ready (self):
         return self.is_connected () and self.hello_received
 
+    def register_handler(self, handler):
+        logger.info (f"WSConnector: Registering handler for message type prefix {handler.type_prefix}: {handler}")
+        self.handler_table[handler.type_prefix] = handler
+        handler.ws_connector = self
+
+    def unregister_handler(self, handler):
+        del self.handler_table[handler.type_prefix]
+        handler.ws_connector = None
+
     async def send_message (self, message, must_be_ready=True):
         if not self.is_connected ():
             raise Exception (f"Websocket not connected (to {self.get_connect_uri()})")
@@ -46,7 +71,7 @@ class WSConnector:
         self.message_id += 1
         message ['messageId'] = message_id
         message_json = json.dumps ( {'message': message} )
-        logger.debug (f"ws_connection: > sending event message: {message}")
+        logger.debug (f"ws_connector: > sending event message: {message}")
         await self.websocket.send (message_json)
         return message_id
 
@@ -138,7 +163,7 @@ class WSConnector:
     async def wait_for_hello_message (self):
         raw_message = await self.websocket.recv ()
         message = json.loads (raw_message)
-        logger.debug (f"ws_connection: process_hello_messages: Received message: {message}")
+        logger.debug (f"ws_connector: process_hello_messages: Received message: {message}")
         if (not message):
             raise Exception (f"message does not appear to be json")
         hello_message = check_json_field (message, 'message', dict, True)
@@ -148,7 +173,7 @@ class WSConnector:
 
         if (not message_type == "CONN:HELLO"):
             raise Exception (f"Unexpected message while waiting for HELLO: {message_type}")
-        logger.debug (f"ws_connection: process_hello_messages: Received HELLO message")
+        logger.debug (f"ws_connector: process_hello_messages: Received HELLO message")
 
     async def sender (self):
         logger.debug ("WSConnector: sender: starting...")
@@ -187,12 +212,17 @@ class WSConnector:
         check_json_field (message, 'messageType', str, True)
         check_json_field (message, 'requiresResponse', bool, True)
         message_type = message ['messageType']
-        if (message_type.startswith ("REST:")):
+        message_type_prefix = message_type[:message_type.find(":")]
+        logger.debug (f"ws_connector: handle_message: message type prefix: {message_type_prefix}")
+        if message_type_prefix == "REST":
             await self.handle_rest_message (message)
-        elif (message_type.startswith ("EVENT:")):
+        elif message_type_prefix == "EVENT:":
             await self.handle_event_message (message)
         else:
-            raise Exception (f"unknown message type {message_type}")
+            if message_type_prefix not in self.handler_table:
+                raise Exception (f"unknown message type prefix {message_type_prefix}")
+            type_handler = self.handler_table[message_type_prefix]
+            await type_handler.handle_message (message)
 
     async def handle_rest_message (self, message):
         received_message_id = message ['messageId']
