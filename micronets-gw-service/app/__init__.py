@@ -116,6 +116,22 @@ except Exception as ex:
     logger.info ("Error registering DPP handler:", exc_info=True)
     exit (1)
 
+from .hostapd_adapter import HostapdAdapter
+
+try:
+    hostapd_adapter_enabled = app.config['HOSTAPD_ADAPTER_ENABLED']
+    hostapd_adapter = None
+    if hostapd_adapter_enabled:
+        hostapd_cli_path = app.config['HOSTAPD_CLI_PATH']
+        logger.info(f"hostapd adapter enabled (hostapd cli path {hostapd_cli_path})")
+        hostapd_adapter = HostapdAdapter(hostapd_cli_path)
+        asyncio.ensure_future(hostapd_adapter.connect())
+    else:
+        logger.info("Not initiating hostapd adapter (disabled via config)")
+except Exception as ex:
+    logger.info ("Error starting hostapd adapter:", exc_info=True)
+    exit (1)
+
 from .dhcp_conf import DHCPConf
 
 flow_adapter = None

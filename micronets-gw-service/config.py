@@ -17,7 +17,7 @@ class BaseConfig:
     WEBSOCKET_SERVER_ADDRESS = "ws-proxy-api.micronets.in"
     WEBSOCKET_SERVER_PORT = 5050
     # NOTE: The WEBSOCKET_SERVER_PATH should be unique to the gateway/subscriber if using the proxy
-    WEBSOCKET_SERVER_PATH = '/micronets/v1/ws-proxy/micronets-gw-0001'
+    WEBSOCKET_SERVER_PATH = '/micronets/v1/ws-proxy/grandpa-gw'
     WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces"
@@ -25,7 +25,7 @@ class BaseConfig:
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {} {}'
     FLOW_ADAPTER_ENABLED = False
     DPP_HANDLER_ENABLED = False
-
+    HOSTAPD_ADAPTER_ENABLED = False
 #
 # Mock Adapter Configurations
 #
@@ -83,6 +83,7 @@ class BaseDnsmasqConfig (BaseConfig):
     DNSMASQ_LEASE_SCRIPT = BaseConfig.SERVER_BIN_DIR.joinpath ("dnsmasq_lease_notify.py")
 
 class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
+    DEBUG = True
     LISTEN_HOST = "127.0.0.1"
     LOGFILE_PATH = None
     LOGFILE_MODE = None
@@ -90,7 +91,8 @@ class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
     DNSMASQ_RESTART_COMMAND = []
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = BaseConfig.SERVER_BASE_DIR.parent\
                                            .joinpath("filesystem/opt/micronets-gw/doc/interfaces.sample")
-    DEBUG = True
+    HOSTAPD_ADAPTER_ENABLED = True
+    HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
 
 class DnsmasqDevelopmentConfigWithWebsocket (DnsmasqDevelopmentConfig):
     WEBSOCKET_CONNECTION_ENABLED = True

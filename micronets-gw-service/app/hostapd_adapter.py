@@ -53,7 +53,7 @@ class HostapdAdapter:
                 line = data.decode("utf-8")
                 if len(line) == 0:
                     continue
-                # logger.debug(f"HostapdAdapter:read_process_data: Read line: \"{line}\"")
+                logger.debug(f"HostapdAdapter:read_process_data: \"{line[:-1]}\"")
                 cli_event_match = HostapdAdapter.cli_event_re.match(line)
                 if cli_event_match:
                     event_data = cli_event_match.group(2)
@@ -259,7 +259,7 @@ async def run_tests():
         configurator_id = await add_config_id_cmd.get_configurator_id()
         logger.info (f"{__name__}: DPP Configurator ID: {configurator_id}")
 
-        await asyncio.sleep(2)
+        # await asyncio.sleep(2)
         qrcode = "DPP:C:81/1;M:2c:d0:5a:6e:ca:3c;I:KYZRQ;K:MDkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDIgAC/nFQKV1+CErzr6QCUT0jFIno3CaTRr3BW2n0ThU4mAw=;;"
         logger.info (f"{__name__}: Issuing DPP Add QRCode command...")
         logger.info (f"{__name__}:   Code: {qrcode}")
@@ -267,7 +267,7 @@ async def run_tests():
         qrcode_id = await add_config_id_cmd.get_qrcode_id()
         logger.info (f"{__name__}: DPP QRCode ID: {qrcode_id}")
 
-        await asyncio.sleep(2)
+        # await asyncio.sleep(2)
         logger.info (f"{__name__}: Issuing DPP Auth Init command...")
         ssid="756e636c652d6a6f686e"
         psk="0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"
