@@ -23,7 +23,7 @@ class GatewayServiceConf:
         self.micronet_list = read_conf ['micronets']
         self.device_lists = read_conf ['devices']
         logger.info ("GatewayServiceConf Instantiated with:")
-        logger.info ("Subnet list:")
+        logger.info ("Micronet list:")
         logger.info (json.dumps (self.micronet_list, indent=2))
         logger.info ("Device lists:")
         logger.info (json.dumps (self.device_lists, indent=2))
@@ -45,18 +45,18 @@ class GatewayServiceConf:
             await self.flow_adapter.update(self.micronet_list, self.device_lists)
 
     #
-    # Subnet Operations
+    # micronet Operations
     #
     def check_micronet_reference (self, micronet_id):
         if micronet_id not in self.micronet_list:
-            raise InvalidUsage (404, message=f"Subnet '{micronet_id}' doesn't exist in micronet list")
+            raise InvalidUsage (404, message=f"micronet '{micronet_id}' doesn't exist in micronet list")
         if micronet_id not in self.device_lists:
-            raise InvalidUsage (404, message=f"Subnet '{micronet_id}' doesn't exist in device list")
+            raise InvalidUsage (404, message=f"micronet '{micronet_id}' doesn't exist in device list")
 
     def check_micronet_unique (self, micronet):
         micronet_id = micronet ['micronetId'].lower ()
         if micronet_id in self.micronet_list:
-            raise InvalidUsage (409, message=f"Subnet '{micronet_id}' already exists")
+            raise InvalidUsage (409, message=f"micronet '{micronet_id}' already exists")
 
     def check_micronet_params (self, micronet_to_check, excluded_micronet_id=None):
         micronet_id_to_check = micronet_to_check ['micronetId']
@@ -78,7 +78,7 @@ class GatewayServiceConf:
                 ipv4_net_params = micronet ['ipv4Network']
                 micronet_network = IPv4Network (ipv4_net_params ['network'] + "/" + ipv4_net_params ['mask'])
                 if micronet_network_to_check.overlaps (micronet_network):
-                    raise InvalidUsage (400, message=f"Subnet '{micronet_id_to_check}' network "
+                    raise InvalidUsage (400, message=f"micronet '{micronet_id_to_check}' network "
                                                      f"{micronet_network_to_check} overlaps existing "
                                                      f"micronet '{micronet_id}' (network {micronet_network})")
         except (AddressValueError, NetmaskValueError) as ve:
@@ -111,7 +111,7 @@ class GatewayServiceConf:
         return jsonify ({'micronet': micronet}), 201
 
     async def delete_all_micronets (self):
-        logger.info (f"GatewayServiceConf.delete_all_devices: Subnet list: {self.micronet_list}")
+        logger.info (f"GatewayServiceConf.delete_all_devices: micronet list: {self.micronet_list}")
         self.micronet_list.clear()
         self.device_lists.clear()
         await self.update_conf ()
@@ -140,7 +140,7 @@ class GatewayServiceConf:
     async def get_micronet (self, micronet_id):
         logger.info (f"GatewayServiceConf.get_micronet ({micronet_id})")
         if micronet_id not in self.micronet_list:
-            raise InvalidUsage (404, message=f"Subnet '{micronet_id}' not found")
+            raise InvalidUsage (404, message=f"micronet '{micronet_id}' not found")
         micronet = self.micronet_list [micronet_id]
         return jsonify ({'micronet': micronet}), 200
 
