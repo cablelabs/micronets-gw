@@ -1,7 +1,7 @@
 from quart import request, jsonify
 from ipaddress import IPv4Address, IPv4Network
-from app import app, get_dhcp_conf_model
-from .utils import InvalidUsage, get_ipv4_hostports_for_hostportspec
+from app import app, get_conf_model
+from .utils import InvalidUsage, get_ipv4_hostports_for_hostportspec, parse_portspec
 
 import re
 import netaddr
@@ -9,7 +9,7 @@ import logging
 
 logger = logging.getLogger ('micronets-gw-service')
 
-dhcp_api_prefix = '/micronets/v1/dhcp'
+api_prefix = '/micronets/v1/gateway'
 
 # This installs the handler to turn the InvalidUsage exception into a response
 # See: http://flask.pocoo.org/docs/1.0/patterns/apierrors/
@@ -60,16 +60,16 @@ def check_for_unrecognized_entries (container, allowed_field_names):
         raise InvalidUsage (400, message=f"Illegal field(s) {unrecognized_keys} in '{container}'")
     return True
 
-subnet_id_re = re.compile ('^\w+[-.\w]*$', re.ASCII)
+micronet_id_re = re.compile ('^\w+[-.\w]*$', re.ASCII)
 
-def check_subnet_id (subnet_id, location):
-    if not subnet_id_re.match (subnet_id):
-        raise InvalidUsage (400, message="Supplied subnet ID '{}' in '{}' is not alpha-numeric"
-                                         .format (subnet_id, location))
+def check_micronet_id (micronet_id, location):
+    if not micronet_id_re.match (micronet_id):
+        raise InvalidUsage (400, message="Supplied micronet ID '{}' in '{}' is not alpha-numeric"
+                                         .format (micronet_id, location))
 
 ip_re = re.compile ('^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$', re.ASCII)
 
-def check_ipv4_network (container, subnet_id, required):
+def check_ipv4_network (container, micronet_id, required):
     ipv4_network = check_field (container, 'ipv4Network', (dict, list), required)
     if ipv4_network:
         check_for_unrecognized_entries (ipv4_network, ['network','mask','gateway'])
@@ -81,7 +81,7 @@ def check_ipv4_network (container, subnet_id, required):
                 IPv4Network (net_address + "/" + net_mask, strict=True)
             except Exception as ex:
                 raise InvalidUsage (400, message=f"Supplied IP network/mask value '{net_address}/"
-                                                 f"{net_mask}' in subnet '{subnet_id}' is not valid: {ex}")
+                                                 f"{net_mask}' in micronet '{micronet_id}' is not valid: {ex}")
     return ipv4_network
 
 def get_ipv4_address_error (ip_address):
@@ -118,72 +118,82 @@ def check_nameservers (container, field_name, required):
                                                  f"{ipv4_address_error}")
     return nameservers
 
-def check_subnet (subnet, subnet_id=None, required=True):
-    check_for_unrecognized_entries (subnet, ['subnetId','ipv4Network','nameservers','ovsBridge','interface'])
-    body_subnet_id = check_field (subnet, 'subnetId', str, required)
-    if subnet_id and body_subnet_id:
-        if subnet_id != body_subnet_id:
-            raise InvalidUsage (400, message=f"The subnet ID in the path ('{subnet_id}') must match the one "
-                                             f"in the body ('{body_subnet_id}')")
-    if body_subnet_id:
-        subnet_id = body_subnet_id
-    subnet_id = subnet_id.lower ()
-    check_subnet_id (subnet_id, subnet)
-    check_ipv4_network (subnet, subnet_id, required)
-    check_nameservers (subnet, 'nameservers', False)
-    check_field (subnet, 'ovsBridge', str, required)
-    check_field (subnet, 'interface', str, required)
 
-def check_subnets (subnets, required):
-    for subnet in subnets:
-        check_subnet (subnet, required=required)
+def check_vlan (container, field_name, required):
+    vlan = check_field (container, field_name, int, required)
+    if vlan is not None:
+        if vlan < 1 or vlan > 4094:
+            raise InvalidUsage(400, message=f"Supplied vlan ID '{vlan}' in '{container}' field"
+                                    f"'{field_name}' is not valid: vlans must be between 1 and 4094")
 
-@app.route (dhcp_api_prefix + '/subnets', methods=['POST'])
-async def create_subnets ():
+
+def check_micronet (micronet, micronet_id=None, required=True):
+    check_for_unrecognized_entries (micronet, ['micronetId','ipv4Network','nameservers','ovsBridge','interface','vlan'])
+    body_micronet_id = check_field (micronet, 'micronetId', str, required)
+    if micronet_id and body_micronet_id:
+        if micronet_id != body_micronet_id:
+            raise InvalidUsage (400, message=f"The micronet ID in the path ('{micronet_id}') must match the one "
+                                             f"in the body ('{body_micronet_id}')")
+    if body_micronet_id:
+        micronet_id = body_micronet_id
+    micronet_id = micronet_id.lower ()
+    check_micronet_id (micronet_id, micronet)
+    check_ipv4_network (micronet, micronet_id, required)
+    check_nameservers (micronet, 'nameservers', False)
+    check_field (micronet, 'ovsBridge', str, required)
+    check_field (micronet, 'interface', str, required)
+    check_vlan (micronet, 'vlan', False) # Optional
+
+def check_micronets (micronets, required):
+    for micronet in micronets:
+        check_micronet (micronet, required=required)
+
+@app.route (api_prefix + '/micronets', methods=['POST'])
+async def create_micronets ():
     check_for_json_payload (request)
     top_level = await request.get_json ()
-    check_for_unrecognized_entries (top_level, ['subnet', 'subnets'])
-    if 'subnets' in top_level:
-        subnets = top_level ['subnets']
-        check_subnets (subnets, required=True)
-        return await get_dhcp_conf_model ().create_subnets (subnets)
-    elif 'subnet' in top_level:
-        subnet = top_level ['subnet']
-        check_subnet (subnet, required=True)
-        return await get_dhcp_conf_model ().create_subnet (subnet)
+    check_for_unrecognized_entries (top_level, ['micronet', 'micronets'])
+    if 'micronets' in top_level:
+        micronets = top_level ['micronets']
+        check_micronets (micronets, required=True)
+        return await get_conf_model ().create_micronets (micronets)
+    elif 'micronet' in top_level:
+        micronet = top_level ['micronet']
+        check_micronet (micronet, required=True)
+        return await get_conf_model ().create_micronet (micronet)
 
-@app.route (dhcp_api_prefix + '/subnets', methods=['GET'])
-async def get_all_subnets ():
-    return await get_dhcp_conf_model ().get_all_subnets ()
+@app.route (api_prefix + '/micronets', methods=['GET'])
+async def get_all_micronets ():
+    return await get_conf_model ().get_all_micronets ()
 
-@app.route (dhcp_api_prefix + '/subnets', methods=['DELETE'])
-async def delete_all_subnets ():
-    return await get_dhcp_conf_model ().delete_all_subnets ()
+@app.route (api_prefix + '/micronets', methods=['DELETE'])
+async def delete_all_micronets ():
+    return await get_conf_model ().delete_all_micronets ()
 
-@app.route (dhcp_api_prefix + '/subnets/<subnet_id>', methods=['PUT'])
-async def update_subnet (subnet_id):
-    subnet_id = subnet_id.lower ()
+@app.route (api_prefix + '/micronets/<micronet_id>', methods=['PUT'])
+async def update_micronet (micronet_id):
+    micronet_id = micronet_id.lower ()
     check_for_json_payload (request)
-    check_subnet_id (subnet_id, request.path)
+    check_micronet_id (micronet_id, request.path)
 
     top_level = await request.get_json ()
-    check_for_unrecognized_entries (top_level, ['subnet'])
-    subnet = top_level ['subnet']
-    check_subnet (subnet, subnet_id=subnet_id, required=False)
-    updated_subnet = await get_dhcp_conf_model ().update_subnet (subnet, subnet_id)
-    return updated_subnet
+    check_for_unrecognized_entries (top_level, ['micronet'])
+    micronet = top_level ['micronet']
+    check_micronet (micronet, micronet_id=micronet_id, required=False)
+    updated_micronet = await get_conf_model ().update_micronet (micronet, micronet_id)
+    return updated_micronet
 
-@app.route (dhcp_api_prefix + '/subnets/<subnet_id>', methods=['GET'])
-async def get_subnet (subnet_id):
-    subnet_id = subnet_id.lower ()
-    check_subnet_id (subnet_id, request.path)
-    return await get_dhcp_conf_model ().get_subnet (subnet_id)
+@app.route (api_prefix + '/micronets/<micronet_id>', methods=['GET'])
+async def get_micronet (micronet_id):
+    micronet_id = micronet_id.lower ()
+    check_micronet_id (micronet_id, request.path)
+    return await get_conf_model ().get_micronet (micronet_id)
 
-@app.route (dhcp_api_prefix + '/subnets/<subnet_id>', methods=['DELETE'])
-async def delete_subnet (subnet_id):
-    subnet_id = subnet_id.lower()
-    check_subnet_id (subnet_id, request.path)
-    return await get_dhcp_conf_model ().delete_subnet (subnet_id)
+@app.route (api_prefix + '/micronets/<micronet_id>', methods=['DELETE'])
+async def delete_micronet (micronet_id):
+    micronet_id = micronet_id.lower()
+    check_micronet_id (micronet_id, request.path)
+    return await get_conf_model ().delete_micronet (micronet_id)
 
 device_id_re = re.compile ('^\w+[-.\w]*$', re.ASCII)
 
@@ -200,19 +210,51 @@ def check_mac_address_field (json_obj, mac_addr_field, required):
         raise InvalidUsage (400, message=f"Supplied MAC '{mac_field}' in '{mac_addr_field}' is not valid")
     return mac_field
 
-async def check_hostspecs (container, field_name, required):
-    hosts = check_field (container, field_name, (list), required)
-    if hosts:
-        for host in hosts:
-            try:
-                hosts = await get_ipv4_hostports_for_hostportspec (host)
-            except Exception as ex:
-                raise InvalidUsage (400, message=f"Supplied hostname '{host}' in field '{field_name}' "
-                                    f"of '{container}' is not valid: {ex}")
-    return hosts
+async def check_rules (container, field_name, required):
+    rules = check_field (container, field_name, (list), required)
+    if rules:
+        for rule in rules:
+            await check_rule (rule)
+
+async def check_rule (rule):
+    check_for_unrecognized_entries (rule, ['action', 'source', 'sourcePort', 'dest', 'destPort'])
+    action = check_field (rule, 'action', str, True)
+    if not (action == "allow" or action == "deny"):
+        raise InvalidUsage(400, message=f"Supplied action '{action}' in rule '{rule}' is not valid "
+                                        "(allowed actions are 'allow" and 'deny')
+
+    await check_hostspec (rule, 'source', False)
+    check_portspec (rule, 'sourcePort', False)
+
+    await check_hostspec (rule, 'dest', False)
+    check_portspec (rule, 'destPort', False)
+
+    return rule
+
+async def check_hostspec (container, field_name, required):
+    hostspec = check_field (container, field_name, (str), required)
+    if not hostspec:
+        return None
+    try:
+        hosts = await get_ipv4_hostports_for_hostportspec (hostspec)
+    except Exception as ex:
+        raise InvalidUsage (400, message=f"Supplied hostname '{hostspec}' in field '{field_name}' "
+                            f"of '{container}' is not valid: {ex}")
+    return hostspec
+
+def check_portspec (container, field_name, required):
+    portspec = check_field (container, field_name, (str), required)
+    if not portspec:
+        return None
+    try:
+        portspec_fields = parse_portspec (portspec)
+    except Exception as ex:
+        raise InvalidUsage (400, message=f"Supplied port specification '{portspec}' in field '{field_name}' "
+                            f"of '{container}' is not valid: {ex}")
+    return portspec
 
 async def check_device (device, required):
-    check_for_unrecognized_entries (device, ['deviceId', 'macAddress', 'networkAddress', 'allowHosts', 'denyHosts'])
+    check_for_unrecognized_entries (device, ['deviceId', 'macAddress', 'networkAddress', 'outRules', 'inRules'])
     device_id = check_field (device, 'deviceId', str, required)
     if device_id:
         device_id = device_id.lower ()
@@ -234,68 +276,68 @@ async def check_device (device, required):
         check_for_unrecognized_entries (network_address, ['ipv4'])
         check_ipv4_address_field (network_address, 'ipv4', required)
 
-    await check_hostspecs (device, 'allowHosts', False)
-    await check_hostspecs (device, 'denyHosts', False)
+    await check_rules (device, 'outRules', False)
+    await check_rules (device, 'inRules', False)
 
 async def check_devices (devices, required):
     for device in devices:
         await check_device (device, required)
 
-@app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices', methods=['POST'])
-async def create_devices (subnet_id):
-    subnet_id = subnet_id.lower ()
+@app.route (api_prefix + '/micronets/<micronet_id>/devices', methods=['POST'])
+async def create_devices (micronet_id):
+    micronet_id = micronet_id.lower ()
     check_for_json_payload (request)
     top_level = await request.get_json ()
     check_for_unrecognized_entries (top_level, ['device', 'devices'])
     if 'devices' in top_level:
         devices = top_level ['devices']
         await check_devices (devices, required=True)
-        return await get_dhcp_conf_model ().create_devices (devices, subnet_id)
+        return await get_conf_model ().create_devices (devices, micronet_id)
     elif 'device' in top_level:
         device = top_level ['device']
         await check_device (device, required=True)
-        return await get_dhcp_conf_model ().create_device (device, subnet_id)
+        return await get_conf_model ().create_device (device, micronet_id)
 
-@app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices', methods=['GET'])
-async def get_devices (subnet_id):
-    subnet_id = subnet_id.lower ()
-    check_subnet_id (subnet_id, request.path)
-    return await get_dhcp_conf_model ().get_all_devices (subnet_id)
+@app.route (api_prefix + '/micronets/<micronet_id>/devices', methods=['GET'])
+async def get_devices (micronet_id):
+    micronet_id = micronet_id.lower ()
+    check_micronet_id (micronet_id, request.path)
+    return await get_conf_model ().get_all_devices (micronet_id)
 
-@app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices', methods=['DELETE'])
-async def delete_devices (subnet_id):
-    subnet_id = subnet_id.lower()
-    check_subnet_id (subnet_id, request.path)
-    return await get_dhcp_conf_model ().delete_all_devices (subnet_id)
+@app.route (api_prefix + '/micronets/<micronet_id>/devices', methods=['DELETE'])
+async def delete_devices (micronet_id):
+    micronet_id = micronet_id.lower()
+    check_micronet_id (micronet_id, request.path)
+    return await get_conf_model ().delete_all_devices (micronet_id)
 
-@app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices/<device_id>', methods=['PUT'])
-async def update_device (subnet_id, device_id):
-    subnet_id = subnet_id.lower ()
+@app.route (api_prefix + '/micronets/<micronet_id>/devices/<device_id>', methods=['PUT'])
+async def update_device (micronet_id, device_id):
+    micronet_id = micronet_id.lower ()
     device_id = device_id.lower ()
     check_for_json_payload (request)
-    check_subnet_id (subnet_id, request.path)
+    check_micronet_id (micronet_id, request.path)
     check_device_id (device_id, request.path)
     top_level = await request.get_json ()
     check_for_unrecognized_entries (top_level, ['device'])
     device_update = top_level ['device']
     await check_device (device_update, required=False)
-    return await get_dhcp_conf_model ().update_device (device_update, subnet_id, device_id)
+    return await get_conf_model ().update_device (device_update, micronet_id, device_id)
 
-@app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices/<device_id>', methods=['GET'])
-async def get_device (subnet_id, device_id):
-    subnet_id = subnet_id.lower ()
+@app.route (api_prefix + '/micronets/<micronet_id>/devices/<device_id>', methods=['GET'])
+async def get_device (micronet_id, device_id):
+    micronet_id = micronet_id.lower ()
     device_id = device_id.lower ()
-    check_subnet_id (subnet_id, request.path)
+    check_micronet_id (micronet_id, request.path)
     check_device_id (device_id, request.path)
-    return await get_dhcp_conf_model ().get_device (subnet_id, device_id)
+    return await get_conf_model ().get_device (micronet_id, device_id)
 
-@app.route (dhcp_api_prefix + '/subnets/<subnet_id>/devices/<device_id>', methods=['DELETE'])
-async def delete_device (subnet_id, device_id):
-    subnet_id = subnet_id.lower ()
+@app.route (api_prefix + '/micronets/<micronet_id>/devices/<device_id>', methods=['DELETE'])
+async def delete_device (micronet_id, device_id):
+    micronet_id = micronet_id.lower ()
     device_id = device_id.lower ()
-    check_subnet_id (subnet_id, request.path)
+    check_micronet_id (micronet_id, request.path)
     check_device_id (device_id, request.path)
-    return await get_dhcp_conf_model ().delete_device (subnet_id, device_id)
+    return await get_conf_model ().delete_device (micronet_id, device_id)
 
 async def check_lease_event (lease_event):
     event_fields = check_field (lease_event, 'leaseChangeEvent', dict, True)
@@ -315,9 +357,9 @@ async def check_lease_event (lease_event):
 
     hostname = check_field (event_fields, 'hostname', str, True)
 
-@app.route (dhcp_api_prefix + '/leases', methods=['PUT'])
+@app.route (api_prefix + '/leases', methods=['PUT'])
 async def process_lease ():
     check_for_json_payload (request)
     lease_event = await request.get_json ()
     await check_lease_event (lease_event)
-    return await get_dhcp_conf_model ().process_dhcp_lease_event (lease_event)
+    return await get_conf_model ().process_dhcp_lease_event (lease_event)

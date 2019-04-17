@@ -43,15 +43,15 @@ def merge_deep (dict1, dict2):
             result [key] = deepcopy (dict2 [key])
     return result
 
-def find_subnet_id_for_host (subnets, host_ip_address):
+def find_micronet_id_for_host (micronets, host_ip_address):
     host_network = IPv4Network (host_ip_address + "/255.255.255.255")
-    for subnet_id, subnet in subnets.items ():
-        ipv4_net_params = subnet ['ipv4Network']
+    for micronet_id, micronet in micronets.items ():
+        ipv4_net_params = micronet ['ipv4Network']
         netaddr = ipv4_net_params ['network']
         netmask = ipv4_net_params ['mask']
-        subnet_network = IPv4Network (netaddr + "/" + netmask, strict=True)
-        if subnet_network.overlaps (host_network):
-            return subnet_id
+        micronet_network = IPv4Network (netaddr + "/" + netmask, strict=True)
+        if micronet_network.overlaps (host_network):
+            return micronet_id
     return None
 
 class InvalidUsage (Exception):
@@ -74,7 +74,11 @@ async def unroll_hostportspec_list (hostportspec_list):
         unrolled_host_list += addrs_for_spec
     return unrolled_host_list
 
-hostportspec_re = re.compile ('^[0-9]+(/(tcp|udp))?$',re.ASCII)
+
+portspec_pattern = "(?:(?P<startport>[0-9]+)(?:-(?P<endport>[0-9]+))?)?(?:/(?P<protocol>tcp|udp))?"
+# e.g. 22/tcp, 1000-2000, 1200-1300/udp, /tcp
+
+portspec_re = re.compile ("^" + portspec_pattern + "$")
 
 async def get_ipv4_hostports_for_hostportspec (hostandportspec):
     if not hostandportspec:
@@ -100,12 +104,36 @@ async def get_ipv4_hostports_for_hostportspec (hostandportspec):
     for addr in host_addrs:
         if portspec_list:
             for portspec in portspec_list:
-                if not hostportspec_re.match(portspec):
+                if not portspec_re.match(portspec):
                     raise Exception(f"Port specification '{portspec}' in host specification '{hostandportspec}' is invalid")
                 hostandport_list.append(addr+":"+portspec)
         else:
             hostandport_list.append(addr)
     return hostandport_list
+
+hostportspec_pattern = "(?P<ip_addr>" + ip_addr_pattern + "(?:/\d{1,3})?)" + "(?::" + portspec_pattern + ")?"
+# e.g. 1.2.3.4, 1.2.3.4:22/tcp, 1.2.3.0/24:1-1024, 1.2.0.0/16:1024-2000/udp
+
+hostportspec_re = re.compile ("^" + hostportspec_pattern + "$")
+
+def parse_portspec (portspec):
+    m = portspec_re.match(portspec)
+    if not m:
+        raise Exception(f"Port specification '{portspec}' is invalid")
+    portspec_elems = m.groupdict() # Will return {'startport': x, 'endport': y, 'protocol': tcp/udp}
+    if 'startport' not in portspec_elems:
+        raise Exception(f"Port specification '{portspec}' does not have a port/start port number")
+    return
+
+def parse_hostportspec (portspec):
+    m = hostportspec_re.match(portspec)
+    if not m:
+        raise Exception(f"Port specification '{portspec}' is invalid")
+    portspec_elems = m.groupdict() # Will return {'startport': x, 'endport': y, 'protocol': tcp/udp}
+    if 'startport' not in portspec_elems:
+        raise Exception(f"host-port specification '{portspec}' does not have a port/start port number")
+    return portspec_elems
+
 
 async def main():
     print("Running utils tests...")

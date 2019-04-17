@@ -4,26 +4,13 @@
 
 dhcp-script=/Users/craig/projects/micronets/micronets-gw/micronets-gw-service/bin/dnsmasq_lease_notify.py
 
-# Subnet: testsubnet001, ovsBridge: brmn001, interface: enxac7f3ee61832
-dhcp-range=set:testsubnet001,10.40.0.0,static,255.255.255.0,10m
-dhcp-option=tag:testsubnet001, option:router,10.40.0.1
-dhcp-option=tag:testsubnet001, option:dns-server,8.8.8.8,4.4.4.4
+# Micronet: mockmicronet007, ovsBridge: brmn001, interface: wlp2s0, vlan: 101
+dhcp-range=set:mockmicronet007,192.168.1.0,static,255.255.255.0,10m
+dhcp-option=tag:mockmicronet007, option:router,192.168.1.1
+dhcp-option=tag:mockmicronet007, option:dns-server,1.2.3.4,1.2.3.5
 
-# Subnet: testsubnet002, ovsBridge: brmn001, interface: enx00e04c534458
-dhcp-range=set:testsubnet002,10.50.0.0,static,255.255.255.0,10m
-dhcp-option=tag:testsubnet002, option:router,10.50.0.1
-dhcp-option=tag:testsubnet002, option:dns-server,8.8.8.8,4.4.4.4
+# DEVICES FOR MICRONET: mockmicronet007
 
-# DEVICES FOR SUBNET: testsubnet001
-
-# Device: micronet-device-1,["8.8.8.8", "12.34.56.0/24", "www.yahoo.com:80/tcp,443/tcp"],[]
-dhcp-host=08:00:27:e5:77:c5,micronetce-1,set:micronet-device-1,10.40.0.71,10m
-
-# Device: micronet-device-2,[],["4.4.4.4", "34.56.78.0/24", "www.ietf.org:80/tcp,443/tcp"]
-dhcp-host=00:23:12:0f:b0:26,micronetce-2,set:micronet-device-2,10.40.0.42,10m
-
-# DEVICES FOR SUBNET: testsubnet002
-
-# Device: micronet-device-3,[],[]
-dhcp-host=08:00:27:3c:ae:02,micronetce-3,set:micronet-device-3,10.50.0.43,10m
+# Device: mydevice03,[],[]
+dhcp-host=b8:27:eb:75:a4:8a,mydevice03,set:mydevice03,192.168.1.42,10m
 

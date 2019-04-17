@@ -8,31 +8,31 @@ from pathlib import Path
 from ipaddress import IPv4Network, IPv4Address
 from netaddr import EUI
 from subprocess import call
-from .utils import ip_addr_pattern, mac_addr_pattern, blank_line_re, comment_line_re, find_subnet_id_for_host
+from .utils import ip_addr_pattern, mac_addr_pattern, blank_line_re, comment_line_re, find_micronet_id_for_host
 
 logger = logging.getLogger ('micronets-gw-service')
 
 class DnsMasqAdapter:
     lease_duration_re = 'infinite|[0-9]+[hm]?'
 
-    # # Subnet: testsubnet001, ovsBridge: brmn001, interface: enxac7f3ee61832
-    # # Subnet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
-    dhcp_range_prefix_re = re.compile ('^\s*#\s*Subnet:\s*(\w.[\w-]*)\s*,\s*ovsBridge:\s*(\w+)\s*,'
-                                       '\s*interface:\s*(\w+)\s*$',
+    # # Micronet: testmicronet001, ovsBridge: brmn001, interface: enxac7f3ee61832
+    # # Micronet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0, vlan: 2112
+    dhcp_range_prefix_re = re.compile ('^\s*#\s*Micronet:\s*(\w.[\w-]*)\s*,\s*ovsBridge:\s*(\w+)\s*,'
+                                       '\s*interface:\s*(\w+)(?:\s*,\s*vlan:\s*([0-9]+))?\s*$',
                                        re.ASCII)
 
-    # dhcp-range=set:testsubnet001,10.40.0.0,static,255.255.255.0,3m
+    # dhcp-range=set:testmicronet001,10.40.0.0,static,255.255.255.0,3m
     dhcp_range_re = re.compile ('^\s*dhcp-range\s*=\s*set:\s*(\w.[\w-]*),(' + ip_addr_pattern 
                                 + '),\s*static,\s*(' + ip_addr_pattern
                                 + '),\s*(' + lease_duration_re + ')\s*$', re.ASCII)
 
     dhcp_range_option_prefix = '^\s*dhcp-option\s*=\s*tag:\s*(\w.[\w-]*),\s*'
 
-    # dhcp-option=tag:testsubnet001, option:router,10.40.0.1
+    # dhcp-option=tag:testmicronet001, option:router,10.40.0.1
     dhcp_range_router_re = re.compile (dhcp_range_option_prefix
                                        + 'option:\s*router\s*,(' + ip_addr_pattern + ')$', re.ASCII)
 
-    # dhcp-option=tag:testsubnet001, option:dns-server,8.8.8.8,4.4.4.4
+    # dhcp-option=tag:testmicronet001, option:dns-server,8.8.8.8,4.4.4.4
     dhcp_range_dns_server_re = re.compile (dhcp_range_option_prefix
                                            + 'option:\s*dns-server((?:\s*,\s*'
                                            + ip_addr_pattern + ')+)', re.ASCII)
@@ -40,7 +40,7 @@ class DnsMasqAdapter:
     # dhcp-hostsfile=/home/micronut/projects/micronets/micronets-dhcp/dnsmasq-hosts
     dhcp_hostfile_re = re.compile ('dhcp-hostsfile\s*=\s*(.+)$')
 
-    # # Subnet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
+    # # Micronet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
     dhcp_device_prefix_re = re.compile ('^\s*#\sDevice:\s*(\w.[\w-]*)\s*,(\[[^\[\]]*\]),(\[[^\[\]]*\])\s*$',
                                         re.ASCII)
 
@@ -66,19 +66,19 @@ class DnsMasqAdapter:
         with self.conffile_path.open ('r') as infile:
             try:
                 infile.line_no = 0
-                logger.info (f"DnsMasqAdapter: Loading subnet data from {self.conffile_path.absolute ()}")
+                logger.info (f"DnsMasqAdapter: Loading micronet data from {self.conffile_path.absolute ()}")
                 read_conf = self.parse_conffile (infile)
-                subnets = read_conf ['subnets']
+                micronets = read_conf ['micronets']
                 devices = read_conf ['devices']
-                return {"subnets": subnets, "devices": devices}
+                return {"micronets": micronets, "devices": devices}
             except Exception as e:
                 raise Exception ("DnsMasqAdapter: Error on line {} of {}: {}"
                                  .format (infile.line_no, self.conffile_path.absolute (), e))
 
     def parse_conffile (self, infile):
-        subnets = {}
+        micronets = {}
         devices_list = {}
-        prefix_subnet_id = None
+        prefix_micronet_id = None
         prefix_host_id = None
 
         for line in infile:
@@ -87,78 +87,78 @@ class DnsMasqAdapter:
                 continue
             dhcp_range_prefix_match_result = self.dhcp_range_prefix_re.match (line)
             if (dhcp_range_prefix_match_result):
-                prefix_subnet_id = dhcp_range_prefix_match_result.group (1)
-                prefix_ovs_bridge = dhcp_range_prefix_match_result.group (2)
-                prefix_interface = dhcp_range_prefix_match_result.group (3)
+                (prefix_micronet_id, prefix_ovs_bridge, prefix_interface, prefix_vlan) \
+                    = dhcp_range_prefix_match_result.groups()
                 continue
             dhcp_host_prefix_match = self.dhcp_device_prefix_re.match (line)
             if dhcp_host_prefix_match:
                 prefix_host_id = dhcp_host_prefix_match.group(1)
-                prefix_host_allow_hosts_str = dhcp_host_prefix_match.group(2)
-                prefix_host_deny_hosts_str = dhcp_host_prefix_match.group(3)
+                prefix_host_out_rules_str = dhcp_host_prefix_match.group(2)
+                prefix_host_in_rules_str = dhcp_host_prefix_match.group(3)
                 logger.info(f"DnsMasqAdapter.parse_conffile:  Found host {prefix_host_id}: "
-                            f"allowHosts:{prefix_host_allow_hosts_str}, denyHosts:{prefix_host_deny_hosts_str}")
+                            f"outRules:{prefix_host_out_rules_str}, denyHosts:{prefix_host_in_rules_str}")
 
-                prefix_host_allow_hosts = json.loads(prefix_host_allow_hosts_str)
-                prefix_host_deny_hosts = json.loads(prefix_host_deny_hosts_str)
+                prefix_host_out_rules = json.loads(prefix_host_out_rules_str)
+                prefix_host_in_rules = json.loads(prefix_host_in_rules_str)
                 logger.info(f"DnsMasqAdapter.parse_conffile:  Found host {prefix_host_id}: "
-                            f"allowHosts:{prefix_host_allow_hosts}, denyHosts:{prefix_host_deny_hosts}")
+                            f"outRules:{prefix_host_out_rules}, inRules:{prefix_host_in_rules}")
             if (comment_line_re.match (line)):
                 continue
             dhcp_range_match_result = self.dhcp_range_re.match (line)
             if (dhcp_range_match_result):
-                if not prefix_subnet_id:
-                    raise Exception ("Found dhcp-range without preceding '# Subnet:' line")
-                subnet_id = dhcp_range_match_result.group (1)
-                subnet_network = dhcp_range_match_result.group (2)
-                subnet_netmask = dhcp_range_match_result.group (3)
-                subnet_lease_duration = dhcp_range_match_result.group (4)
-                if prefix_subnet_id != subnet_id:
-                    raise Exception(f"Found dhcp-range with mismatched subnet id ({subnet_id} != {prefix_subnet_id})")
-                prefix_subnet_id = None
-                network = IPv4Network (subnet_network + "/" + subnet_netmask, strict=True)
-                logger.debug ("DnsMasqAdapter.parse_conffile: Found subnet range: {} {} {} {}"
-                              .format (subnet_id, subnet_network, subnet_netmask, subnet_lease_duration))
+                if not prefix_micronet_id:
+                    raise Exception ("Found dhcp-range without preceding '# Micronet:' line")
+                micronet_id = dhcp_range_match_result.group (1)
+                micronet_network = dhcp_range_match_result.group (2)
+                micronet_netmask = dhcp_range_match_result.group (3)
+                micronet_lease_duration = dhcp_range_match_result.group (4)
+                if prefix_micronet_id != micronet_id:
+                    raise Exception(f"Found dhcp-range with mismatched micronet id ({micronet_id} != {prefix_micronet_id})")
+                prefix_micronet_id = None
+                network = IPv4Network (micronet_network + "/" + micronet_netmask, strict=True)
+                logger.debug ("DnsMasqAdapter.parse_conffile: Found micronet range: {} {} {} {}"
+                              .format (micronet_id, micronet_network, micronet_netmask, micronet_lease_duration))
 
-                if subnet_id in subnets:
-                    raise Exception ("Duplicate subnet ID '{}'".format (subnet_id))
+                if micronet_id in micronets:
+                    raise Exception ("Duplicate micronet ID '{}'".format (micronet_id))
                 if not network:
-                    raise Exception ("Invalid subnet network/netmask '{}/{}'"
-                                     .format (subnet_network, subnet_netmask))
-                subnet = {}
-                subnet ['subnetId'] = subnet_id
-                subnet ['ipv4Network'] = {'network' : str (network.network_address), 'mask' : str (network.netmask)}
-                subnet ['ovsBridge'] = prefix_ovs_bridge
-                subnet ['interface'] = prefix_interface
-                subnets [subnet_id] = subnet
-                devices_list [subnet_id] = {}
-                prefix_subnet_id = None
+                    raise Exception ("Invalid micronet network/netmask '{}/{}'"
+                                     .format (micronet_network, micronet_netmask))
+                micronet = {}
+                micronet ['micronetId'] = micronet_id
+                micronet ['ipv4Network'] = {'network' : str (network.network_address), 'mask' : str (network.netmask)}
+                micronet ['ovsBridge'] = prefix_ovs_bridge
+                micronet ['interface'] = prefix_interface
+                micronet ['vlan'] = prefix_vlan
+                micronets [micronet_id] = micronet
+                devices_list [micronet_id] = {}
+                prefix_micronet_id = None
                 continue
             dhcp_range_router_match = self.dhcp_range_router_re.match (line)
             if (dhcp_range_router_match):
-                subnet_id = dhcp_range_router_match.group (1)
+                micronet_id = dhcp_range_router_match.group (1)
                 router_address = dhcp_range_router_match.group (2)
                 logger.debug (f"DnsMasqAdapter.parse_conffile: Found router address: "
-                              f"{subnet_id} {router_address}")
-                if not subnet_id in subnets:
-                    raise Exception ("Could not find subnet ID '{}'".format (subnet_id))
+                              f"{micronet_id} {router_address}")
+                if not micronet_id in micronets:
+                    raise Exception ("Could not find micronet ID '{}'".format (micronet_id))
                 addr = IPv4Address (router_address)
                 if not addr or addr.is_loopback or addr.is_multicast:
                     raise Exception ("Invalid router/gateway address '{}'".format (router_address))
-                subnet = subnets [subnet_id]
-                logger.debug (f"DnsMasqAdapter.parse_conffile: subnet {subnet_id}: {subnet}")
-                logger.debug (f"DnsMasqAdapter.parse_conffile: subnet {subnet_id}"
-                              f"ipv4Network: {subnet ['ipv4Network']}")
-                subnet ['ipv4Network']['gateway'] = str (addr)
+                micronet = micronets [micronet_id]
+                logger.debug (f"DnsMasqAdapter.parse_conffile: micronet {micronet_id}: {micronet}")
+                logger.debug (f"DnsMasqAdapter.parse_conffile: micronet {micronet_id}"
+                              f"ipv4Network: {micronet ['ipv4Network']}")
+                micronet ['ipv4Network']['gateway'] = str (addr)
                 continue
             dhcp_range_dns_server_match = self.dhcp_range_dns_server_re.match (line)
             if (dhcp_range_dns_server_match):
-                subnet_id = dhcp_range_dns_server_match.group (1)
+                micronet_id = dhcp_range_dns_server_match.group (1)
                 dns_server_addresses = dhcp_range_dns_server_match.group (2)
                 logger.debug (f"DnsMasqAdapter.parse_conffile: Found dns server addresses: "
-                              f"{subnet_id} {dns_server_addresses}")
-                if not subnet_id in subnets:
-                    raise Exception ("Could not find subnet ID '{}'".format (subnet_id))
+                              f"{micronet_id} {dns_server_addresses}")
+                if not micronet_id in micronets:
+                    raise Exception ("Could not find micronet ID '{}'".format (micronet_id))
                 nameservers = []
                 for dns_server in dns_server_addresses.split (','):
                     if not dns_server:
@@ -169,7 +169,7 @@ class DnsMasqAdapter:
                         raise Exception ("Invalid DNS server address '{}'".format (router_address))
                     nameservers.append (str (addr))
                 logger.debug (f"DnsMasqAdapter.parse_conffile: DNS server list: {nameservers}")
-                subnets [subnet_id]['nameservers'] = nameservers
+                micronets [micronet_id]['nameservers'] = nameservers
                 continue
             dhcp_host_match = self.dhcp_host_re.match (line)
             if (dhcp_host_match):
@@ -190,17 +190,17 @@ class DnsMasqAdapter:
                 addr = IPv4Address (dhcp_host_ip)
                 if not addr or addr.is_loopback or addr.is_multicast:
                     raise Exception ("Invalid host IP address '{}'".format (dhcp_host_ip))
-                subnet_id = find_subnet_id_for_host (subnets, dhcp_host_ip)
-                if not subnet_id:
-                    raise Exception ("Could not find a subnet compatible with host '{}'".format (addr))
+                micronet_id = find_micronet_id_for_host (micronets, dhcp_host_ip)
+                if not micronet_id:
+                    raise Exception ("Could not find a micronet compatible with host '{}'".format (addr))
                 device = {'deviceId': prefix_host_id}
                 device ['macAddress'] = {'eui48': str(eui_mac_addr)}
                 device ['networkAddress'] = {'ipv4': str (addr)}
-                if len(prefix_host_allow_hosts) > 0:
-                    device ['allowHosts'] = prefix_host_allow_hosts
-                if len(prefix_host_deny_hosts) > 0:
-                    device ['denyHosts'] = prefix_host_deny_hosts
-                device_list = devices_list [subnet_id]
+                if len(prefix_host_out_rules) > 0:
+                    device ['outRules'] = prefix_host_out_rules
+                if len(prefix_host_in_rules) > 0:
+                    device ['inRules'] = prefix_host_in_rules
+                device_list = devices_list [micronet_id]
                 device_list [prefix_host_id] = device
                 prefix_host_id = None
                 continue
@@ -218,54 +218,58 @@ class DnsMasqAdapter:
             raise Exception ("Unrecognized dnsmasq config entry: {}".format (line.rstrip ()))
 
         logger.info ("DnsMasqAdapter.parse_conffile: Done reading {}".format (infile))
-        logger.info ("DnsMasqAdapter.parse_conffile: Subnets:")
-        logger.info (json.dumps (subnets, indent=4))
-        return {'subnets': subnets, 'devices': devices_list}
+        logger.info ("DnsMasqAdapter.parse_conffile: Micronets:")
+        logger.info (json.dumps (micronets, indent=4))
+        return {'micronets': micronets, 'devices': devices_list}
 
-    def save_to_conf (self, subnets, devices):
+    def save_to_conf (self, micronets, devices):
         logger.debug ("DnsMasqAdapter.save_to_conf")
         with self.conffile_path.open ('w') as outfile:
-            logger.info (f"DnsMasqAdapter: Saving subnet data to {self.conffile_path.absolute ()}")
+            logger.info (f"DnsMasqAdapter: Saving micronet data to {self.conffile_path.absolute ()}")
             outfile.write ("# THIS CONF FILE IS MANAGED BY THE MICRONETS GW SERVICE\n\n")
             outfile.write ("# MODIFICATIONS TO THIS FILE WILL BE OVER-WRITTEN\n\n")
             outfile.write ("dhcp-script={}\n\n".format (self.lease_script.absolute ()))
-            self.write_subnets (outfile, subnets)
+            self.write_micronets (outfile, micronets)
             self.write_devices (outfile, devices)
 
         if self.dnsmasq_restart_command:
             logger.info (f"Restarting dnsmasq daemon ('{self.dnsmasq_restart_command}')")
             call (self.dnsmasq_restart_command)
 
-    def write_subnets (self, outfile, subnets):
-        for subnet_id, subnet in subnets.items ():
-            # # Subnet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
-            ovs_switch = subnet ['ovsBridge']
-            interface = subnet ['interface']
-            outfile.write ("# Subnet: {}, ovsBridge: {}, interface: {}\n"
-                           .format (subnet_id, ovs_switch, interface))
-            ipv4_params = subnet ['ipv4Network']
+    def write_micronets (self, outfile, micronets):
+        for micronet_id, micronet in micronets.items ():
+            # # Micronet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
+            ovs_switch = micronet ['ovsBridge']
+            interface = micronet ['interface']
+            if 'vlan' in micronet:
+                vlan = micronet ['vlan']
+            else:
+                vlan = None
+            outfile.write ("# Micronet: {}, ovsBridge: {}, interface: {}, vlan: {}\n"
+                           .format (micronet_id, ovs_switch, interface, vlan))
+            ipv4_params = micronet ['ipv4Network']
             network_addr = ipv4_params['network']
             netmask = ipv4_params ['mask']
-            if 'leasePeriod' in subnet:
-                lease_period = subnet ['leasePeriod']
+            if 'leasePeriod' in micronet:
+                lease_period = micronet ['leasePeriod']
             else:
                 lease_period = self.default_lease_period
             outfile.write ("dhcp-range=set:{},{},static,{},{}\n"
-                           .format (subnet_id, network_addr, netmask,lease_period))
+                           .format (micronet_id, network_addr, netmask,lease_period))
             if 'gateway' in ipv4_params:
                 outfile.write ("dhcp-option=tag:{}, option:router,{}\n"
-                               .format (subnet_id, ipv4_params['gateway']))
-            if 'nameservers' in subnet:
+                               .format (micronet_id, ipv4_params['gateway']))
+            if 'nameservers' in micronet:
                 dns_server=""
-                for server in subnet['nameservers']:
+                for server in micronet['nameservers']:
                     dns_server += "," + server
                 outfile.write ("dhcp-option=tag:{}, option:dns-server{}\n"
-                               .format (subnet_id, dns_server))
+                               .format (micronet_id, dns_server))
             outfile.write ("\n")
 
     def write_devices (self, outfile, devices):
-        for subnet_id, devices in devices.items ():
-            outfile.write ("# DEVICES FOR SUBNET: {}\n".format (subnet_id))
+        for micronet_id, devices in devices.items ():
+            outfile.write ("# DEVICES FOR MICRONET: {}\n".format (micronet_id))
             for device_id, device in devices.items ():
                 mac_addr = EUI (device ['macAddress']['eui48'])
                 mac_addr.dialect = netaddr.mac_unix_expanded
@@ -274,19 +278,19 @@ class DnsMasqAdapter:
                     lease_period = device ['leasePeriod']
                 else:
                     lease_period = self.default_lease_period
-                if 'allowHosts' in device:
-                    allow_hosts = json.dumps(device['allowHosts'])
+                if 'outRules' in device:
+                    out_rules = json.dumps(device['outRules'])
                 else:
-                    allow_hosts = []
-                if 'denyHosts' in device:
-                    deny_hosts = json.dumps(device['denyHosts'])
+                    out_rules = []
+                if 'inRules' in device:
+                    in_rules = json.dumps(device['inRules'])
                 else:
-                    deny_hosts = []
+                    in_rules = []
                 if (len(device_id) <= 12):
                     short_device_id = device_id
                 else:
                     short_device_id = device_id[0:8]+device_id[-4:]
-                outfile.write ("\n# Device: {},{},{}\n".format (device_id, allow_hosts, deny_hosts))
+                outfile.write ("\n# Device: {},{},{}\n".format (device_id, out_rules, in_rules))
                 # 08:00:27:3c:ae:02,micronet-client-2,set:micronet-client-2,10.50.0.43,2m
                 outfile.write ("dhcp-host={},{},set:{},{},{}\n"
                                .format (mac_addr, short_device_id, device_id, ip_addr, lease_period))
