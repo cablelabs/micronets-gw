@@ -59,7 +59,7 @@ source /opt/local/bin/virtualenvwrapper.sh-2.7
 If you want to access the REST API directly - running against the mock gateway adapter, use:
 
 ```
-MICRONETS_GW_SERVICE_CONFIG=config.MockDevelopmentConfig python ./runner.py
+python ./runner.py -c config.MockDevelopmentConfig
 ```
 
 If you want to have the gateway service connect to a websocket for access to the REST API and to receive notifications,
