@@ -17,6 +17,8 @@ class MyRequest (Request):
 class MyQuart (Quart):
     request_class = MyRequest
 
+logger = logging.getLogger ('micronets-gw-service')
+
 # create application instance
 app = MyQuart (__name__)
 
@@ -44,16 +46,20 @@ logging.basicConfig (level=logging_level, filename=logging_filename, filemode=lo
                      format='%(asctime)s %(name)s: %(levelname)s %(message)s')
 print (f"Logging to logfile {logging_filename} (level {logging_level})")
 
-logger = logging.getLogger ('micronets-gw-service')
-
 logger.info (f"Loading app module using {config}")
 
 dhcp_conf_model = None
 dhcp_adapter = None
-ws_connection = None
+ws_connector = None
+
+def get_logger():
+    return logger
 
 def get_dhcp_conf_model ():
     return dhcp_conf_model
+
+def get_ws_connector():
+    return ws_connector
 
 if not 'DHCP_ADAPTER' in app.config:
     exit (f"A DHCP_ADAPTER must be defined in the selected configuration ({app.config})")
@@ -74,24 +80,53 @@ elif adapter == "DNSMASQ":
 else:
     exit ("Unrecognized adapter type ({})".format (adapter))
 
-from .ws_connection import WSConnector
+from .ws_connector import WSConnector
 
 try:
-    ws_connection_enabled = app.config['WEBSOCKET_CONNECTION_ENABLED']
+    ws_connector_enabled = app.config['WEBSOCKET_CONNECTION_ENABLED']
     ws_server_address = app.config ['WEBSOCKET_SERVER_ADDRESS']
     ws_server_port = app.config ['WEBSOCKET_SERVER_PORT']
     ws_server_path = app.config ['WEBSOCKET_SERVER_PATH']
     ws_tls_certkey_file = app.config['WEBSOCKET_TLS_CERTKEY_FILE']
     ws_tls_ca_cert_file = app.config['WEBSOCKET_TLS_CA_CERT_FILE']
-    ws_connection = WSConnector (ws_server_address, ws_server_port, ws_server_path,
-                                 tls_certkey_file=ws_tls_certkey_file,
-                                 tls_ca_file=ws_tls_ca_cert_file)
-    if ws_connection_enabled:
-        ws_connection.connect ()
+    ws_connector = WSConnector (ws_server_address, ws_server_port, ws_server_path,
+                                tls_certkey_file=ws_tls_certkey_file,
+                                tls_ca_file=ws_tls_ca_cert_file)
+    if ws_connector_enabled:
+        ws_connector.connect ()
     else:
         logger.info("Not initiating websocket connection (Websocket connection disabled)")
 except Exception as ex:
     logger.info ("Error starting websocket connector:", exc_info=True)
+    exit (1)
+
+from .dpp_handler import DPPHandler
+
+try:
+    dpp_handler_enabled = app.config['DPP_HANDLER_ENABLED']
+    dpp_handler = DPPHandler ()
+    if dpp_handler_enabled:
+        ws_connector.register_handler (dpp_handler)
+    else:
+        logger.info("Not initiating dpp handler (DPP handler or Websocket connection disabled)")
+except Exception as ex:
+    logger.info ("Error registering DPP handler:", exc_info=True)
+    exit (1)
+
+from .hostapd_adapter import HostapdAdapter
+
+try:
+    hostapd_adapter_enabled = app.config['HOSTAPD_ADAPTER_ENABLED']
+    hostapd_adapter = None
+    if hostapd_adapter_enabled:
+        hostapd_cli_path = app.config['HOSTAPD_CLI_PATH']
+        logger.info(f"hostapd adapter enabled (hostapd cli path {hostapd_cli_path})")
+        hostapd_adapter = HostapdAdapter(hostapd_cli_path)
+        asyncio.ensure_future(hostapd_adapter.connect())
+    else:
+        logger.info("Not initiating hostapd adapter (disabled via config)")
+except Exception as ex:
+    logger.info ("Error starting hostapd adapter:", exc_info=True)
     exit (1)
 
 from .dhcp_conf import DHCPConf
@@ -110,7 +145,7 @@ except Exception as ex:
 try:
     min_dhcp_conf_update_int_s = app.config ['MIN_DHCP_UPDATE_INTERVAL_S']
     logger.info (f"Minimum DHCP update interval (seconds): {min_dhcp_conf_update_int_s}")
-    dhcp_conf_model = DHCPConf (ws_connection, dhcp_adapter, flow_adapter, min_dhcp_conf_update_int_s)
+    dhcp_conf_model = DHCPConf (ws_connector, dhcp_adapter, flow_adapter, min_dhcp_conf_update_int_s)
 except Exception as ex:
     logger.info ("Error starting with adapter:", exc_info=True)
     exit (1)

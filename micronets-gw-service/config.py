@@ -24,7 +24,8 @@ class BaseConfig:
     # For this command, the first parameter will be the bridge name and the second the flow filename
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {} {}'
     FLOW_ADAPTER_ENABLED = False
-
+    DPP_HANDLER_ENABLED = False
+    HOSTAPD_ADAPTER_ENABLED = False
 #
 # Mock Adapter Configurations
 #
@@ -40,6 +41,7 @@ class MockDevelopmentConfig (BaseMockConfig):
 
 class MockDevelopmentConfigWithWebsocket (MockDevelopmentConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
+    DPP_HANDLER_ENABLED = True
     WEBSOCKET_SERVER_ADDRESS = "localhost"
 
 #
@@ -65,6 +67,7 @@ class IscTestingConfig (BaseIscDhcpConfig):
 
 class IscProductionConfig (BaseIscDhcpConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
+    DPP_HANDLER_ENABLED = True
     DEBUG = False
     LOGGING_LEVEL = logging.INFO
     LOGFILE_MODE = 'a'
@@ -80,6 +83,7 @@ class BaseDnsmasqConfig (BaseConfig):
     DNSMASQ_LEASE_SCRIPT = BaseConfig.SERVER_BIN_DIR.joinpath ("dnsmasq_lease_notify.py")
 
 class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
+    DEBUG = True
     LISTEN_HOST = "127.0.0.1"
     LOGFILE_PATH = None
     LOGFILE_MODE = None
@@ -87,11 +91,13 @@ class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
     DNSMASQ_RESTART_COMMAND = []
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = BaseConfig.SERVER_BASE_DIR.parent\
                                            .joinpath("filesystem/opt/micronets-gw/doc/interfaces.sample")
-    DEBUG = True
+    HOSTAPD_ADAPTER_ENABLED = True
+    HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
 
 class DnsmasqDevelopmentConfigWithWebsocket (DnsmasqDevelopmentConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
     WEBSOCKET_SERVER_ADDRESS = "localhost"
+    DPP_HANDLER_ENABLED = True
 
 class DnsmasqDevelopmentConfigWithFlowAdapter (DnsmasqDevelopmentConfig):
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/bin/echo This is where I would add flows to bridge {} from {}'
@@ -99,11 +105,13 @@ class DnsmasqDevelopmentConfigWithFlowAdapter (DnsmasqDevelopmentConfig):
 
 class DnsmasqTestingConfig (BaseDnsmasqConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
+    DPP_HANDLER_ENABLED = True
     FLOW_ADAPTER_ENABLED = True
     DEBUG = True
 
 class DnsmasqProductionConfig (BaseDnsmasqConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
+    DPP_HANDLER_ENABLED = True
     DEBUG = False
     LOGGING_LEVEL = logging.INFO
     LOGFILE_MODE = 'a'
