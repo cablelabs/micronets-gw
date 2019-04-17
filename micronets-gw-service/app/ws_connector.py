@@ -11,7 +11,7 @@ from .utils import check_json_field
 
 logger = logging.getLogger ('micronets-gw-service')
 
-class WSHandler:
+class WSMessageHandler:
     def __init__ (self, type_prefix):
         self.type_prefix = type_prefix
         self.ws_connector = None
