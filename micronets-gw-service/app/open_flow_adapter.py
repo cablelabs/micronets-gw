@@ -142,6 +142,7 @@ class OpenFlowAdapter:
                             f"actions=NORMAL\n")
 
             # Walk the micronets
+            cur_table = 10
             for micronet_id, micronet in micronet_list.items ():
                 micronet_int = micronet ['interface']
                 micronet_bridge = micronet ['ovsBridge']
@@ -165,6 +166,7 @@ class OpenFlowAdapter:
                                  f" (interface {micronet_int}, micronet {micronet_network})\n")
                 for device_id, device in device_lists [micronet_id].items ():
                     device_mac = device ['macAddress']['eui48']
+                    hostport_spec_list = None
                     if 'allowHosts' in device:
                         hosts = device['allowHosts']
                         hostport_spec_list = await unroll_hostportspec_list (hosts)
@@ -269,7 +271,8 @@ class OpenFlowAdapter:
                     logger.info (line[0:-1])
                 logger.info ("------------------------------------------------------------------------")
 
-            run_cmd = self.apply_openflow_command.format (self.bridge_name, flow_file_path)
+            run_cmd = self.apply_openflow_command.format(**{"ovs_bridge": self.bridge_name,
+                                                            "flow_file": flow_file_path})
             try:
                 logger.info ("Running: " + run_cmd)
                 status_code = call (run_cmd.split ())
