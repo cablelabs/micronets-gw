@@ -41,8 +41,8 @@ class DnsMasqAdapter:
     dhcp_hostfile_re = re.compile ('dhcp-hostsfile\s*=\s*(.+)$')
 
     # # Micronet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
-    dhcp_device_prefix_re = re.compile ('^\s*#\sDevice:\s*(\w.[\w-]*)\s*,(\[[^\[\]]*\]),(\[[^\[\]]*\])\s*$',
-                                        re.ASCII)
+    dhcp_device_prefix_re = re.compile ('^\s*#\sDevice:\s*(\w.[\w-]*)\s*,\s*inRules:\s*(\[[^\[\]]*\]),'
+                                        '\s*outRules:\s*(\[[^\[\]]*\])\s*,\s*psk:\s*(\w+)\s*$', re.ASCII)
 
     # 08:00:27:e5:77:c5,micronet-client-1,set:micronet-client-1,10.40.0.71,2m
     dhcp_host_re = re.compile ('^\s*dhcp-host\s*=\s*(' + mac_addr_pattern + ')\s*,\s*(\w.[\w-]*)\s*,'
@@ -95,8 +95,10 @@ class DnsMasqAdapter:
                 prefix_host_id = dhcp_host_prefix_match.group(1)
                 prefix_host_out_rules_str = dhcp_host_prefix_match.group(2)
                 prefix_host_in_rules_str = dhcp_host_prefix_match.group(3)
+                prefix_host_psk_str = dhcp_host_prefix_match.group(4)
                 logger.info(f"DnsMasqAdapter.parse_conffile:  Found host {prefix_host_id}: "
-                            f"outRules:{prefix_host_out_rules_str}, denyHosts:{prefix_host_in_rules_str}")
+                            f"outRules:{prefix_host_out_rules_str}, denyHosts:{prefix_host_in_rules_str}, "
+                            f"psk:{prefix_host_psk_str}")
 
                 prefix_host_out_rules = json.loads(prefix_host_out_rules_str)
                 prefix_host_in_rules = json.loads(prefix_host_in_rules_str)
@@ -200,6 +202,7 @@ class DnsMasqAdapter:
                     device ['outRules'] = prefix_host_out_rules
                 if len(prefix_host_in_rules) > 0:
                     device ['inRules'] = prefix_host_in_rules
+                device ['psk'] = prefix_host_psk_str
                 device_list = devices_list [micronet_id]
                 device_list [prefix_host_id] = device
                 prefix_host_id = None
@@ -286,11 +289,13 @@ class DnsMasqAdapter:
                     in_rules = json.dumps(device['inRules'])
                 else:
                     in_rules = []
+                psk = device.get('psk')
                 if (len(device_id) <= 12):
                     short_device_id = device_id
                 else:
                     short_device_id = device_id[0:8]+device_id[-4:]
-                outfile.write ("\n# Device: {},{},{}\n".format (device_id, out_rules, in_rules))
+                outfile.write ("\n# Device: {}, inRules: {}, outRules: {}, psk: {}\n"
+                               .format (device_id, out_rules, in_rules, psk))
                 # 08:00:27:3c:ae:02,micronet-client-2,set:micronet-client-2,10.50.0.43,2m
                 outfile.write ("dhcp-host={},{},set:{},{},{}\n"
                                .format (mac_addr, short_device_id, device_id, ip_addr, lease_period))

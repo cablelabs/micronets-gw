@@ -178,13 +178,13 @@ Note: Currently only data type _application/json_ is supported.
 | networkAddress           | nested object | Y        | The network address definition. Either **_ipv4_** or **_ipv6_** must be specified ||
 | networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | "192.168.1.42" |
 | networkAddress.ipv6      | string        | N        | The IPv6 network definition | "fe80::104c:20b6:f71a:4e55" |
-| psk                      | string        | N        | A hex-encoded 32-bit PSK (64 hex digits) or password | "my password", "0102030405...20" |
+| psk                      | string        | N        | A 32-bit PSK (64 hex digits) hex-encoded WPA key or 6-63 character ASCII password | "my bad pa55word!", "0102030405...20" |
 | outRules                 | list (object) | N        | Micronet-Rules for outbound connections | “outRules": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
 | inRules                  | list (object) | N        | Micronet-Rules for inbound connections | “inRules": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
 
 ##### Notes:
 * The psk field is only relevant for wifi micronets currently
-* If psk is omitted when adding a wifi micronet, a psk will be generated and returned
+* If psk is omitted when adding a wifi micronet, a psk will be generated and returned in the device block
 * **inRules** and **outRules** are processed in the order they are defined.
 * If **inRules** or **outRules** is non-empty, the default action is "deny"
 * If no **outRules** are defined, all outgoing device connections/packets are allowed. 

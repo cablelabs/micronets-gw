@@ -742,6 +742,39 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
+* Creating a device with a PSK:
+
+    ```
+    curl -X POST -H "Content-Type: application/json" -d '{
+           "device": {
+               "deviceId": "MyDevice01",
+               "macAddress": {
+                   "eui48": "00:23:12:0f:b0:26"
+               },
+               "networkAddress": {
+                   "ipv4": "192.168.1.42"
+               },
+               "psk": "736b697070657220697320612076657279207665727920676f6f642063617421"
+           }
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+    ```
+
+    Expected output: (status code 201)
+
+    ```json
+    {
+        "device": {
+            "deviceId": "MyDevice01",
+            "macAddress": {
+               "eui48": "00:23:12:0f:b0:26"
+            },
+            "networkAddress": {
+                "ipv4": "192.168.1.42"
+            }
+        }
+    }
+    ```
+
 * Updating a device:
 
     ```

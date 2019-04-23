@@ -126,7 +126,6 @@ def check_vlan (container, field_name, required):
             raise InvalidUsage(400, message=f"Supplied vlan ID '{vlan}' in '{container}' field"
                                     f"'{field_name}' is not valid: vlans must be between 1 and 4094")
 
-
 def check_micronet (micronet, micronet_id=None, required=True):
     check_for_unrecognized_entries (micronet, ['micronetId','ipv4Network','nameservers','ovsBridge','interface','vlan'])
     body_micronet_id = check_field (micronet, 'micronetId', str, required)
@@ -210,11 +209,26 @@ def check_mac_address_field (json_obj, mac_addr_field, required):
         raise InvalidUsage (400, message=f"Supplied MAC '{mac_field}' in '{mac_addr_field}' is not valid")
     return mac_field
 
+device_wpa_psk_re = re.compile('^[0-9a-fA-F]{64}$', re.ASCII)
+device_wpa_passphrase_re = re.compile('^[ -~]{8,63}$')
+
+def check_wpa_psk(container, field_name, required):
+    psk = check_field(container, field_name, str, required)
+    if psk:
+        if len(psk) == 64:
+            if not device_wpa_psk_re.match(psk):
+                raise InvalidUsage(400, message=f"Supplied WPA PSK '{psk}' is invalid (must be 64 hex digits)")
+        else:
+            if not device_wpa_passphrase_re.match(psk):
+                raise InvalidUsage(400, message=f"Supplied WPA passphrase '{psk}' is invalid (must be 8-63 ASCII characters)")
+    return psk
+
 async def check_rules (container, field_name, required):
     rules = check_field (container, field_name, (list), required)
     if rules:
         for rule in rules:
             await check_rule (rule)
+    return rules
 
 async def check_rule (rule):
     check_for_unrecognized_entries (rule, ['action', 'source', 'sourcePort', 'dest', 'destPort'])
@@ -254,7 +268,7 @@ def check_portspec (container, field_name, required):
     return portspec
 
 async def check_device (device, required):
-    check_for_unrecognized_entries (device, ['deviceId', 'macAddress', 'networkAddress', 'outRules', 'inRules'])
+    check_for_unrecognized_entries (device, ['deviceId', 'macAddress', 'networkAddress', 'psk', 'outRules', 'inRules'])
     device_id = check_field (device, 'deviceId', str, required)
     if device_id:
         device_id = device_id.lower ()
@@ -275,6 +289,8 @@ async def check_device (device, required):
     else:
         check_for_unrecognized_entries (network_address, ['ipv4'])
         check_ipv4_address_field (network_address, 'ipv4', required)
+
+    check_wpa_psk (device, 'psk', required)
 
     await check_rules (device, 'outRules', False)
     await check_rules (device, 'inRules', False)
