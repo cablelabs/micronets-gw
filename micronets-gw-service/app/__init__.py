@@ -51,6 +51,7 @@ logger.info (f"Loading app module using {config}")
 conf_model = None
 dhcp_adapter = None
 ws_connector = None
+dpp_handler = None
 
 def get_logger():
     return logger
@@ -60,6 +61,9 @@ def get_conf_model ():
 
 def get_ws_connector():
     return ws_connector
+
+def get_dpp_handler():
+    return dpp_handler
 
 if not 'DHCP_ADAPTER' in app.config:
     exit (f"A DHCP_ADAPTER must be defined in the selected configuration ({app.config})")
@@ -104,8 +108,8 @@ from .dpp_handler import DPPHandler
 
 try:
     dpp_handler_enabled = app.config['DPP_HANDLER_ENABLED']
-    dpp_handler = DPPHandler ()
     if dpp_handler_enabled:
+        dpp_handler = DPPHandler()
         ws_connector.register_handler (dpp_handler)
     else:
         logger.info("Not initiating dpp handler (DPP handler or Websocket connection disabled)")

@@ -18,3 +18,7 @@ class DPPHandler(WSMessageHandler):
 
     async def handle_message(self, message):
         logger.info("DPPHandler.handle_message: {message}")
+
+    async def onboard_device(self, micronet_id, device_id, onboard_params):
+        logger.info(f"DPPHandler.onboard_device(micronet '{micronet_id}, device '{device_id}', onboard_params '{onboard_params}')")
+        return '', 200

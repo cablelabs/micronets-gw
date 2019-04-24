@@ -1,6 +1,6 @@
 from quart import request, jsonify
 from ipaddress import IPv4Address, IPv4Network
-from app import app, get_conf_model
+from app import app, get_conf_model, get_dpp_handler
 from .utils import InvalidUsage, get_ipv4_hostports_for_hostportspec, parse_portspec
 
 import re
@@ -354,6 +354,16 @@ async def delete_device (micronet_id, device_id):
     check_micronet_id (micronet_id, request.path)
     check_device_id (device_id, request.path)
     return await get_conf_model ().delete_device (micronet_id, device_id)
+
+@app.route (api_prefix + '/micronets/<micronet_id>/devices/<device_id>/onboard', methods=['PUT'])
+async def onboard_device (micronet_id, device_id):
+    micronet_id = micronet_id.lower ()
+    device_id = device_id.lower ()
+    check_micronet_id (micronet_id, request.path)
+    check_device_id (device_id, request.path)
+    top_level = await request.get_json ()
+    check_for_unrecognized_entries (top_level, ['dpp'])
+    return await get_dpp_handler().onboard_device (micronet_id, device_id, top_level)
 
 async def check_lease_event (lease_event):
     event_fields = check_field (lease_event, 'leaseChangeEvent', dict, True)

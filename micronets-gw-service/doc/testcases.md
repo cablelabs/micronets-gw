@@ -1,9 +1,5 @@
 # Micronets Gateway Service Test Cases
 
-* To start the server with the mock DHCP conf file, ensure that `USE_MOCK_DHCP_CONFIG = True` is set in the `BaseConfig` section of `config.py` and start the server using:
-
-    `python runner.py runserver`
-
 ### MICRONET ENDPOINT TEST CASES:
 
 Note: JSON request/response object fields should not be assumed to be in any particular order (JSON object fields have no ordering requirements). e.g. `{"a":1, "b":2, "c":{"d":4, "e":5}}` is equivalent to `{"b":2, "c":{"e":5, "d":4}, "a":1}`.
@@ -587,7 +583,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-### DHCP DEVICE ENDPOINT TEST CASES:
+### MICRONET DEVICE ENDPOINT TEST CASES:
 
 #### Positive Device Test Cases:
 
@@ -898,6 +894,18 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
         }
     }
     ```
+
+* Initiating DPP onboarding:
+
+  DPP onboarding can be initiated by providing a 
+
+   ```
+   curl -X PUT -H "Content-Type: application/json" -d '{
+           "dpp": {
+               "uri": "DPP:C:81/1;M:2c:d0:5a:6e:ca:3c;I:KYZRQ;K:MDkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDIgAC/nFQKV1+CErzr6QCUT0jFIno3CaTRr3BW2n0ThU4mAw=;;"
+           }
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices/MyDevice03/onboard
+   ```
 
 #### Negative Device Test Cases:
 
