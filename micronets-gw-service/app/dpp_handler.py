@@ -31,11 +31,11 @@ class DPPHandler(WSMessageHandler):
             if self.simulate_response_events == "with success":
                 logger.info (f"DPPHandler.onboard_device: simulating success response to onboard {device_id} "
                              f"in {self.simulated_event_wait_s} seconds")
-                asyncio.ensure_future(send_dpp_onboard_event_delayed("OnboardingCompleteEvent", "This is only a test"))
+                asyncio.ensure_future(send_dpp_onboard_event_delayed("DPPOnboardingCompleteEvent", "This is only a test"))
             elif self.simulate_response_events == "with failure":
                 logger.info(f"DPPHandler.onboard_device: simulating fail response to onboard {device_id} "
                             f"in {self.simulated_event_wait_s} seconds")
-                asyncio.ensure_future(send_dpp_onboard_event_delayed("OnboardingFailedEvent", "This is only a test"))
+                asyncio.ensure_future(send_dpp_onboard_event_delayed("DPPOnboardingFailedEvent", "This is only a test"))
             else:
                 logger.warning(f"DPPHandler.onboard_device: unrecognized value for SIMULATE_ONBOARD_RESPONSE_EVENTS: "
                                + self.simulate_response_events)
@@ -51,15 +51,14 @@ class DPPHandler(WSMessageHandler):
             return f"The websocket connection to {ws_uri} is not connected/ready", 500
 
         dev_mac_field = device['macAddress']['eui48']
-        dev_ip_field = device['networkAddress']['ipv4']
 
-        dpp_onboarding_complete_event = { 'micronetId': micronet['micronetId'],
+        dpp_onboarding_complete_event = { event_name: {
+                                          'micronetId': micronet['micronetId'],
                                           'deviceId': device['deviceId'],
-                                          'macAddress': {"eui48": dev_mac_field},
-                                          'networkAddress': {"ipv4": dev_ip_field}
-                                        }
+                                          'macAddress': dev_mac_field
+                                          } }
         if reason:
-            dpp_onboarding_complete_event['reason'] = reason
+            dpp_onboarding_complete_event[event_name]['reason'] = reason
         logger.info (f"DPPHandler.send_dpp_onboard_complete: sending:")
         logger.info (json.dumps (dpp_onboarding_complete_event, indent=4))
         await ws_connector.send_event_message ("DPP", event_name, dpp_onboarding_complete_event)

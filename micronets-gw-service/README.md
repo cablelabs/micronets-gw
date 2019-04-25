@@ -144,10 +144,10 @@ Note: Currently only data type _application/json_ is supported.
 | update | PUT /micronets/**_micronetId_**    | Update a micronet definition. This will return 400 if the message body contains a **_micronetId_** that doesn't match the **_micronetId_** in the URI path or if the network conflicts with an already-existing network and will return 404 (Not Found) if the **_micronetId_** doesn't exist. |
 | delete | DELETE /micronets/**_micronetId_** | Delete a micronet definition. The operation will return a status code of 405 (Method Not Allowed) if the micronet still contains device reservations and will return 404 (Not Found) if the **_micronetId_** doesn't exist. |
 
-### DEVICE ADDRESS RESERVATION
+### DEVICE ADDRESS RESERVATION AND ONBOARDING
 
 These definitions allow for the management of micronet network devices.
-Devices must be defined and exist within the context of a micronet network.
+Devices must be defined and exist within the context of a micronet.
 
 #### Micronet Device Representation
 
@@ -191,7 +191,7 @@ Note: Currently only data type _application/json_ is supported.
 * If no **inRules** are defined, no inbound connections are allowed other than data related to allowed outgoing connections.
 * If **inRules** or **outRules** is defined, it overrides the corresponding definition in the contained micronet 
 
-#### Micronet Device Reservation Endpoints/Operations
+#### Micronet Device Endpoints/Operations
 
 All request URIs are prefixed by **/micronets/v1/gateway** unless otherwise noted
 
@@ -203,6 +203,79 @@ All request URIs are prefixed by **/micronets/v1/gateway** unless otherwise note
 | get    | GET /micronets/**_micronetId_**/devices/**_deviceId_**    | Return a particular device definition. This will return 404 (Not Found) if the **_micronetId_** or **_deviceId_** doesn't exist. |
 | update | PUT /micronets/**_micronetId_**/devices/**_deviceId_**    | Update a device definition |
 | delete | DELETE /micronets/**_micronetId_**/devices/**_deviceId_** | Delete a device definition.  |
+
+### MICRONET DEVICE ONBOARDING OPERATIONS
+
+**Micronet Device Onboarding Request:**
+```json
+{
+    "dpp": {
+       "uri": string
+    }
+}
+```
+
+| Property name            | Value         | Required | Description                           | Example      |
+| ------------------------ | ------------- | -------- | ------------------------------------- | ------------- 
+| dpp                      | nested object | N        | Parameters for DPP-based onboarding   | |
+| uri                      | string        | Y        | The device's DPP onboarding URI (e.g. from QR code) | DPP:C:81/1;M:2c:d0:5a:6e:ca:3c;I:KYZRQ;K:MDkwEwYH....hU4mAw=;; |
+
+#### Micronet Device Onboarding Endpoints/Operations
+
+All request URIs are prefixed by `/micronets/v1/gateway` unless otherwise noted
+
+| Method | HTTP request                                     | Description                           |
+| ------ | ------------------------------------------------ | ------------------------------------- |
+| update | PUT /micronets/**_micronetId_**/devices/**_deviceId_**/onboard | Initiate device onboarding.  |
+| delete | DELETE /micronets/**_micronetId_**/devices/**_deviceId_**/onboard | Cancel device onboarding.  |
+
+#### Notes:
+
+* If `update` on the onboarding endpoint returns a success status code (200), an onboarding event will be 
+  sent on the active websocket connection if/when the onboarding operation succeeds, fails, or times out. 
+* Currently only DPP-based onboarding is supported via the onboarding endpoint. But others may be added 
+  in the future (with a corresponding json message definition)
+
+#### Micronet Device Onboarding Event Notifications
+
+These events are sent over the active websocket connection in response to a successful onboarding
+request initiated via the `onboarding` endpoint described above.
+
+Note: Currently only data type `application/json` is supported.
+
+**Device Onboarding Complete Event Notification:**
+```json
+{
+    "DPPOnboardingCompleteEvent": {
+        "micronetId": string,
+        "deviceId": string,
+        "macAddress": string,
+        "reason": string
+    }
+}
+```
+This will be posted to the websocket with messageType `EVENT:DPP:OnboardingCompleteEvent`
+
+**Device Onboarding Failed Event Notification:**
+```json
+{
+    "DPPOnboardingFailedEvent": {
+        "micronetId": string,
+        "deviceId": string,
+        "macAddress": string,
+        "reason": string
+    }
+}
+```
+
+This will be posted to the websocket with messageType `EVENT:DPP:OnboardingFailedEvent`
+
+| Property name            | Value         | Required | Description                           | Example      |
+| ------------------------ | ------------- | -------- | ------------------------------------- | ------------- 
+| micronetId               | string        | Y        | Unique alphanumeric ID for the Micronet | "TestMicronet42" |
+| deviceId                 | string        | Y        | An alphanumeric device identifier (max 64 characters) | "device-1234"|
+| macAddress               | string        | Y        | An EUI-48 format MAC address | "00:23:12:0f:b0:26" |
+| reason                   | string        | N        | A human-readable reason for the onboarding success/failure|
 
 ### MICRONET DEVICE LEASE CHANGE NOTIFICATIONS
 
