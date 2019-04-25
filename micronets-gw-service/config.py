@@ -43,6 +43,7 @@ class MockDevelopmentConfigWithWebsocket (MockDevelopmentConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
     DPP_HANDLER_ENABLED = True
     WEBSOCKET_SERVER_ADDRESS = "localhost"
+    SIMULATE_ONBOARD_RESPONSE_EVENTS = "with success"
 
 #
 # ISC DHCP Adapter Configurations
@@ -98,6 +99,7 @@ class DnsmasqDevelopmentConfigWithLocalWebsocket (DnsmasqDevelopmentConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
     WEBSOCKET_SERVER_ADDRESS = "localhost"
     DPP_HANDLER_ENABLED = True
+    SIMULATE_ONBOARD_RESPONSE_EVENTS = "with success"
 
 class DnsmasqDevelopmentConfigWithFlowRules (DnsmasqDevelopmentConfig):
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/sort -t= -k 2n -k 3rn {flow_file}'

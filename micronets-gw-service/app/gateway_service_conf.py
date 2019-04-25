@@ -52,6 +52,7 @@ class GatewayServiceConf:
             raise InvalidUsage (404, message=f"micronet '{micronet_id}' doesn't exist in micronet list")
         if micronet_id not in self.device_lists:
             raise InvalidUsage (404, message=f"micronet '{micronet_id}' doesn't exist in device list")
+        return self.micronet_list[micronet_id]
 
     def check_micronet_unique (self, micronet):
         micronet_id = micronet ['micronetId'].lower ()
@@ -159,12 +160,14 @@ class GatewayServiceConf:
         micronet_devices = self.device_lists [micronet_id]
         if device_id not in micronet_devices:
             raise InvalidUsage (404, message=f"Device '{device_id}' doesn't exist in micronet '{micronet_id}'")
+        return micronet_devices[device_id]
 
     def check_device_unique (self, device_id, micronet_id):
         device_list = self.device_lists [micronet_id]
         if device_id in device_list:
             raise InvalidUsage (409, message=f"Supplied device '{device_id}' already exists for "
                                              f"micronet '{micronet_id}'");
+        return device_list[device_id]
 
     def check_device_for_micronet (self, device, micronet):
         ipv4_net_params = micronet ['ipv4Network']

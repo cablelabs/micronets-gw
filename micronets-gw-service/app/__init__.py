@@ -109,7 +109,7 @@ from .dpp_handler import DPPHandler
 try:
     dpp_handler_enabled = app.config['DPP_HANDLER_ENABLED']
     if dpp_handler_enabled:
-        dpp_handler = DPPHandler()
+        dpp_handler = DPPHandler(app.config)
         ws_connector.register_handler (dpp_handler)
     else:
         logger.info("Not initiating dpp handler (DPP handler or Websocket connection disabled)")
