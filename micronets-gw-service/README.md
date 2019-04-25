@@ -84,7 +84,7 @@ All request URIs are prefixed by **/micronets/v1/gateway** unless otherwise note
 
 See the `testcases.md` document in the `test` directory for examples.
 
-### Micronet API
+### Micronet Management API
 
 Micronet device definitions must be made in the context of a Micronet.
 The operations defined in this section allow for the management of these Micronets.
@@ -133,7 +133,7 @@ Note: Currently only data type _application/json_ is supported.
 * If no **outRules** are defined, all outgoing device connections/packets are allowed. 
 * If no **inRules** are defined, no inbound connections are allowed other than data related to allowed outgoing connections.
 
-#### Micronet Network Endpoints/Operations
+#### Micronet Management Endpoints/Operations
 
 | Method | HTTP request                                     | Description                           |
 | ------ | ------------------------------------------------ | ------------------------------------- |
@@ -144,7 +144,7 @@ Note: Currently only data type _application/json_ is supported.
 | update | PUT /micronets/**_micronetId_**    | Update a micronet definition. This will return 400 if the message body contains a **_micronetId_** that doesn't match the **_micronetId_** in the URI path or if the network conflicts with an already-existing network and will return 404 (Not Found) if the **_micronetId_** doesn't exist. |
 | delete | DELETE /micronets/**_micronetId_** | Delete a micronet definition. The operation will return a status code of 405 (Method Not Allowed) if the micronet still contains device reservations and will return 404 (Not Found) if the **_micronetId_** doesn't exist. |
 
-### DEVICE ADDRESS RESERVATION AND ONBOARDING
+### Device Management API
 
 These definitions allow for the management of micronet network devices.
 Devices must be defined and exist within the context of a micronet.
@@ -204,7 +204,7 @@ All request URIs are prefixed by **/micronets/v1/gateway** unless otherwise note
 | update | PUT /micronets/**_micronetId_**/devices/**_deviceId_**    | Update a device definition |
 | delete | DELETE /micronets/**_micronetId_**/devices/**_deviceId_** | Delete a device definition.  |
 
-### MICRONET DEVICE ONBOARDING OPERATIONS
+### Micronet Device On-boarding
 
 **Micronet Device Onboarding Request:**
 ```json
@@ -229,7 +229,7 @@ All request URIs are prefixed by `/micronets/v1/gateway` unless otherwise noted
 | update | PUT /micronets/**_micronetId_**/devices/**_deviceId_**/onboard | Initiate device onboarding.  |
 | delete | DELETE /micronets/**_micronetId_**/devices/**_deviceId_**/onboard | Cancel device onboarding.  |
 
-#### Notes:
+##### Notes:
 
 * If `update` on the onboarding endpoint returns a success status code (200), an onboarding event will be 
   sent on the active websocket connection if/when the onboarding operation succeeds, fails, or times out. 
