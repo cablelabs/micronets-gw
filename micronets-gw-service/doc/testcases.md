@@ -897,15 +897,34 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
 * Initiating DPP onboarding:
 
-  DPP onboarding can be initiated by providing a 
+    DPP onboarding can be initiated by providing a 
 
-   ```
-   curl -X PUT -H "Content-Type: application/json" -d '{
+    ```
+    curl -X PUT -H "Content-Type: application/json" -d '{
            "dpp": {
                "uri": "DPP:C:81/1;M:2c:d0:5a:6e:ca:3c;I:KYZRQ;K:MDkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDIgAC/nFQKV1+CErzr6QCUT0jFIno3CaTRr3BW2n0ThU4mAw=;;"
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices/MyDevice03/onboard
-   ```
+       }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices/MyDevice03/onboard
+    ```
+
+    Expected event: (when the onboard call is successful)
+    ```json
+    {
+        "message" : {
+            "messageId" : 1234,
+            "messageType" : "EVENT:DPP:DPPOnboardingCompleteEvent",
+            "requiresResponse" : false,
+            "dataFormat" : "application/json",
+            "messageBody" : {
+                "DPPOnboardingCompleteEvent" : {
+                    "deviceId" : "MyDevice03",
+                    "micronetId" : "mockmicronet007",
+                    "macAddress" : "00:23:12:0f:b0:26"
+                 }
+            }
+        }
+    }
+    ```
 
 #### Negative Device Test Cases:
 
