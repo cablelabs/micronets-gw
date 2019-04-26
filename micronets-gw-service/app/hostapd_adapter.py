@@ -33,27 +33,27 @@ class HostapdAdapter:
                                          shell=False, bufsize=1,
                                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-        self.process_reader_thread = threading.Thread(target=self.read_process_data)
+        self.process_reader_thread = threading.Thread(target=self.read_cli_output)
         self.process_reader_thread.start()
 
-    def read_process_data(self):
+    def read_cli_output(self):
         response_data = None
         self.command_queue = Queue()
-        logger.info(f"HostapdAdapter:read_process_data: Started")
+        logger.info(f"HostapdAdapter:read_cli_process_data: Started")
         command = None
         while True:
             try:
                 # https://docs.python.org/3/library/io.html
 
-                # logger.debug(f"HostapdAdapter:read_process_data: Waiting on stdout.readline()...")
+                # logger.debug(f"HostapdAdapter:read_cli_output: Waiting on stdout.readline()...")
                 data = self.hostapd_cli_process.stdout.readline()
                 if not data:
-                    logger.info(f"HostapdAdapter:read_process_data: Got EOF from hostapd_cli - exiting")
+                    logger.info(f"HostapdAdapter:read_cli_output: Got EOF from hostapd_cli - exiting")
                     break
                 line = data.decode("utf-8")
                 if len(line) == 0:
                     continue
-                logger.debug(f"HostapdAdapter:read_process_data: \"{line[:-1]}\"")
+                logger.debug(f"HostapdAdapter:read_cli_output: \"{line[:-1]}\"")
                 cli_event_match = HostapdAdapter.cli_event_re.match(line)
                 if cli_event_match:
                     event_data = cli_event_match.group(2)
@@ -73,18 +73,18 @@ class HostapdAdapter:
                     response_data += line
                     pos = response_data.find("> ")
                     if pos > 0:
-                        # logger.debug (f"HostapdAdapter:read_process_data: aggregate response_data: {response_data}")
+                        # logger.debug (f"HostapdAdapter:read_cli_output: aggregate response_data: {response_data}")
                         command_type = type(command).__name__
                         complete_response = response_data[:pos].rstrip()
-                        logger.debug (f"HostapdAdapter:read_process_data: Found command response for {command}: {complete_response}")
-                        # logger.debug (f"HostapdAdapter:read_process_data: Calling process_response_data()...")
+                        logger.debug (f"HostapdAdapter:read_cli_output: Found command response for {command}: {complete_response}")
+                        # logger.debug (f"HostapdAdapter:read_cli_output: Calling process_response_data()...")
                         asyncio.run_coroutine_threadsafe(command.process_response_data(complete_response), 
                                                          command.event_loop)
-                        # logger.debug (f"HostapdAdapter:read_process_data: process_response_data() returned.")
+                        # logger.debug (f"HostapdAdapter:read_cli_output: process_response_data() returned.")
                         response_data = None
                         command = None
             except Exception as ex:
-                logger.warning(f"HostapdAdapter:read_process_data: Error processing data: {ex}", exc_info=True)
+                logger.warning(f"HostapdAdapter:read_cli_output: Error processing data: {ex}", exc_info=True)
 
 
     async def process_event(self, event_data):
