@@ -13,10 +13,11 @@ import logging
 logger = logging.getLogger ('micronets-gw-service')
 
 class GatewayServiceConf:
-    def __init__ (self, ws_connection, dhcp_adapter, flow_adapter, min_update_interval_s):
+    def __init__ (self, ws_connection, dhcp_adapter, flow_adapter, hostapd_adapter, min_update_interval_s):
         self.ws_connection = ws_connection
         self.dhcp_adapter = dhcp_adapter
         self.flow_adapter = flow_adapter
+        self.hostapd_adapter = hostapd_adapter
         self.min_update_interval_s = min_update_interval_s
         self.update_conf_task = None
         read_conf = dhcp_adapter.read_from_conf ()
@@ -43,6 +44,8 @@ class GatewayServiceConf:
         self.dhcp_adapter.save_to_conf (self.micronet_list, self.device_lists)
         if self.flow_adapter:
             await self.flow_adapter.update(self.micronet_list, self.device_lists)
+        if self.hostapd_adapter:
+            await self.hostapd_adapter.update(self.micronet_list, self.device_lists)
 
     #
     # micronet Operations

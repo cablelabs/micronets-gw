@@ -52,6 +52,8 @@ conf_model = None
 dhcp_adapter = None
 ws_connector = None
 dpp_handler = None
+hostapd_adapter = None
+flow_adapter = None
 
 def get_logger():
     return logger
@@ -121,11 +123,12 @@ from .hostapd_adapter import HostapdAdapter
 
 try:
     hostapd_adapter_enabled = app.config['HOSTAPD_ADAPTER_ENABLED']
-    hostapd_adapter = None
     if hostapd_adapter_enabled:
-        hostapd_cli_path = app.config['HOSTAPD_CLI_PATH']
-        logger.info(f"hostapd adapter enabled (hostapd cli path {hostapd_cli_path})")
-        hostapd_adapter = HostapdAdapter(hostapd_cli_path)
+        hostapd_cli_path = app.config.get('HOSTAPD_CLI_PATH')
+        hostapd_psk_file_path = app.config.get('HOSTAPD_PSK_FILE_PATH')
+        logger.info(f"hostapd adapter enabled (hostapd_psk_file_path {hostapd_psk_file_path}"
+                                             f",hostapd cli path {hostapd_cli_path})")
+        hostapd_adapter = HostapdAdapter(hostapd_psk_file_path, hostapd_cli_path)
         asyncio.ensure_future(hostapd_adapter.connect())
     else:
         logger.info("Not initiating hostapd adapter (disabled via config)")
@@ -133,9 +136,6 @@ except Exception as ex:
     logger.info ("Error starting hostapd adapter:", exc_info=True)
     exit (1)
 
-from .gateway_service_conf import GatewayServiceConf
-
-flow_adapter = None
 try:
     if app.config['FLOW_ADAPTER_ENABLED']:
         from .open_flow_adapter import OpenFlowAdapter
@@ -146,16 +146,18 @@ try:
 except Exception as ex:
     logger.warning ("Error starting flow adapter:", exc_info=True)
 
+from .gateway_service_conf import GatewayServiceConf
+
 try:
     min_dhcp_conf_update_int_s = app.config ['MIN_DHCP_UPDATE_INTERVAL_S']
     logger.info (f"Minimum DHCP update interval (seconds): {min_dhcp_conf_update_int_s}")
-    conf_model = GatewayServiceConf (ws_connector, dhcp_adapter, flow_adapter, min_dhcp_conf_update_int_s)
+    conf_model = GatewayServiceConf (ws_connector, dhcp_adapter, flow_adapter, hostapd_adapter,
+                                     min_dhcp_conf_update_int_s)
 except Exception as ex:
     logger.info ("Error starting with adapter:", exc_info=True)
     exit (1)
 
-if flow_adapter:
-    asyncio.ensure_future(conf_model.update_conf())
+asyncio.ensure_future(conf_model.update_conf())
 
 # Initialize the API
 from . import gateway_service_api

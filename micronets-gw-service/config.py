@@ -26,6 +26,7 @@ class BaseConfig:
     FLOW_ADAPTER_ENABLED = False
     DPP_HANDLER_ENABLED = False
     HOSTAPD_ADAPTER_ENABLED = False
+
 #
 # Mock Adapter Configurations
 #
@@ -82,7 +83,6 @@ class BaseDnsmasqConfig (BaseConfig):
     DNSMASQ_CONF_FILE = '/etc/dnsmasq.d/micronets'
     DNSMASQ_RESTART_COMMAND = ['sudo','/etc/init.d/dnsmasq','restart']
     DNSMASQ_LEASE_SCRIPT = BaseConfig.SERVER_BIN_DIR.joinpath ("dnsmasq_lease_notify.py")
-    HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
     HOSTAPD_ADAPTER_ENABLED = False
 
 class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
@@ -94,6 +94,8 @@ class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
     DNSMASQ_RESTART_COMMAND = []
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = BaseConfig.SERVER_BASE_DIR.parent\
                                            .joinpath("filesystem/opt/micronets-gw/doc/interfaces.sample")
+    HOSTAPD_ADAPTER_ENABLED = True
+    HOSTAPD_PSK_FILE_PATH = 'doc/hostapd.wpa_psk.sample'
 
 class DnsmasqDevelopmentConfigWithLocalWebsocket (DnsmasqDevelopmentConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
@@ -110,6 +112,8 @@ class DnsmasqTestingConfig (BaseDnsmasqConfig):
     DPP_HANDLER_ENABLED = True
     FLOW_ADAPTER_ENABLED = True
     HOSTAPD_ADAPTER_ENABLED = True
+    HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
+    HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
     DEBUG = True
 
 class DnsmasqProductionConfig (DnsmasqTestingConfig):
