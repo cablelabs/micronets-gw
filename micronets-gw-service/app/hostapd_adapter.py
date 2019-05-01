@@ -17,6 +17,7 @@ logger = logging.getLogger ('hostapd_adapter')
 class HostapdAdapter:
 
     cli_event_re = re.compile ('^.*<([0-9+])>(.+)$')
+    cli_ready_re = re.compile ('Connection.*established|Interactive mode')
 
     def __init__ (self, hostapd_psk_path, hostapd_cli_path, hostapd_cli_args=()):
         self.hostapd_psk_path = Path(hostapd_psk_path) if hostapd_psk_path else None
@@ -27,6 +28,7 @@ class HostapdAdapter:
         self.command_queue = None
         self.event_loop = None
         self.cli_connected = False
+        self.cli_ready = False
 
     async def update (self, micronet_list, device_lists):
         logger.info (f"HostapdAdapter.update()")
@@ -42,7 +44,7 @@ class HostapdAdapter:
                 vlan_id = micronet.get('vlan')
 
                 outfile.write (f"# DEVICES FOR MICRONET {micronet_id} (vlan {vlan_id})\n")
-                outfile.write ("###############################################################")
+                outfile.write ("###############################################################\n\n")
                 for device_id, device in devices.items ():
                     psk = device.get('psk')
                     mac_addr = netaddr.EUI(device ['macAddress']['eui48'])
@@ -69,15 +71,16 @@ class HostapdAdapter:
             logger.info ("------------------------------------------------------------------------")
 
 
-        if self.cli_connected:
+        if self.cli_ready:
             logger.info (f"HostapdAdapter.update: Issuing PSK reload command")
             psk_reload_command = await self.send_command(ReloadPSKCLICommand())
             if await psk_reload_command.was_successful():
                 logger.info(f"HostapdAdapter.update: PSK reload successful")
             else:
-                logger.warning(f"HostapdAdapter.update: PSK reload FAILED (received '{psk_reload_command.get_response()}')")
+                response = await psk_reload_command.get_response()
+                logger.warning(f"HostapdAdapter.update: PSK reload FAILED (received '{response}')")
         else:
-            logger.warning(f"HostapdAdapter.update: Could not issue PSK reload (hostapd CLI not connected)")
+            logger.warning(f"HostapdAdapter.update: Could not issue PSK reload (CLI not ready)")
 
     async def connect(self):
         logger.info(f"HostapdAdapter:connect()")
@@ -97,14 +100,18 @@ class HostapdAdapter:
         self.cli_connected = True
         self.process_reader_thread = threading.Thread(target=self.read_cli_output)
         self.process_reader_thread.start()
+        logger.info(f"HostapdAdapter:connect: Reader thread started")
 
     def is_cli_connected(self):
         return self.cli_connected
 
+    def is_cli_ready(self):
+        return self.cli_ready
+
     def read_cli_output(self):
         response_data = None
         self.command_queue = Queue()
-        logger.info(f"HostapdAdapter:read_cli_process_data: Started")
+        logger.info(f"HostapdAdapter:read_cli_output: Started")
         command = None
         while True:
             try:
@@ -119,9 +126,12 @@ class HostapdAdapter:
                 if len(line) == 0:
                     continue
                 logger.debug(f"HostapdAdapter:read_cli_output: \"{line[:-1]}\"")
+                if not self.cli_ready and self.cli_ready_re.match(line):
+                    logger.info(f"HostapdAdapter:read_cli_output: hostapd CLI is now READY")
+                    self.cli_ready = True
                 cli_event_match = HostapdAdapter.cli_event_re.match(line)
                 if cli_event_match:
-                    event_data = cli_event_match.group(2)
+                    event_data = cli_event_match.group(2).strip()
                     asyncio.run_coroutine_threadsafe(self.process_event(event_data), self.event_loop)
                     continue
                 if not command:
@@ -150,16 +160,20 @@ class HostapdAdapter:
                         command = None
             except Exception as ex:
                 logger.warning(f"HostapdAdapter:read_cli_output: Error processing data: {ex}", exc_info=True)
-            finally:
-                self.cli_connected = False
+        self.cli_connected = False
+        self.cli_ready = False
 
     async def process_event(self, event_data):
         logger.info(f"HostapdAdapter:process_event: EVENT: (\"{event_data}\")")
-
+        if (event_data.startswith("CTRL-EVENT-TERMINATING")):
+            logger.info(f"HostapdAdapter:process_event: hostapd CLI is now NOT READY")
+            self.cli_ready = False
 
     async def send_command(self, command):
         if not isinstance(command, HostapdCLICommand):
             raise TypeError
+        if not self.cli_ready:
+            raise Exception("hostapd adapter CLI is not ready")
         self.command_queue.put(command)
         command_string = command.get_command_string()
         logger.info (f"HostapdAdapter:send_command: issuing command: {command} (\"{command_string}\")")
@@ -293,7 +307,7 @@ class DPPAuthInitPSKCommand(HostapdCLICommand):
         await super().process_response_data(response)
 
 class ReloadPSKCLICommand(HostapdCLICommand):
-    def __init__ (self, configurator_id, qrcode_id, ssid, psk, event_loop=asyncio.get_event_loop()):
+    def __init__ (self, event_loop=asyncio.get_event_loop()):
         super().__init__(event_loop)
         self.success = False
 

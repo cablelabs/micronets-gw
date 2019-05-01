@@ -110,7 +110,8 @@ class OpenFlowAdapter:
             raise Exception (f"Did not find a ovs_ports entry in {infile}")
         if not self.ovs_uplink_interface:
             raise Exception (f"Did not find a ovs_bridge_uplink_port entry in {infile}")
-        self.ovs_micronet_interfaces.remove (self.ovs_uplink_interface)
+        if self.ovs_uplink_interface in self.ovs_micronet_interfaces:
+            self.ovs_micronet_interfaces.remove (self.ovs_uplink_interface)
         logger.info (f"OpenFlowAdapter.read_interfaces_file: ovs_micronet_ports: {self.ovs_micronet_interfaces}")
         logger.info (f"OpenFlowAdapter.read_interfaces_file: ovs_uplink_port: {self.ovs_uplink_interface}")
 
@@ -157,7 +158,8 @@ class OpenFlowAdapter:
                 if micronet_int not in self.ovs_micronet_interfaces:
                     raise Exception (f"interface {micronet_int} in micronet {micronet_id} not found "
                                      f"in configured micronet interfaces ({self.ovs_micronet_interfaces})")
-                disabled_interfaces.remove (micronet_int)
+                if micronet_int in disabled_interfaces:
+                    disabled_interfaces.remove (micronet_int)
                 micronet_port = self.port_for_interface [micronet_int]
                 flow_file.write (f"add table={start_table},priority=10,in_port={micronet_port} "
                                  f"actions=resubmit(,{cur_micronet_table})\n")

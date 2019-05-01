@@ -39,9 +39,9 @@ else:
 
 app.config.from_object (config)
 
-logging_filename = app.config ['LOGFILE_PATH']
-logging_filemode = app.config ['LOGFILE_MODE']
-logging_level = app.config ['LOGGING_LEVEL']
+logging_filename = app.config.get('LOGFILE_PATH')
+logging_filemode = app.config.get('LOGFILE_MODE')
+logging_level = app.config.get('LOGGING_LEVEL')
 logging.basicConfig (level=logging_level, filename=logging_filename, filemode=logging_filemode,
                      format='%(asctime)s %(name)s: %(levelname)s %(message)s')
 print (f"Logging to logfile {logging_filename} (level {logging_level})")

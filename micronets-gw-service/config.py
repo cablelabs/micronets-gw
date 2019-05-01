@@ -3,8 +3,6 @@ import os, sys, pathlib, logging
 app_dir = os.path.abspath (os.path.dirname (__file__))
 
 class BaseConfig:
-    LOGFILE_PATH = pathlib.Path (__file__).parent.joinpath ("micronets-gw.log")
-    LOGFILE_MODE = 'w'  # 'w' clears the log at startup, 'a' appends to the existing log file
     LOGGING_LEVEL = logging.DEBUG
     SECRET_KEY = os.environ.get ('SECRET_KEY') or 'A SECRET KEY'
     LISTEN_HOST = "0.0.0.0"
@@ -14,18 +12,24 @@ class BaseConfig:
     SERVER_BASE_DIR = pathlib.Path (__file__).parent
     SERVER_BIN_DIR = SERVER_BASE_DIR.joinpath ("bin")
     WEBSOCKET_CONNECTION_ENABLED = False
-    WEBSOCKET_SERVER_ADDRESS = "ws-proxy-api.micronets.in"
-    WEBSOCKET_SERVER_PORT = 5050
     # NOTE: The WEBSOCKET_SERVER_PATH should be unique to the gateway/subscriber if using the proxy
     WEBSOCKET_SERVER_PATH = '/micronets/v1/ws-proxy/micronets-gw-0001'
     WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces"
     # For this command, the first parameter will be the bridge name and the second the flow filename
-    FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {flow_file}'
     FLOW_ADAPTER_ENABLED = False
     DPP_HANDLER_ENABLED = False
     HOSTAPD_ADAPTER_ENABLED = False
+    SIMULATE_ONBOARD_RESPONSE_EVENTS = False
+
+class BaseGatewayConfig:
+    LOGFILE_PATH = pathlib.Path (__file__).parent.joinpath ("micronets-gw.log")
+    WEBSOCKET_SERVER_ADDRESS = "ws-proxy-api.micronets.in"
+    WEBSOCKET_SERVER_PORT = 5050
+    FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {flow_file}'
+    HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
+    HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
 
 #
 # Mock Adapter Configurations
@@ -83,13 +87,10 @@ class BaseDnsmasqConfig (BaseConfig):
     DNSMASQ_CONF_FILE = '/etc/dnsmasq.d/micronets'
     DNSMASQ_RESTART_COMMAND = ['sudo','/etc/init.d/dnsmasq','restart']
     DNSMASQ_LEASE_SCRIPT = BaseConfig.SERVER_BIN_DIR.joinpath ("dnsmasq_lease_notify.py")
-    HOSTAPD_ADAPTER_ENABLED = False
 
 class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
     DEBUG = True
     LISTEN_HOST = "127.0.0.1"
-    LOGFILE_PATH = None
-    LOGFILE_MODE = None
     DNSMASQ_CONF_FILE = 'doc/dnsmasq-config.sample'
     DNSMASQ_RESTART_COMMAND = []
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = BaseConfig.SERVER_BASE_DIR.parent\
@@ -107,16 +108,24 @@ class DnsmasqDevelopmentConfigWithFlowRules (DnsmasqDevelopmentConfig):
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/sort -t= -k 2n -k 3rn {flow_file}'
     FLOW_ADAPTER_ENABLED = True
 
-class DnsmasqTestingConfig (BaseDnsmasqConfig):
+class DnsmasqDebugConfig (BaseDnsmasqConfig, BaseGatewayConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
     DPP_HANDLER_ENABLED = True
     FLOW_ADAPTER_ENABLED = True
     HOSTAPD_ADAPTER_ENABLED = True
-    HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
-    HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
+    LOGFILE_PATH = None
     DEBUG = True
+
+class DnsmasqTestingConfig (BaseDnsmasqConfig, BaseGatewayConfig):
+    DEBUG = True
+    LOGFILE_MODE = 'w'  # 'w' clears the log at startup, 'a' appends to the existing log file
+    WEBSOCKET_CONNECTION_ENABLED = True
+    DPP_HANDLER_ENABLED = True
+    FLOW_ADAPTER_ENABLED = True
+    HOSTAPD_ADAPTER_ENABLED = True
 
 class DnsmasqProductionConfig (DnsmasqTestingConfig):
     DEBUG = False
     LOGGING_LEVEL = logging.INFO
     LOGFILE_MODE = 'a'
+

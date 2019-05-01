@@ -170,7 +170,7 @@ class GatewayServiceConf:
         if device_id in device_list:
             raise InvalidUsage (409, message=f"Supplied device '{device_id}' already exists for "
                                              f"micronet '{micronet_id}'");
-        return device_list[device_id]
+        return device_id
 
     def check_device_for_micronet (self, device, micronet):
         ipv4_net_params = micronet ['ipv4Network']
