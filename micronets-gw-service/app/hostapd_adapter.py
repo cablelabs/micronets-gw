@@ -36,8 +36,8 @@ class HostapdAdapter:
             logger.info(f"HostapdAdapter.update: No PSK file configured, so nothing to do")
 
         with self.hostapd_psk_path.open ('w') as outfile:
-            logger.info (f"HostapdAdapter.update: Writing PSKDs to {self.hostapd_psk_path.absolute ()}")
-            outfile.write ("# THIS CONF FILE IS MANAGED BY THE MICRONETS GATEWAY SERVICE\n\n")
+            logger.info (f"HostapdAdapter.update: Writing PSKs to {self.hostapd_psk_path.absolute ()}")
+            outfile.write ("# THIS WPA-PSK FILE IS MANAGED BY THE MICRONETS GATEWAY SERVICE\n\n")
             outfile.write ("# MODIFICATIONS TO THIS FILE WILL BE OVER-WRITTEN\n\n")
             for micronet_id, devices in device_lists.items ():
                 micronet = micronet_list.get(micronet_id)
@@ -69,7 +69,6 @@ class HostapdAdapter:
             for line in infile:
                 logger.info (line[0:-1])
             logger.info ("------------------------------------------------------------------------")
-
 
         if self.cli_ready:
             logger.info (f"HostapdAdapter.update: Issuing PSK reload command")

@@ -16,10 +16,10 @@ class WSMessageHandler:
         self.type_prefix = type_prefix
         self.ws_connector = None
 
-    async def handle_message(self, message):
+    async def handle_ws_message(self, message):
         pass
 
-    async def send_message(self, message):
+    async def send_ws_message(self, message):
         message_body = message['message']
         messageType = message_body['messageType']
         message_body['messageType'] = self.type_prefix + ":" + messageType
@@ -222,7 +222,7 @@ class WSConnector:
             if message_type_prefix not in self.handler_table:
                 raise Exception (f"unknown message type prefix {message_type_prefix}")
             type_handler = self.handler_table[message_type_prefix]
-            await type_handler.handle_message (message)
+            await type_handler.handle_ws_message (message)
 
     async def handle_rest_message (self, message):
         received_message_id = message ['messageId']

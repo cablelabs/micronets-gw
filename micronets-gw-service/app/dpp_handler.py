@@ -14,8 +14,8 @@ class DPPHandler(WSMessageHandler):
         self.simulate_response_events = config ['SIMULATE_ONBOARD_RESPONSE_EVENTS']
         self.simulated_event_wait_s = 7
 
-    async def handle_message(self, message):
-        logger.info("DPPHandler.handle_message: {message}")
+    async def handle_ws_message(self, message):
+        logger.info("DPPHandler.handle_ws_message: {message}")
 
     async def onboard_device(self, micronet_id, device_id, onboard_params):
         logger.info(f"DPPHandler.onboard_device(micronet '{micronet_id}, device '{device_id}', onboard_params '{onboard_params}')")
