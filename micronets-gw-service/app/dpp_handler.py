@@ -21,7 +21,7 @@ class DPPHandler(WSMessageHandler, HostapdCLIEventHandler):
         logger.info("DPPHandler.handle_ws_message: {message}")
 
     async def handle_hostapd_cli_message(self, message):
-        logger.info(f"DPPHandler.handle_hostapd_cli_message({message}")
+        logger.info(f"DPPHandler.handle_hostapd_cli_message({message})")
         # TODO
         pass
 
@@ -47,9 +47,15 @@ class DPPHandler(WSMessageHandler, HostapdCLIEventHandler):
             else:
                 logger.warning(f"DPPHandler.onboard_device: unrecognized value for SIMULATE_ONBOARD_RESPONSE_EVENTS: "
                                + self.simulate_response_events)
+        else:
+            logger.info(f"DPPHandler.onboard_device: Issuing DPP onboarding commands...")
 
         # TODO: IMPLEMENT ME
         return '', 200
+
+    async def handle_hostapd_cli_event(self, event):
+        logger.info(f"DPPHandler.handle_hostapd_cli_event({event})")
+
 
     async def send_dpp_onboard_event(self, micronet, device, event_name, reason=None):
         ws_connector = get_ws_connector()

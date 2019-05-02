@@ -101,20 +101,6 @@ except Exception as ex:
     logger.info ("Error starting websocket connector:", exc_info=True)
     exit (1)
 
-from .dpp_handler import DPPHandler
-
-dpp_handler = None
-try:
-    dpp_handler_enabled = app.config['DPP_HANDLER_ENABLED']
-    if dpp_handler_enabled:
-        dpp_handler = DPPHandler(app.config)
-        ws_connector.register_handler (dpp_handler)
-    else:
-        logger.info("Not initiating dpp handler (DPP handler disabled)")
-except Exception as ex:
-    logger.info ("Error registering DPP handler:", exc_info=True)
-    exit (1)
-
 from .hostapd_adapter import HostapdAdapter
 
 hostapd_adapter = None
@@ -131,6 +117,21 @@ try:
         logger.info("Not initiating hostapd adapter (disabled via config)")
 except Exception as ex:
     logger.info ("Error starting hostapd adapter:", exc_info=True)
+    exit (1)
+
+from .dpp_handler import DPPHandler
+
+dpp_handler = None
+try:
+    dpp_handler_enabled = app.config['DPP_HANDLER_ENABLED']
+    if dpp_handler_enabled:
+        dpp_handler = DPPHandler(app.config)
+        ws_connector.register_handler (dpp_handler)
+        hostapd_adapter.register_cli_event_handler(dpp_handler)
+    else:
+        logger.info("Not initiating dpp handler (DPP handler disabled)")
+except Exception as ex:
+    logger.info ("Error registering DPP handler:", exc_info=True)
     exit (1)
 
 flow_adapter = None
