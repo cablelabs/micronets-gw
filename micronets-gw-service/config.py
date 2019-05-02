@@ -46,6 +46,8 @@ class MockDevelopmentConfig (BaseMockConfig):
 
 class MockDevelopmentConfigWithWebsocket (MockDevelopmentConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
+    WEBSOCKET_SERVER_ADDRESS = "localhost"
+    WEBSOCKET_SERVER_PORT = 5050
     DPP_HANDLER_ENABLED = True
     WEBSOCKET_SERVER_ADDRESS = "localhost"
     SIMULATE_ONBOARD_RESPONSE_EVENTS = "with success"

@@ -48,13 +48,6 @@ print (f"Logging to logfile {logging_filename} (level {logging_level})")
 
 logger.info (f"Loading app module using {config}")
 
-conf_model = None
-dhcp_adapter = None
-ws_connector = None
-dpp_handler = None
-hostapd_adapter = None
-flow_adapter = None
-
 def get_logger():
     return logger
 
@@ -70,6 +63,7 @@ def get_dpp_handler():
 if not 'DHCP_ADAPTER' in app.config:
     exit (f"A DHCP_ADAPTER must be defined in the selected configuration ({app.config})")
 
+dhcp_adapter = None
 adapter = app.config ['DHCP_ADAPTER'].upper ()
 if adapter == "MOCK":
     from .mock_adapter import MockAdapter
@@ -88,13 +82,14 @@ else:
 
 from .ws_connector import WSConnector
 
+ws_connector = None
 try:
     ws_connector_enabled = app.config['WEBSOCKET_CONNECTION_ENABLED']
-    ws_server_address = app.config ['WEBSOCKET_SERVER_ADDRESS']
-    ws_server_port = app.config ['WEBSOCKET_SERVER_PORT']
-    ws_server_path = app.config ['WEBSOCKET_SERVER_PATH']
-    ws_tls_certkey_file = app.config['WEBSOCKET_TLS_CERTKEY_FILE']
-    ws_tls_ca_cert_file = app.config['WEBSOCKET_TLS_CA_CERT_FILE']
+    ws_server_address = app.config.get('WEBSOCKET_SERVER_ADDRESS')
+    ws_server_port = app.config.get('WEBSOCKET_SERVER_PORT')
+    ws_server_path = app.config.get('WEBSOCKET_SERVER_PATH')
+    ws_tls_certkey_file = app.config.get('WEBSOCKET_TLS_CERTKEY_FILE')
+    ws_tls_ca_cert_file = app.config.get('WEBSOCKET_TLS_CA_CERT_FILE')
     ws_connector = WSConnector (ws_server_address, ws_server_port, ws_server_path,
                                 tls_certkey_file=ws_tls_certkey_file,
                                 tls_ca_file=ws_tls_ca_cert_file)
@@ -108,19 +103,21 @@ except Exception as ex:
 
 from .dpp_handler import DPPHandler
 
+dpp_handler = None
 try:
     dpp_handler_enabled = app.config['DPP_HANDLER_ENABLED']
     if dpp_handler_enabled:
         dpp_handler = DPPHandler(app.config)
         ws_connector.register_handler (dpp_handler)
     else:
-        logger.info("Not initiating dpp handler (DPP handler or Websocket connection disabled)")
+        logger.info("Not initiating dpp handler (DPP handler disabled)")
 except Exception as ex:
     logger.info ("Error registering DPP handler:", exc_info=True)
     exit (1)
 
 from .hostapd_adapter import HostapdAdapter
 
+hostapd_adapter = None
 try:
     hostapd_adapter_enabled = app.config['HOSTAPD_ADAPTER_ENABLED']
     if hostapd_adapter_enabled:
@@ -136,6 +133,7 @@ except Exception as ex:
     logger.info ("Error starting hostapd adapter:", exc_info=True)
     exit (1)
 
+flow_adapter = None
 try:
     if app.config['FLOW_ADAPTER_ENABLED']:
         from .open_flow_adapter import OpenFlowAdapter
@@ -148,6 +146,7 @@ except Exception as ex:
 
 from .gateway_service_conf import GatewayServiceConf
 
+conf_model = None
 try:
     min_dhcp_conf_update_int_s = app.config ['MIN_DHCP_UPDATE_INTERVAL_S']
     logger.info (f"Minimum DHCP update interval (seconds): {min_dhcp_conf_update_int_s}")

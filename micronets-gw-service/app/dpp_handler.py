@@ -4,18 +4,26 @@ import logging
 from quart import Quart, Request, json
 from app import get_ws_connector, get_conf_model
 from .ws_connector import WSMessageHandler
+from .hostapd_adapter import HostapdCLIEventHandler
 
 logger = logging.getLogger ('micronets-gw-service')
 
-class DPPHandler(WSMessageHandler):
+
+class DPPHandler(WSMessageHandler, HostapdCLIEventHandler):
     def __init__ (self, config):
-        super().__init__("DPP")
+        WSMessageHandler.__init__(self, "DPP")
+        HostapdCLIEventHandler.__init__(self, "DPP")
         self.config = config
         self.simulate_response_events = config ['SIMULATE_ONBOARD_RESPONSE_EVENTS']
         self.simulated_event_wait_s = 7
 
     async def handle_ws_message(self, message):
         logger.info("DPPHandler.handle_ws_message: {message}")
+
+    async def handle_hostapd_cli_message(self, message):
+        logger.info(f"DPPHandler.handle_hostapd_cli_message({message}")
+        # TODO
+        pass
 
     async def onboard_device(self, micronet_id, device_id, onboard_params):
         logger.info(f"DPPHandler.onboard_device(micronet '{micronet_id}, device '{device_id}', onboard_params '{onboard_params}')")

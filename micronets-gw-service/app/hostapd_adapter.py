@@ -13,6 +13,13 @@ from pathlib import Path
 
 logger = logging.getLogger ('hostapd_adapter')
 
+class HostapdCLIEventHandler:
+    def __init__ (self, event_prefixes):
+        self.hostapd_adapter = None
+        self.event_prefixes = event_prefixes
+
+    async def handle_hostapd_cli_event(self, event):
+        pass
 
 class HostapdAdapter:
 
@@ -20,6 +27,7 @@ class HostapdAdapter:
     cli_ready_re = re.compile ('Connection.*established|Interactive mode')
 
     def __init__ (self, hostapd_psk_path, hostapd_cli_path, hostapd_cli_args=()):
+        self.event_handler_table = []
         self.hostapd_psk_path = Path(hostapd_psk_path) if hostapd_psk_path else None
         self.hostapd_cli_path = Path(hostapd_cli_path) if hostapd_cli_path else None
         self.hostapd_cli_args = hostapd_cli_args
@@ -29,6 +37,15 @@ class HostapdAdapter:
         self.event_loop = None
         self.cli_connected = False
         self.cli_ready = False
+
+    def register_cli_event_handler(self, handler):
+        logger.info (f"HostapdAdapter: Registering event handler: {handler}")
+        self.event_handler_table.append(handler)
+        handler.hostapd_adapter = self
+
+    def unregister_cli_event_handler(self, handler):
+        del self.event_handler_table.remove[handler.type_prefix]
+        handler.hostapd_adapter = None
 
     async def update (self, micronet_list, device_lists):
         logger.info (f"HostapdAdapter.update()")
@@ -164,9 +181,13 @@ class HostapdAdapter:
 
     async def process_event(self, event_data):
         logger.info(f"HostapdAdapter:process_event: EVENT: (\"{event_data}\")")
-        if (event_data.startswith("CTRL-EVENT-TERMINATING")):
+        if event_data.startswith("CTRL-EVENT-TERMINATING"):
             logger.info(f"HostapdAdapter:process_event: hostapd CLI is now NOT READY")
             self.cli_ready = False
+        else:
+            for handler in self.event_handler_table:
+                if handler.event_prefixes is None or event_data.startswith(handler.event_prefixes):
+                    asyncio.ensure_future(handler.handle_hostapd_cli_event(event_data))
 
     async def send_command(self, command):
         if not isinstance(command, HostapdCLICommand):
