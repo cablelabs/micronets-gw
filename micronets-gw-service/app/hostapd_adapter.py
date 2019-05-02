@@ -13,14 +13,6 @@ from pathlib import Path
 
 logger = logging.getLogger ('hostapd_adapter')
 
-class HostapdCLIEventHandler:
-    def __init__ (self, event_prefixes):
-        self.hostapd_adapter = None
-        self.event_prefixes = event_prefixes
-
-    async def handle_hostapd_cli_event(self, event):
-        pass
-
 class HostapdAdapter:
 
     cli_event_re = re.compile ('^.*<([0-9+])>(.+)$')
@@ -37,6 +29,14 @@ class HostapdAdapter:
         self.event_loop = None
         self.cli_connected = False
         self.cli_ready = False
+
+    class HostapdCLIEventHandler:
+        def __init__ (self, event_prefixes):
+            self.hostapd_adapter = None
+            self.event_prefixes = event_prefixes
+
+        async def handle_hostapd_cli_event(self, event):
+            pass
 
     def register_cli_event_handler(self, handler):
         logger.info (f"HostapdAdapter: Registering event handler: {handler}")
@@ -89,7 +89,7 @@ class HostapdAdapter:
 
         if self.cli_ready:
             logger.info (f"HostapdAdapter.update: Issuing PSK reload command")
-            psk_reload_command = await self.send_command(ReloadPSKCLICommand())
+            psk_reload_command = await self.send_command(HostapdAdapter.ReloadPSKCLICommand())
             if await psk_reload_command.was_successful():
                 logger.info(f"HostapdAdapter.update: PSK reload successful")
             else:
@@ -163,15 +163,15 @@ class HostapdAdapter:
                         continue
                     response_data += line
                     pos = response_data.find("> ")
-                    if pos > 0:
+                    if pos >= 0:
                         # logger.debug (f"HostapdAdapter:read_cli_output: aggregate response_data: {response_data}")
                         command_type = type(command).__name__
                         complete_response = response_data[:pos].rstrip()
                         logger.debug (f"HostapdAdapter:read_cli_output: Found command response for {command}: {complete_response}")
-                        # logger.debug (f"HostapdAdapter:read_cli_output: Calling process_response_data()...")
+                        logger.debug (f"HostapdAdapter:read_cli_output: Calling process_response_data()...")
                         asyncio.run_coroutine_threadsafe(command.process_response_data(complete_response), 
                                                          command.event_loop)
-                        # logger.debug (f"HostapdAdapter:read_cli_output: process_response_data() returned.")
+                        logger.debug (f"HostapdAdapter:read_cli_output: process_response_data() returned.")
                         response_data = None
                         command = None
             except Exception as ex:
@@ -189,8 +189,26 @@ class HostapdAdapter:
                 if handler.event_prefixes is None or event_data.startswith(handler.event_prefixes):
                     asyncio.ensure_future(handler.handle_hostapd_cli_event(event_data))
 
+    class HostapdCLICommand:
+        def __init__ (self, event_loop = asyncio.get_event_loop()):
+            self.event_loop = event_loop
+            self.response_future = asyncio.Future(loop=event_loop)
+
+        def get_command_string(self):
+            """ Over-ride this method to provide the string that compromise the hostapd_cli command (without newline)"""
+            pass
+
+        async def process_response_data(self, response):
+            """This is where the response can be parsed for meaningful data, parsed, and have
+            memvars set to any values that want to be retained."""
+            self.response_future.set_result(response)
+
+        async def get_response(self):
+            """Return the raw response data. Subclasses may provide accessors for specific data elements."""
+            return await self.response_future
+
     async def send_command(self, command):
-        if not isinstance(command, HostapdCLICommand):
+        if not isinstance(command, HostapdAdapter.HostapdCLICommand):
             raise TypeError
         if not self.cli_ready:
             raise Exception("hostapd adapter CLI is not ready")
@@ -205,203 +223,227 @@ class HostapdAdapter:
         return command
 
 
-class HostapdCLICommand:
-    def __init__ (self, event_loop = asyncio.get_event_loop()):
-        self.event_loop = event_loop
-        self.response_future = asyncio.Future(loop=event_loop)
+    class PingCLICommand(HostapdCLICommand):
+        def __init__ (self, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
 
-    def get_command_string(self):
-        """ Over-ride this method to provide the string that compromise the hostapd_cli command (without newline)"""
-        pass
+        def get_command_string(self):
+            return "ping"
 
-    async def process_response_data(self, response):
-        """This is where the response can be parsed for meaningful data, parsed, and have
-        memvars set to any values that want to be retained."""
-        self.response_future.set_result(response)
+    class GenericHostapdCLIMessage(HostapdCLICommand):
+        def __init__ (self, hostapd_command, hostapd_command_args=(), event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.hostapd_command = hostapd_command
+            self.hostapd_command_args = hostapd_command_args
 
-    async def get_response(self):
-        """Return the raw response data. Subclasses may provide accessors for specific data elements."""
-        return await self.response_future
-
-
-class GenericHostapdCLIMessage(HostapdCLICommand):
-    def __init__ (self, hostapd_command, hostapd_command_args=(), event_loop=asyncio.get_event_loop()):
-        super().__init__(event_loop)
-        self.hostapd_command = hostapd_command
-        self.hostapd_command_args = hostapd_command_args
-
-    def get_command_string(self):
-        if isinstance (self.hostapdcommand, bytes):
-            return self.hostapdcommand
-        compound_command = self.hostapdcommand
-        for arg in self.hostapd_command_args:
-            compound_command = " " + compound_command
-        return compound_command
+        def get_command_string(self):
+            if isinstance (self.hostapdcommand, bytes):
+                return self.hostapdcommand
+            compound_command = self.hostapdcommand
+            for arg in self.hostapd_command_args:
+                compound_command = " " + compound_command
+            return compound_command
 
 
-class PingCLICommand(HostapdCLICommand):
-    def __init__ (self, event_loop=asyncio.get_event_loop()):
-        super().__init__(event_loop)
+    class HelpCLICommand(HostapdCLICommand):
+        def __init__ (self, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
 
-    def get_command_string(self):
-        return "ping"
-
-
-class HelpCLICommand(HostapdCLICommand):
-    def __init__ (self, event_loop=asyncio.get_event_loop()):
-        super().__init__(event_loop)
-
-    def get_command_string(self):
-        return "help"
+        def get_command_string(self):
+            return "help"
 
 
-class ListStationsCLICommand(HostapdCLICommand):
-    def __init__ (self, event_loop=asyncio.get_event_loop()):
-        super().__init__(event_loop)
-        self.sta_macs = []
+    class StatusCLICommand(HostapdCLICommand):
+        index_re = re.compile("^([a-zA-Z0-9]+)\[([0-9]+)\]$")
+        def __init__ (self, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.status_vars = {}
 
-    def get_command_string(self):
-        return "list_sta"
+        def get_command_string(self):
+            return "status"
 
-    async def process_response_data(self, response):
-        self.sta_macs = response.splitlines()
-        await super().process_response_data(response)
+        async def process_response_data(self, response):
+            try:
+                for line in response.splitlines():
+                    try:
+                        (name,val) = line.split("=")
+                        if not name or not val:
+                            continue
+                        index_match = HostapdAdapter.StatusCLICommand.index_re.match(name)
+                        if index_match:
+                            name = index_match.group(1)
+                            index = int(index_match.group(2))
+                            if name not in self.status_vars:
+                                self.status_vars[name] = {}
+                            self.status_vars[name][index] = val
+                        else:
+                            self.status_vars[name] = val
+                        logger.debug(f"StatusCLICommand.process_response_data: {name} = \"{self.status_vars[name]}\"")
+                    except Exception as ex:
+                        logger.warning(f"StatusCLICommand.process_response_data: Error processing status line {line}: {ex}", exc_info=True)
+            finally:
+                await super().process_response_data(response)
 
-    async def get_sta_macs(self):
-        await self.get_response()
-        return self.sta_macs
+        async def get_status_dict(self):
+            await self.get_response()
+            return self.status_vars
 
+        async def get_status_var(self, name):
+            await self.get_response()
+            return self.status_vars.get(name)
 
-class DPPAddConfiguratorCLICommand(HostapdCLICommand):
-    def __init__ (self, event_loop=asyncio.get_event_loop()):
-        super().__init__(event_loop)
-        self.configurator_id = None
+    class ListStationsCLICommand(HostapdCLICommand):
+        def __init__ (self, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.sta_macs = []
 
-    def get_command_string(self):
-        return "dpp_configurator_add"
+        def get_command_string(self):
+            return "list_sta"
 
-    async def process_response_data(self, response):
-        try:
-            self.configurator_id = int(response)
-        finally:
+        async def process_response_data(self, response):
+            self.sta_macs = response.splitlines()
             await super().process_response_data(response)
 
-    async def get_configurator_id(self):
-        await self.get_response()
-        return self.configurator_id
+        async def get_sta_macs(self):
+            await self.get_response()
+            return self.sta_macs
 
-class DPPAddQRCodeCLICommand(HostapdCLICommand):
-    def __init__ (self, qrcode, event_loop=asyncio.get_event_loop()):
-        super().__init__(event_loop)
-        self.qrcode = qrcode
-        self.qrcode_id = None
 
-    def get_command_string(self):
-        return f"dpp_qr_code {self.qrcode}"
+    class DPPAddConfiguratorCLICommand(HostapdCLICommand):
+        def __init__ (self, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.configurator_id = None
 
-    async def process_response_data(self, response):
-        try:
-            self.qrcode_id = int(response)
-        finally:
+        def get_command_string(self):
+            return "dpp_configurator_add"
+
+        async def process_response_data(self, response):
+            try:
+                self.configurator_id = int(response)
+            finally:
+                await super().process_response_data(response)
+
+        async def get_configurator_id(self):
+            await self.get_response()
+            return self.configurator_id
+
+    class DPPAddQRCodeCLICommand(HostapdCLICommand):
+        def __init__ (self, qrcode, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.qrcode = qrcode
+            self.qrcode_id = None
+
+        def get_command_string(self):
+            return f"dpp_qr_code {self.qrcode}"
+
+        async def process_response_data(self, response):
+            try:
+                self.qrcode_id = int(response)
+            finally:
+                await super().process_response_data(response)
+
+        def get_qrcode(self):
+            return self.qrcode
+
+        async def get_qrcode_id(self):
+            await self.get_response()
+            return self.qrcode_id
+
+    class DPPAuthInitPSKCommand(HostapdCLICommand):
+        def __init__ (self, configurator_id, qrcode_id, ssid, psk, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.configurator_id = configurator_id
+            self.qrcode_id = qrcode_id
+            self.ssid = ssid
+            self.psk = psk
+
+        def get_command_string(self):
+            return f"dpp_auth_init peer={self.qrcode_id} conf=sta-psk ssid={self.ssid} psk={self.psk} configurator={self.configurator_id}"
+
+        async def process_response_data(self, response):
             await super().process_response_data(response)
 
-    def get_qrcode(self):
-        return self.qrcode
+    class ReloadPSKCLICommand(HostapdCLICommand):
+        def __init__ (self, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.success = False
 
-    async def get_qrcode_id(self):
-        await self.get_response()
-        return self.qrcode_id
+        def get_command_string(self):
+            return "reload_wpa_psk"
 
-class DPPAuthInitPSKCommand(HostapdCLICommand):
-    def __init__ (self, configurator_id, qrcode_id, ssid, psk, event_loop=asyncio.get_event_loop()):
-        super().__init__(event_loop)
-        self.configurator_id = configurator_id
-        self.qrcode_id = qrcode_id
-        self.ssid = ssid
-        self.psk = psk
+        async def process_response_data(self, response):
+            try:
+                self.success = "OK" in response
+            finally:
+                await super().process_response_data(response)
 
-    def get_command_string(self):
-        return f"dpp_auth_init peer={self.qrcode_id} conf=sta-psk ssid={self.ssid} psk={self.psk} configurator={self.configurator_id}"
-
-    async def process_response_data(self, response):
-        await super().process_response_data(response)
-
-class ReloadPSKCLICommand(HostapdCLICommand):
-    def __init__ (self, event_loop=asyncio.get_event_loop()):
-        super().__init__(event_loop)
-        self.success = False
-
-    def get_command_string(self):
-        return "reload_wpa_psk"
-
-    async def process_response_data(self, response):
-        try:
-            self.success = "OK" in response
-        finally:
-            await super().process_response_data(response)
-
-    async def was_successful(self):
-        await self.get_response()
-        return self.success
+        async def was_successful(self):
+            await self.get_response()
+            return self.success
 
 async def run_tests():
 #        hostapd_adapter = HostapdAdapter("/usr/bin/tail", ["-f", "-n", "1", "/var/log/syslog"])
-        hostapd_adapter = HostapdAdapter("/opt/micronets-hostapd/bin/hostapd_cli", [])
+    hostapd_adapter = HostapdAdapter(None, "/opt/micronets-hostapd/bin/hostapd_cli", [])
 
-        await hostapd_adapter.connect()
-        logger.info (f"{__name__}: Connected.")
+    await hostapd_adapter.connect()
+    logger.info (f"{__name__}: Connected.")
 
-        # await asyncio.sleep(2)
-        # logger.info (f"{__name__}: Issuing help command...")
-        # help_cmd = await hostapd_adapter.send_command(HelpCLICommand())
-        # response = await help_cmd.get_response()
-        # logger.info (f"{__name__}: Help command response: {response}")
+    # await asyncio.sleep(2)
+    # logger.info (f"{__name__}: Issuing help command...")
+    # help_cmd = await hostapd_adapter.send_command(HelpCLICommand())
+    # response = await help_cmd.get_response()
+    # logger.info (f"{__name__}: Help command response: {response}")
 
-        await asyncio.sleep(2)
-        logger.info (f"{__name__}: Issuing ping command...")
-        ping_cmd = await hostapd_adapter.send_command(PingCLICommand())
+    await asyncio.sleep(2)
+    logger.info (f"{__name__}: Issuing ping command...")
+    ping_cmd = await hostapd_adapter.send_command(HostapdAdapter.PingCLICommand())
+    response = await ping_cmd.get_response()
+    logger.info (f"{__name__}: Ping response: {response}")
+
+    await asyncio.sleep(2)
+    logger.info (f"{__name__}: Issuing List Stations command...")
+    list_sta_cmd = await hostapd_adapter.send_command(HostapdAdapter.ListStationsCLICommand())
+    stas = await list_sta_cmd.get_sta_macs()
+    logger.info (f"{__name__}: Station List: {stas}")
+
+    await asyncio.sleep(2)
+    logger.info (f"{__name__}: Issuing Status command...")
+    status_cmd = await hostapd_adapter.send_command(HostapdAdapter.StatusCLICommand())
+    # logger.info (f"{__name__}: Retrieving status dict...")
+    # status_dict = await status_cmd.get_status_dict()
+    # logger.info (f"{__name__}: Status dict: {status_dict}")
+    logger.info (f"{__name__}: Retrieving ssid...")
+    ssid = await status_cmd.get_status_var("ssid")
+    logger.info (f"{__name__}: SSID: {ssid[0]}")
+
+    await asyncio.sleep(2)
+    logger.info (f"{__name__}: Issuing a flood of pings...")
+    for x in range(1,10):
+        logger.info (f"{__name__}: Issuing ping command #{x}...")
+        ping_cmd = await hostapd_adapter.send_command(HostapdAdapter.PingCLICommand())
         response = await ping_cmd.get_response()
         logger.info (f"{__name__}: Ping response: {response}")
+    logger.info (f"{__name__}: Tests complete.")
 
-        await asyncio.sleep(2)
-        logger.info (f"{__name__}: Issuing List Stations command...")
-        list_sta_cmd = await hostapd_adapter.send_command(ListStationsCLICommand())
-        stas = await list_sta_cmd.get_sta_macs()
-        logger.info (f"{__name__}: Station List: {stas}")
 
-        await asyncio.sleep(2)
-        logger.info (f"{__name__}: Issuing DPP Add Configurator command...")
-        add_config_id_cmd = await hostapd_adapter.send_command(DPPAddConfiguratorCLICommand())
-        configurator_id = await add_config_id_cmd.get_configurator_id()
-        logger.info (f"{__name__}: DPP Configurator ID: {configurator_id}")
+async def run_dpp_tests():
+    # await asyncio.sleep(2)
+    qrcode = "DPP:C:81/1;M:2c:d0:5a:6e:ca:3c;I:KYZRQ;K:MDkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDIgAC/nFQKV1+CErzr6QCUT0jFIno3CaTRr3BW2n0ThU4mAw=;;"
+    logger.info (f"{__name__}: Issuing DPP Add QRCode command...")
+    logger.info (f"{__name__}:   Code: {qrcode}")
+    add_config_id_cmd = await hostapd_adapter.send_command(HostapdAdapter.DPPAddQRCodeCLICommand(qrcode))
+    qrcode_id = await add_config_id_cmd.get_qrcode_id()
+    logger.info (f"{__name__}: DPP QRCode ID: {qrcode_id}")
 
-        # await asyncio.sleep(2)
-        qrcode = "DPP:C:81/1;M:2c:d0:5a:6e:ca:3c;I:KYZRQ;K:MDkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDIgAC/nFQKV1+CErzr6QCUT0jFIno3CaTRr3BW2n0ThU4mAw=;;"
-        logger.info (f"{__name__}: Issuing DPP Add QRCode command...")
-        logger.info (f"{__name__}:   Code: {qrcode}")
-        add_config_id_cmd = await hostapd_adapter.send_command(DPPAddQRCodeCLICommand(qrcode))
-        qrcode_id = await add_config_id_cmd.get_qrcode_id()
-        logger.info (f"{__name__}: DPP QRCode ID: {qrcode_id}")
-
-        # await asyncio.sleep(2)
-        logger.info (f"{__name__}: Issuing DPP Auth Init command...")
-        ssid="756e636c652d6a6f686e"
-        psk="0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"
-        logger.info (f"{__name__}:   SSID: {ssid}")
-        logger.info (f"{__name__}:   PSK: {psk}")
-        dpp_auth_init_cmd = await hostapd_adapter.send_command(DPPAuthInitPSKCommand(configurator_id, qrcode_id, ssid, psk))
-        result = await dpp_auth_init_cmd.get_response()
-        logger.info (f"{__name__}: Auth Init result: {result}")
-
-        await asyncio.sleep(2)
-        logger.info (f"{__name__}: Issuing a flood of pings...")
-        for x in range(1,10):
-            logger.info (f"{__name__}: Issuing ping command #{x}...")
-            ping_cmd = await hostapd_adapter.send_command(PingCLICommand())
-            response = await ping_cmd.get_response()
-            logger.info (f"{__name__}: Ping response: {response}")
-        logger.info (f"{__name__}: Tests complete.")
-
+    # await asyncio.sleep(2)
+    logger.info (f"{__name__}: Issuing DPP Auth Init command...")
+    ssid="756e636c652d6a6f686e"
+    psk="0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"
+    logger.info (f"{__name__}:   SSID: {ssid}")
+    logger.info (f"{__name__}:   PSK: {psk}")
+    dpp_auth_init_cmd = await hostapd_adapter.send_command(HostapdAdapter.DPPAuthInitPSKCommand(configurator_id, qrcode_id, ssid, psk))
+    result = await dpp_auth_init_cmd.get_response()
+    logger.info (f"{__name__}: Auth Init result: {result}")
 
 if __name__ == '__main__':
     print (f"{__name__}: Starting\n")

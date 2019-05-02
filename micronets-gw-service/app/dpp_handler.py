@@ -4,18 +4,19 @@ import logging
 from quart import Quart, Request, json
 from app import get_ws_connector, get_conf_model
 from .ws_connector import WSMessageHandler
-from .hostapd_adapter import HostapdCLIEventHandler
+from .hostapd_adapter import HostapdAdapter 
 
 logger = logging.getLogger ('micronets-gw-service')
 
 
-class DPPHandler(WSMessageHandler, HostapdCLIEventHandler):
-    def __init__ (self, config):
+class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
+    def __init__ (self, config, hostapd_adapter):
         WSMessageHandler.__init__(self, "DPP")
-        HostapdCLIEventHandler.__init__(self, "DPP")
+        HostapdAdapter.HostapdCLIEventHandler.__init__(self, "DPP")
         self.config = config
         self.simulate_response_events = config ['SIMULATE_ONBOARD_RESPONSE_EVENTS']
         self.simulated_event_wait_s = 7
+        self.hostapd_adapter = hostapd_adapter
 
     async def handle_ws_message(self, message):
         logger.info("DPPHandler.handle_ws_message: {message}")
@@ -26,7 +27,7 @@ class DPPHandler(WSMessageHandler, HostapdCLIEventHandler):
         pass
 
     async def onboard_device(self, micronet_id, device_id, onboard_params):
-        logger.info(f"DPPHandler.onboard_device(micronet '{micronet_id}, device '{device_id}', onboard_params '{onboard_params}')")
+        logger.info(f"DPPHandler.onboard_device(micronet '{micronet_id}', device '{device_id}', onboard_params '{onboard_params}')")
         conf_model = get_conf_model()
         micronet = conf_model.check_micronet_reference(micronet_id)
         device = conf_model.check_device_reference(micronet_id, device_id)
@@ -47,11 +48,40 @@ class DPPHandler(WSMessageHandler, HostapdCLIEventHandler):
             else:
                 logger.warning(f"DPPHandler.onboard_device: unrecognized value for SIMULATE_ONBOARD_RESPONSE_EVENTS: "
                                + self.simulate_response_events)
+            return '', 200
         else:
-            logger.info(f"DPPHandler.onboard_device: Issuing DPP onboarding commands...")
+            logger.info(f"DPPHandler.onboard_device: Issuing DPP onboarding commands for device '{device_id}' in micronet '{micronet_id}...")
 
-        # TODO: IMPLEMENT ME
-        return '', 200
+            if 'psk' not in device:
+                raise Exception("Device {device_id} does not have a PSK")
+            psk = device['psk']
+
+            status_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.StatusCLICommand())
+            logger.info (f"{__name__}: Retrieving ssid...")
+            ssid_list = await status_cmd.get_status_var("ssid")
+            ssid = ssid_list[0]
+            ssid_ascii = ssid.encode("ascii").hex()
+            logger.info(f"DPPHandler.onboard_device:   SSID: {ssid} ({ssid_ascii})")
+
+            qrcode_uri = onboard_params['dpp']['uri']
+            logger.info (f"{__name__}:   QRCode URI: {qrcode_uri}")
+            add_qrcode_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAddQRCodeCLICommand(qrcode_uri))
+            qrcode_id = await add_qrcode_cmd.get_qrcode_id()
+            logger.info (f"{__name__}:   DPP QRCode ID: {qrcode_id}")
+
+            add_config_id_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAddConfiguratorCLICommand())
+            configurator_id = await add_config_id_cmd.get_configurator_id()
+            logger.info (f"{__name__}:   DPP Configurator ID: {configurator_id}")
+
+            dpp_auth_init_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAuthInitPSKCommand(configurator_id, qrcode_id, ssid_ascii, psk))
+            result = await dpp_auth_init_cmd.get_response()
+            logger.info (f"{__name__}: Auth Init result: {result}")
+
+            if "OK" in result:
+                return '', 200
+            else:
+                return f"Onboarding could not be initiated ({result})", 500
+
 
     async def handle_hostapd_cli_event(self, event):
         logger.info(f"DPPHandler.handle_hostapd_cli_event({event})")
