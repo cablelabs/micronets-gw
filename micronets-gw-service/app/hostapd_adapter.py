@@ -168,10 +168,8 @@ class HostapdAdapter:
                         command_type = type(command).__name__
                         complete_response = response_data[:pos].rstrip()
                         logger.debug (f"HostapdAdapter:read_cli_output: Found command response for {command}: {complete_response}")
-                        logger.debug (f"HostapdAdapter:read_cli_output: Calling process_response_data()...")
                         asyncio.run_coroutine_threadsafe(command.process_response_data(complete_response), 
                                                          command.event_loop)
-                        logger.debug (f"HostapdAdapter:read_cli_output: process_response_data() returned.")
                         response_data = None
                         command = None
             except Exception as ex:
@@ -313,6 +311,7 @@ class HostapdAdapter:
         def __init__ (self, event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
             self.configurator_id = None
+            self.success = False
 
         def get_command_string(self):
             return "dpp_configurator_add"
@@ -320,11 +319,16 @@ class HostapdAdapter:
         async def process_response_data(self, response):
             try:
                 self.configurator_id = int(response)
+                self.success = True
+            except Exception as ex:
+                self.success = False
             finally:
                 await super().process_response_data(response)
 
         async def get_configurator_id(self):
-            await self.get_response()
+            response = await self.get_response()
+            if not self.success:
+                raise Exception("Unexpected response ({responses})")
             return self.configurator_id
 
     class DPPAddQRCodeCLICommand(HostapdCLICommand):
@@ -332,6 +336,7 @@ class HostapdAdapter:
             super().__init__(event_loop)
             self.qrcode = qrcode
             self.qrcode_id = None
+            self.success = False
 
         def get_command_string(self):
             return f"dpp_qr_code {self.qrcode}"
@@ -339,6 +344,9 @@ class HostapdAdapter:
         async def process_response_data(self, response):
             try:
                 self.qrcode_id = int(response)
+                self.success = True
+            except Exception as ex:
+                self.success = False
             finally:
                 await super().process_response_data(response)
 
@@ -346,8 +354,14 @@ class HostapdAdapter:
             return self.qrcode
 
         async def get_qrcode_id(self):
-            await self.get_response()
+            response = await self.get_response()
+            if not self.success:
+                raise Exception("Unexpected response ({responses})")
             return self.qrcode_id
+
+        async def was_successful(self):
+            await self.get_response()
+            return self.success
 
     class DPPAuthInitPSKCommand(HostapdCLICommand):
         def __init__ (self, configurator_id, qrcode_id, ssid, psk, event_loop=asyncio.get_event_loop()):
@@ -356,12 +370,20 @@ class HostapdAdapter:
             self.qrcode_id = qrcode_id
             self.ssid = ssid
             self.psk = psk
+            self.success = False
 
         def get_command_string(self):
             return f"dpp_auth_init peer={self.qrcode_id} conf=sta-psk ssid={self.ssid} psk={self.psk} configurator={self.configurator_id}"
 
         async def process_response_data(self, response):
-            await super().process_response_data(response)
+            try:
+                self.success = "OK" in response
+            finally:
+                await super().process_response_data(response)
+
+        async def was_successful(self):
+            await self.get_response()
+            return self.success
 
     class ReloadPSKCLICommand(HostapdCLICommand):
         def __init__ (self, event_loop=asyncio.get_event_loop()):
@@ -382,7 +404,6 @@ class HostapdAdapter:
             return self.success
 
 async def run_tests():
-#        hostapd_adapter = HostapdAdapter("/usr/bin/tail", ["-f", "-n", "1", "/var/log/syslog"])
     hostapd_adapter = HostapdAdapter(None, "/opt/micronets-hostapd/bin/hostapd_cli", [])
 
     await hostapd_adapter.connect()

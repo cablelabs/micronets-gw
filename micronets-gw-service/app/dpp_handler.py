@@ -77,7 +77,7 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
             result = await dpp_auth_init_cmd.get_response()
             logger.info (f"{__name__}: Auth Init result: {result}")
 
-            if "OK" in result:
+            if await dpp_auth_init_cmd.was_successful():
                 return '', 200
             else:
                 return f"Onboarding could not be initiated ({result})", 500
