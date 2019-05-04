@@ -10,24 +10,31 @@ logger = logging.getLogger ('micronets-gw-service')
 
 
 class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
+    EVENT_ONBOARDING_PROGRESS = "DPPOnboardingProgressEvent"
+    EVENT_ONBOARDING_COMPLETE = "DPPOnboardingCompleteEvent"
+    EVENT_ONBOARDING_FAILED = "DPPOnboardingFailedEvent"
+    DPP_ONBOARD_TIMEOUT_S = 20
+
     def __init__ (self, config, hostapd_adapter):
         WSMessageHandler.__init__(self, "DPP")
-        HostapdAdapter.HostapdCLIEventHandler.__init__(self, "DPP")
+        HostapdAdapter.HostapdCLIEventHandler.__init__(self, ("DPP","AP-STA"))
         self.config = config
         self.simulate_response_events = config ['SIMULATE_ONBOARD_RESPONSE_EVENTS']
         self.simulated_event_wait_s = 7
         self.hostapd_adapter = hostapd_adapter
+        self.pending_onboard = None
 
     async def handle_ws_message(self, message):
         logger.info("DPPHandler.handle_ws_message: {message}")
 
-    async def handle_hostapd_cli_message(self, message):
-        logger.info(f"DPPHandler.handle_hostapd_cli_message({message})")
-        # TODO
-        pass
-
     async def onboard_device(self, micronet_id, device_id, onboard_params):
         logger.info(f"DPPHandler.onboard_device(micronet '{micronet_id}', device '{device_id}', onboard_params '{onboard_params}')")
+        
+        if self.pending_onboard:
+            pending_device_id = self.pending_onboard['device']['deviceId']
+            pending_micronet_id = self.pending_onboard['micronet']['micronetId']
+            raise InvalidUsage (503, message="Only one onboard process can be performed at a time (currently onboarding "
+                                            f"device {pending_device_id} into micronet (pending_micronet_id))")
         conf_model = get_conf_model()
         micronet = conf_model.check_micronet_reference(micronet_id)
         device = conf_model.check_device_reference(micronet_id, device_id)
@@ -35,25 +42,33 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         if self.simulate_response_events:
             async def send_dpp_onboard_event_delayed(event_name, reason):
                 await asyncio.sleep(self.simulated_event_wait_s)
-                await self.send_dpp_onboard_event(micronet, device, event_name, reason)
+                if self.pending_onboard:
+                    pend_micronet = self.pending_onboard['micronet']
+                    pend_device = self.pending_onboard['device']
+                    await self.send_dpp_onboard_event(pend_micronet, pend_device, event_name, reason)
+                    self.pending_onboard = None
+                else:
+                    logger.warning("DPPHandler.send_dpp_onboard_event_delayed: No onboard is pending - not sending event")
 
             if self.simulate_response_events == "with success":
                 logger.info (f"DPPHandler.onboard_device: simulating success response to onboard {device_id} "
                              f"in {self.simulated_event_wait_s} seconds")
-                asyncio.ensure_future(send_dpp_onboard_event_delayed("DPPOnboardingCompleteEvent", "This is only a test"))
+                asyncio.ensure_future(send_dpp_onboard_event_delayed(DPPHandler.EVENT_ONBOARDING_COMPLETE, "This is only a test"))
             elif self.simulate_response_events == "with failure":
                 logger.info(f"DPPHandler.onboard_device: simulating fail response to onboard {device_id} "
                             f"in {self.simulated_event_wait_s} seconds")
-                asyncio.ensure_future(send_dpp_onboard_event_delayed("DPPOnboardingFailedEvent", "This is only a test"))
+                asyncio.ensure_future(send_dpp_onboard_event_delayed(DPPHandler.EVENT_ONBOARDING_FAILED, "This is only a test"))
             else:
                 logger.warning(f"DPPHandler.onboard_device: unrecognized value for SIMULATE_ONBOARD_RESPONSE_EVENTS: "
                                + self.simulate_response_events)
+            self.pending_onboard = {"micronet":micronet, "device": device, "onboard_params": onboard_params}
             return '', 200
         else:
             logger.info(f"DPPHandler.onboard_device: Issuing DPP onboarding commands for device '{device_id}' in micronet '{micronet_id}...")
 
             if 'psk' not in device:
-                raise Exception("Device {device_id} does not have a PSK")
+                raise Exception("Device {device_id} does not have a PSK - cannot onboard")
+                # TODO: Consider generating a PSK?
             psk = device['psk']
 
             status_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.StatusCLICommand())
@@ -64,34 +79,64 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
             logger.info(f"DPPHandler.onboard_device:   SSID: {ssid} ({ssid_ascii})")
 
             qrcode_uri = onboard_params['dpp']['uri']
-            logger.info (f"{__name__}:   QRCode URI: {qrcode_uri}")
+            logger.info (f"{__name__}:   DPP QRCode URI: {qrcode_uri}")
             add_qrcode_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAddQRCodeCLICommand(qrcode_uri))
             qrcode_id = await add_qrcode_cmd.get_qrcode_id()
-            logger.info (f"{__name__}:   DPP QRCode ID: {qrcode_id}")
+            logger.info(f"{__name__}:   DPP QRCode ID: {qrcode_id}")
 
             add_config_id_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAddConfiguratorCLICommand())
             configurator_id = await add_config_id_cmd.get_configurator_id()
-            logger.info (f"{__name__}:   DPP Configurator ID: {configurator_id}")
+            logger.info(f"{__name__}:   DPP Configurator ID: {configurator_id}")
 
+            self.pending_onboard = {"micronet":micronet, "device": device, "onboard_params": onboard_params}
             dpp_auth_init_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAuthInitPSKCommand(configurator_id, qrcode_id, ssid_ascii, psk))
             result = await dpp_auth_init_cmd.get_response()
-            logger.info (f"{__name__}: Auth Init result: {result}")
+            logger.info(f"{__name__}: Auth Init result: {result}")
 
             if await dpp_auth_init_cmd.was_successful():
+                async def onboard_timeout_handler():
+                    await asyncio.sleep(HostapdAdapter.DPP_ONBOARD_TIMEOUT_S)
+                    if self.pending_onboard:
+                        logger.info(f"{__name__}: Onboarding TIMED OUT (after {HostapdAdapter.DPP_ONBOARD_TIMEOUT_S} seconds)")
+                        pend_micronet = self.pending_onboard['micronet']
+                        pend_device = self.pending_onboard['device']
+                        await self.send_dpp_onboard_event(pend_micronet, pend_device, 
+                                                          HostapdAdapter.EVENT_ONBOARDING_FAILED, 
+                                                          f"Onboarding timed out ({HostapdAdapter.DPP_ONBOARD_TIMEOUT_S} seconds)")
+                        self.pending_onboard = None
+                    else:
+                        logger.info(f"{__name__}: Onboarding completed before timeout (before {HostapdAdapter.DPP_ONBOARD_TIMEOUT_S} seconds)")
+
+                self.pending_timeout_task = asyncio.ensure_future(onboard_timeout_handler())
                 return '', 200
             else:
+                self.pending_onboard = None
                 return f"Onboarding could not be initiated ({result})", 500
 
 
     async def handle_hostapd_cli_event(self, event):
         logger.info(f"DPPHandler.handle_hostapd_cli_event({event})")
-
+        logger.info(f"DPPHandler.handle_hostapd_cli_event({event}): pending_onboard {self.pending_onboard}")
+        if self.pending_onboard:
+            micronet = self.pending_onboard['micronet']
+            device = self.pending_onboard['device']
+            if event.startswith("DPP-AUTH-INIT-FAILED"):
+                self.pending_onboard = None
+                await self.send_dpp_onboard_event(micronet, device, DPPHandler.EVENT_ONBOARDING_FAILED, 
+                                                  f"DPP Authorization failed ({event})")
+            elif event.startswith("DPP-AUTH-SUCCESS") or event.startswith("DPP-CONF-SENT"):
+                await self.send_dpp_onboard_event(micronet, device, DPPHandler.EVENT_ONBOARDING_PROGRESS, 
+                                                  f"DPP Progress ({event})")
+            elif event.startswith("AP-STA-CONNECTED") and device['macAddress']['eui48'] in event:
+                self.pending_onboard = None
+                await self.send_dpp_onboard_event(micronet, device, DPPHandler.EVENT_ONBOARDING_COMPLETE, 
+                                                  f"DPP Onboarding Complete ({event})")
 
     async def send_dpp_onboard_event(self, micronet, device, event_name, reason=None):
         ws_connector = get_ws_connector()
-        if not ws_connector.is_ready ():
-            ws_uri = ws_connector.get_connect_uri ()
-            logger.info (f"DPPHandler.send_dpp_onboard_complete: websocket not connected (ws uri: {ws_uri})")
+        if not ws_connector.is_ready():
+            ws_uri = ws_connector.get_connect_uri()
+            logger.info (f"DPPHandler.send_dpp_onboard_event: websocket not connected (ws uri: {ws_uri})")
             return f"The websocket connection to {ws_uri} is not connected/ready", 500
 
         dev_mac_field = device['macAddress']['eui48']
@@ -103,6 +148,7 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
                                           } }
         if reason:
             dpp_onboarding_complete_event[event_name]['reason'] = reason
-        logger.info (f"DPPHandler.send_dpp_onboard_complete: sending:")
+        logger.info (f"DPPHandler.send_dpp_onboard_event: sending:")
         logger.info (json.dumps (dpp_onboarding_complete_event, indent=4))
         await ws_connector.send_event_message ("DPP", event_name, dpp_onboarding_complete_event)
+
