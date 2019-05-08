@@ -35,6 +35,9 @@ class HostapdAdapter:
             self.hostapd_adapter = None
             self.event_prefixes = event_prefixes
 
+        async def handle_hostapd_ready(self):
+            pass
+
         async def handle_hostapd_cli_event(self, event):
             pass
 
@@ -145,6 +148,7 @@ class HostapdAdapter:
                 if not self.cli_ready and self.cli_ready_re.match(line):
                     logger.info(f"HostapdAdapter:read_cli_output: hostapd CLI is now READY")
                     self.cli_ready = True
+                    asyncio.run_coroutine_threadsafe(self.handle_hostapd_ready(), self.event_loop)
                 cli_event_match = HostapdAdapter.cli_event_re.match(line)
                 if cli_event_match:
                     event_data = cli_event_match.group(2).strip()
@@ -308,19 +312,26 @@ class HostapdAdapter:
 
 
     class DPPAddConfiguratorCLICommand(HostapdCLICommand):
-        def __init__ (self, event_loop=asyncio.get_event_loop()):
+        def __init__ (self, curve=None, key=None, event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
+            self.curve = curve
+            self.key = key
             self.configurator_id = None
             self.success = False
 
         def get_command_string(self):
-            return "dpp_configurator_add"
+            cmd_string = "dpp_configurator_add"
+            if self.curve:
+                cmd_string += f" curve={self.curve}"
+            if self.key:
+                cmd_string += f" key={self.key}"
 
         async def process_response_data(self, response):
             try:
                 self.configurator_id = int(response)
                 self.success = True
             except Exception as ex:
+                # If the response isn't an integer, the command failed
                 self.success = False
             finally:
                 await super().process_response_data(response)

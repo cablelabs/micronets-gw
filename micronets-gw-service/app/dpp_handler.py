@@ -1,10 +1,13 @@
 import asyncio
 import logging
+import ecdsa
 
+from pathlib import Path
 from quart import Quart, Request, json
 from app import get_ws_connector, get_conf_model
 from .ws_connector import WSMessageHandler
 from .hostapd_adapter import HostapdAdapter 
+from .utils import InvalidUsage
 
 logger = logging.getLogger ('micronets-gw-service')
 
@@ -23,6 +26,8 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         self.simulated_event_wait_s = 7
         self.hostapd_adapter = hostapd_adapter
         self.pending_onboard = None
+        self.dpp_config_key_file = Path (config ['DPP_CONFIG_KEY_FILE'])
+        self.dpp_configurator_id = None
 
     async def handle_ws_message(self, message):
         logger.info("DPPHandler.handle_ws_message: {message}")
@@ -84,12 +89,10 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
             qrcode_id = await add_qrcode_cmd.get_qrcode_id()
             logger.info(f"{__name__}:   DPP QRCode ID: {qrcode_id}")
 
-            add_config_id_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAddConfiguratorCLICommand())
-            configurator_id = await add_config_id_cmd.get_configurator_id()
-            logger.info(f"{__name__}:   DPP Configurator ID: {configurator_id}")
-
             self.pending_onboard = {"micronet":micronet, "device": device, "onboard_params": onboard_params}
-            dpp_auth_init_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAuthInitPSKCommand(configurator_id, qrcode_id, ssid_ascii, psk))
+            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitPSKCommand(self.dpp_configurator_id, qrcode_id,
+                                                                     ssid_ascii, psk)
+            await self.hostapd_adapter.send_command(dpp_auth_init_cmd)
             result = await dpp_auth_init_cmd.get_response()
             logger.info(f"{__name__}: Auth Init result: {result}")
 
@@ -131,6 +134,25 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
                 self.pending_onboard = None
                 await self.send_dpp_onboard_event(micronet, device, DPPHandler.EVENT_ONBOARDING_COMPLETE, 
                                                   f"DPP Onboarding Complete ({event})")
+
+    async def handle_hostapd_ready(self):
+        logger.info(f"DPPHandler.handle_hostapd_ready()")
+        dpp_config_key = None
+        if self.dpp_config_key_file.exists():
+            try:
+                dpp_config_key = self.dpp_config_key_file.read_text()
+            except Exception as ex:
+                logger.warning(f"DPPHandler: handle_hostapd_ready: Caught exception reading {self.dpp_config_key_file}: {ex}")
+                return
+        else:
+            # Create a prime256v1 key
+            dpp_config_key = ecdsa.SigningKey.generate(curve=ecdsa.NIST256p).to_der().hex()
+            self.dpp_config_key_file.write_text(dpp_config_key)
+
+        add_configurator_cmd = HostapdAdapter.DPPAddConfiguratorCLICommand(curve="prime256v1", key=dpp_config_key)
+        await self.hostapd_adapter.send_command(add_configurator_cmd)
+        self.dpp_configurator_id = await add_configurator_cmd.get_configurator_id()
+        logger.info(f"DPPHandler.handle_hostapd_ready: DPP Configurator ID: {self.dpp_configurator_id}")
 
     async def send_dpp_onboard_event(self, micronet, device, event_name, reason=None):
         ws_connector = get_ws_connector()

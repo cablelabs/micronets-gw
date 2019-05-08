@@ -127,7 +127,8 @@ try:
     if dpp_handler_enabled:
         dpp_handler = DPPHandler(app.config, hostapd_adapter)
         ws_connector.register_handler (dpp_handler)
-        hostapd_adapter.register_cli_event_handler(dpp_handler)
+        if hostapd_adapter:
+            hostapd_adapter.register_cli_event_handler(dpp_handler)
     else:
         logger.info("Not initiating dpp handler (DPP handler disabled)")
 except Exception as ex:
