@@ -148,7 +148,7 @@ class HostapdAdapter:
                 if not self.cli_ready and self.cli_ready_re.match(line):
                     logger.info(f"HostapdAdapter:read_cli_output: hostapd CLI is now READY")
                     self.cli_ready = True
-                    asyncio.run_coroutine_threadsafe(self.handle_hostapd_ready(), self.event_loop)
+                    asyncio.run_coroutine_threadsafe(self.process_hostapd_ready(), self.event_loop)
                 cli_event_match = HostapdAdapter.cli_event_re.match(line)
                 if cli_event_match:
                     event_data = cli_event_match.group(2).strip()
@@ -180,6 +180,11 @@ class HostapdAdapter:
                 logger.warning(f"HostapdAdapter:read_cli_output: Error processing data: {ex}", exc_info=True)
         self.cli_connected = False
         self.cli_ready = False
+
+    async def process_hostapd_ready(self):
+        logger.info(f"HostapdAdapter:process_hostapd_ready()")
+        for handler in self.event_handler_table:
+            asyncio.ensure_future(handler.handle_hostapd_ready())
 
     async def process_event(self, event_data):
         logger.info(f"HostapdAdapter:process_event: EVENT: (\"{event_data}\")")
@@ -325,6 +330,7 @@ class HostapdAdapter:
                 cmd_string += f" curve={self.curve}"
             if self.key:
                 cmd_string += f" key={self.key}"
+            return cmd_string
 
         async def process_response_data(self, response):
             try:
