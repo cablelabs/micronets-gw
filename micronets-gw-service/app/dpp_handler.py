@@ -98,19 +98,20 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
 
             if await dpp_auth_init_cmd.was_successful():
                 async def onboard_timeout_handler():
-                    await asyncio.sleep(HostapdAdapter.DPP_ONBOARD_TIMEOUT_S)
+                    await asyncio.sleep(DPPHandler.DPP_ONBOARD_TIMEOUT_S)
                     if self.pending_onboard:
-                        logger.info(f"{__name__}: Onboarding TIMED OUT (after {HostapdAdapter.DPP_ONBOARD_TIMEOUT_S} seconds)")
+                        logger.info(f"{__name__}: Onboarding TIMED OUT (after {DPPHandler.DPP_ONBOARD_TIMEOUT_S} seconds)")
                         pend_micronet = self.pending_onboard['micronet']
                         pend_device = self.pending_onboard['device']
                         await self.send_dpp_onboard_event(pend_micronet, pend_device, 
-                                                          HostapdAdapter.EVENT_ONBOARDING_FAILED, 
-                                                          f"Onboarding timed out ({HostapdAdapter.DPP_ONBOARD_TIMEOUT_S} seconds)")
+                                                          DPPHandler.EVENT_ONBOARDING_FAILED, 
+                                                          f"Onboarding timed out (after {DPPHandler.DPP_ONBOARD_TIMEOUT_S} seconds)")
                         self.pending_onboard = None
                     else:
-                        logger.info(f"{__name__}: Onboarding completed before timeout (before {HostapdAdapter.DPP_ONBOARD_TIMEOUT_S} seconds)")
+                        logger.info(f"{__name__}: Onboarding completed before timeout (< {DPPHandler.DPP_ONBOARD_TIMEOUT_S} seconds)")
 
                 self.pending_timeout_task = asyncio.ensure_future(onboard_timeout_handler())
+
                 return '', 200
             else:
                 self.pending_onboard = None
