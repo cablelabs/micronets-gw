@@ -901,13 +901,51 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
+           "akms": ["psk"],
            "dpp": {
                "uri": "DPP:C:81/1;M:2c:d0:5a:6e:ca:3c;I:KYZRQ;K:MDkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDIgAC/nFQKV1+CErzr6QCUT0jFIno3CaTRr3BW2n0ThU4mAw=;;"
            }
        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices/MyDevice03/onboard
     ```
 
-    Expected event: (when the onboard call is successful)
+    Expected events: (when the onboard is initiated successfully/returns 200)
+    ```json
+    {
+        "message" : {
+            "messageId" : 1234,
+            "messageType" : "EVENT:DPP:DPPOnboardingStartedEvent",
+            "requiresResponse" : false,
+            "dataFormat" : "application/json",
+            "messageBody" : {
+                "DPPOnboardingStartedEvent" : {
+                    "deviceId" : "MyDevice03",
+                    "micronetId" : "mockmicronet007",
+                    "macAddress" : "00:23:12:0f:b0:26"
+                 }
+            }
+        }
+    }
+    ```
+
+    ```json
+    {
+        "message" : {
+            "messageId" : 1234,
+            "messageType" : "EVENT:DPP:DPPOnboardingProgressEvent",
+            "requiresResponse" : false,
+            "dataFormat" : "application/json",
+            "messageBody" : {
+                "DPPOnboardingProgressEvent" : {
+                    "deviceId" : "MyDevice03",
+                    "micronetId" : "mockmicronet007",
+                    "macAddress" : "00:23:12:0f:b0:26",
+                    "reason": "DPP-CONF-SENT"
+                 }
+            }
+        }
+    }
+    ```
+
     ```json
     {
         "message" : {

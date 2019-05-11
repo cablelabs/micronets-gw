@@ -290,7 +290,7 @@ async def check_device (device, required):
         check_for_unrecognized_entries (network_address, ['ipv4'])
         check_ipv4_address_field (network_address, 'ipv4', required)
 
-    check_wpa_psk (device, 'psk', required)
+    check_wpa_psk (device, 'psk', False)
 
     await check_rules (device, 'outRules', False)
     await check_rules (device, 'inRules', False)
@@ -363,7 +363,21 @@ async def onboard_device (micronet_id, device_id):
     check_device_id (device_id, request.path)
     top_level = await request.get_json ()
     check_for_unrecognized_entries (top_level, ['dpp'])
+    dpp_obj = top_level['dpp']
+    check_for_unrecognized_entries(dpp_obj, ['uri','akms'])
+    uri = check_field (dpp_obj, 'uri', str, True)
+    akms = check_akms (dpp_obj, 'akms', True)
     return await get_dpp_handler().onboard_device (micronet_id, device_id, top_level)
+
+valid_akms = ("psk", "dpp", "sae")
+
+def check_akms (container, field_name, required):
+    akms = check_field (container, field_name, (list), required)
+    if akms:
+        for akm in akms:
+            if akm not in valid_akms:
+                raise InvalidUsage (400, message=f"akms entry '{akm}' is invalid (must be one of: {valid_akms})")
+    return akms
 
 async def check_lease_event (lease_event):
     event_fields = check_field (lease_event, 'leaseChangeEvent', dict, True)

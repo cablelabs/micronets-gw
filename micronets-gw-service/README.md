@@ -114,7 +114,7 @@ Note: Currently only data type _application/json_ is supported.
 
 | Property name            | Value           | Required | Description                           | Example      |
 | ------------------------ | --------------- | -------- | ------------------------------------- | ------------- 
-| micronetId               | string          | Y        | Unique ID for the Micronet | "192.168.0" |
+| micronetId               | string          | Y        | Unique ID for the Micronet | "micronet-192.168.0" |
 | ipv4Network              | nested object   | Y        | The definition of a IPv4 network ||
 | ipv4Network.network      | string          | Y        | The IPv4 network definition (dotted IP) | "192.168.1.0" |
 | ipv4Network.mask         | string          | Y        | The netmask for the network (dotted IP) | "255.255.255.0" |
@@ -210,6 +210,9 @@ All request URIs are prefixed by **/micronets/v1/gateway** unless otherwise note
 ```json
 {
     "dpp": {
+       "akm": [
+           string
+       ],
        "uri": string
     }
 }
@@ -217,8 +220,13 @@ All request URIs are prefixed by **/micronets/v1/gateway** unless otherwise note
 
 | Property name            | Value         | Required | Description                           | Example      |
 | ------------------------ | ------------- | -------- | ------------------------------------- | ------------- 
-| dpp                      | nested object | N        | Parameters for DPP-based onboarding   | |
+| dpp                      | nested object | Y        | Parameters for DPP-based onboarding   | |
+| akms                     | list (string) | Y        | The Authentication and Key Management method(s) to enable for on-boarding. List containing "dpp", "psk", and/or "sae". | ["dpp", "psk"] |
 | uri                      | string        | Y        | The device's DPP onboarding URI (e.g. from QR code) | DPP:C:81/1;M:2c:d0:5a:6e:ca:3c;I:KYZRQ;K:MDkwEwYH....hU4mAw=;; |
+
+##### Notes:
+
+* Not all combinations of akm values are allowed 
 
 #### Micronet Device Onboarding Endpoints/Operations
 
@@ -229,24 +237,16 @@ All request URIs are prefixed by `/micronets/v1/gateway` unless otherwise noted
 | update | PUT /micronets/**_micronetId_**/devices/**_deviceId_**/onboard | Initiate device onboarding.  |
 | delete | DELETE /micronets/**_micronetId_**/devices/**_deviceId_**/onboard | Cancel device onboarding.  |
 
-##### Notes:
-
-* If `update` on the onboarding endpoint returns a success status code (200), an onboarding event will be 
-  sent on the active websocket connection if/when the onboarding operation succeeds, fails, or times out. 
-* Currently only DPP-based onboarding is supported via the onboarding endpoint. But others may be added 
-  in the future (with a corresponding json message definition)
-
 #### Micronet Device Onboarding Event Notifications
 
 These events are sent over the active websocket connection in response to a successful onboarding
 request initiated via the `onboarding` endpoint described above.
 
-Note: Currently only data type `application/json` is supported.
+And all onboarding events share the same structure definition:
 
-**Device Onboarding Complete Event Notification:**
 ```json
 {
-    "DPPOnboardingCompleteEvent": {
+    eventName: {
         "micronetId": string,
         "deviceId": string,
         "macAddress": string,
@@ -254,21 +254,6 @@ Note: Currently only data type `application/json` is supported.
     }
 }
 ```
-This will be posted to the websocket with messageType `EVENT:DPP:OnboardingCompleteEvent`
-
-**Device Onboarding Failed Event Notification:**
-```json
-{
-    "DPPOnboardingFailedEvent": {
-        "micronetId": string,
-        "deviceId": string,
-        "macAddress": string,
-        "reason": string
-    }
-}
-```
-
-This will be posted to the websocket with messageType `EVENT:DPP:OnboardingFailedEvent`
 
 | Property name            | Value         | Required | Description                           | Example      |
 | ------------------------ | ------------- | -------- | ------------------------------------- | ------------- 
@@ -276,6 +261,58 @@ This will be posted to the websocket with messageType `EVENT:DPP:OnboardingFaile
 | deviceId                 | string        | Y        | An alphanumeric device identifier (max 64 characters) | "device-1234"|
 | macAddress               | string        | Y        | An EUI-48 format MAC address | "00:23:12:0f:b0:26" |
 | reason                   | string        | N        | A human-readable reason for the onboarding success/failure|
+
+##### Event Notification Types:
+
+* `DPPOnboardingStartedEvent`: Sent after onboarding is successfully initiated (returns a status code of 200)
+* `DPPOnboardingProgressEvent`: Optionally sent during the onboarding process with the `reason` code indicating the nature of the progress.
+* `DPPOnboardingFailedEvent`: Signals the failure of the onboarding process with the `reason` code optionally indicating the reason for the failure. 
+  No other onboarding events will be received after this event.
+* `DPPOnboardingCompleteEvent`: Signals the successful completion of the onboarding process.
+  No other onboarding events will be received after this event.
+ 
+These will be posted to the websocket with messageType `EVENT:DPP:eventName`
+
+##### Example:
+
+    ```json
+    {
+        "message" : {
+            "messageId" : 1234,
+            "messageType" : "EVENT:DPP:DPPOnboardingStartedEvent",
+            "requiresResponse" : false,
+            "dataFormat" : "application/json",
+            "messageBody" : {
+                "DPPOnboardingStartedEvent" : {
+                    "deviceId" : "MyDevice03",
+                    "micronetId" : "mockmicronet007",
+                    "macAddress" : "00:23:12:0f:b0:26"
+                 }
+            }
+        }
+    }
+    ```
+
+##### Notes:
+
+* If `update` on the onboarding endpoint returns a success status code (200), an onboarding terminal event 
+  will be sent on the active websocket connection if/when the onboarding operation succeeds, fails, or times out. 
+* Currently only DPP-based onboarding is supported via the onboarding endpoint. But others may be added 
+  in the future (with a corresponding json message definition)
+* Currently only data type `application/json` is supported.
+
+
+**Device Onboarding Started Event Notification:**
+```json
+{
+    "DPPOnboardingStartedEvent": {
+        "micronetId": string,
+        "deviceId": string,
+        "macAddress": string,
+        "reason": string
+    }
+}
+```
 
 ### MICRONET DEVICE LEASE CHANGE NOTIFICATIONS
 

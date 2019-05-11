@@ -13,6 +13,7 @@ logger = logging.getLogger ('micronets-gw-service')
 
 
 class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
+    EVENT_ONBOARDING_STARTED = "DPPOnboardingStartedEvent"
     EVENT_ONBOARDING_PROGRESS = "DPPOnboardingProgressEvent"
     EVENT_ONBOARDING_COMPLETE = "DPPOnboardingCompleteEvent"
     EVENT_ONBOARDING_FAILED = "DPPOnboardingFailedEvent"
@@ -23,7 +24,7 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         HostapdAdapter.HostapdCLIEventHandler.__init__(self, ("DPP","AP-STA"))
         self.config = config
         self.simulate_response_events = config ['SIMULATE_ONBOARD_RESPONSE_EVENTS']
-        self.simulated_event_wait_s = 7
+        self.simulated_event_wait_s = 6
         self.hostapd_adapter = hostapd_adapter
         self.pending_onboard = None
         self.dpp_config_key_file = Path (config ['DPP_CONFIG_KEY_FILE'])
@@ -34,7 +35,7 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
 
     async def onboard_device(self, micronet_id, device_id, onboard_params):
         logger.info(f"DPPHandler.onboard_device(micronet '{micronet_id}', device '{device_id}', onboard_params '{onboard_params}')")
-        
+
         if self.pending_onboard:
             pending_device_id = self.pending_onboard['device']['deviceId']
             pending_micronet_id = self.pending_onboard['micronet']['micronetId']
@@ -44,78 +45,82 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         micronet = conf_model.check_micronet_reference(micronet_id)
         device = conf_model.check_device_reference(micronet_id, device_id)
 
+        akms = onboard_params['dpp']['akms']
+        if 'psk' not in akms:
+            raise InvalidUsage (503, message="Only PSK AKM is currently supported")
+        if 'psk' not in device:
+            raise InvalidUsage (503, message="Device {device_id} does not have a PSK - cannot onboard")
+            # TODO: Consider generating a PSK?
+        psk = device['psk']
+
         if self.simulate_response_events:
-            async def send_dpp_onboard_event_delayed(event_name, reason):
-                await asyncio.sleep(self.simulated_event_wait_s)
+            async def send_dpp_onboard_event_delayed(event_name, delay, reason=None, terminal=False):
+                await asyncio.sleep(delay)
                 if self.pending_onboard:
                     pend_micronet = self.pending_onboard['micronet']
                     pend_device = self.pending_onboard['device']
                     await self.send_dpp_onboard_event(pend_micronet, pend_device, event_name, reason)
-                    self.pending_onboard = None
+                    if terminal:
+                        self.pending_onboard = None
                 else:
                     logger.warning("DPPHandler.send_dpp_onboard_event_delayed: No onboard is pending - not sending event")
 
-            if self.simulate_response_events == "with success":
-                logger.info (f"DPPHandler.onboard_device: simulating success response to onboard {device_id} "
-                             f"in {self.simulated_event_wait_s} seconds")
-                asyncio.ensure_future(send_dpp_onboard_event_delayed(DPPHandler.EVENT_ONBOARDING_COMPLETE, "This is only a test"))
-            elif self.simulate_response_events == "with failure":
-                logger.info(f"DPPHandler.onboard_device: simulating fail response to onboard {device_id} "
-                            f"in {self.simulated_event_wait_s} seconds")
-                asyncio.ensure_future(send_dpp_onboard_event_delayed(DPPHandler.EVENT_ONBOARDING_FAILED, "This is only a test"))
-            else:
-                logger.warning(f"DPPHandler.onboard_device: unrecognized value for SIMULATE_ONBOARD_RESPONSE_EVENTS: "
-                               + self.simulate_response_events)
+            asyncio.ensure_future(send_dpp_onboard_event_delayed(DPPHandler.EVENT_ONBOARDING_STARTED, 1))
+            asyncio.ensure_future(send_dpp_onboard_event_delayed(DPPHandler.EVENT_ONBOARDING_PROGRESS,
+                                                                 self.simulated_event_wait_s/2,
+                                                                 reason="This is progress"))
+            sim_terminal_event = DPPHandler.EVENT_ONBOARDING_COMPLETE \
+                                 if self.simulate_response_events is "with success" \
+                                 else DPPHandler.EVENT_ONBOARDING_FAILED
+            logger.info (f"DPPHandler.onboard_device: simulating {sim_terminal_event} response to onboard {device_id} "
+                         f"in {self.simulated_event_wait_s} seconds")
+            asyncio.ensure_future(send_dpp_onboard_event_delayed(sim_terminal_event, self.simulated_event_wait_s,
+                                                                 reason="This is only a test...", terminal=True))
             self.pending_onboard = {"micronet":micronet, "device": device, "onboard_params": onboard_params}
             return '', 200
+
+        logger.info(f"DPPHandler.onboard_device: Issuing DPP onboarding commands for device '{device_id}' in micronet '{micronet_id}...")
+
+        status_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.StatusCLICommand())
+        logger.info (f"{__name__}: Retrieving ssid...")
+        ssid_list = await status_cmd.get_status_var("ssid")
+        ssid = ssid_list[0]
+        ssid_ascii = ssid.encode("ascii").hex()
+        logger.info(f"DPPHandler.onboard_device:   SSID: {ssid} ({ssid_ascii})")
+
+        qrcode_uri = onboard_params['dpp']['uri']
+        logger.info (f"{__name__}:   DPP QRCode URI: {qrcode_uri}")
+        add_qrcode_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAddQRCodeCLICommand(qrcode_uri))
+        qrcode_id = await add_qrcode_cmd.get_qrcode_id()
+        logger.info(f"{__name__}:   DPP QRCode ID: {qrcode_id}")
+
+        self.pending_onboard = {"micronet":micronet, "device": device, "onboard_params": onboard_params}
+        dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitPSKCommand(self.dpp_configurator_id, qrcode_id,
+                                                                 ssid_ascii, psk)
+        await self.hostapd_adapter.send_command(dpp_auth_init_cmd)
+        result = await dpp_auth_init_cmd.get_response()
+        logger.info(f"{__name__}: Auth Init result: {result}")
+
+        if await dpp_auth_init_cmd.was_successful():
+            async def onboard_timeout_handler():
+                await asyncio.sleep(DPPHandler.DPP_ONBOARD_TIMEOUT_S)
+                if self.pending_onboard:
+                    logger.info(f"{__name__}: Onboarding TIMED OUT (after {DPPHandler.DPP_ONBOARD_TIMEOUT_S} seconds)")
+                    pend_micronet = self.pending_onboard['micronet']
+                    pend_device = self.pending_onboard['device']
+                    await self.send_dpp_onboard_event(pend_micronet, pend_device,
+                                                      DPPHandler.EVENT_ONBOARDING_FAILED,
+                                                      f"Onboarding timed out (after {DPPHandler.DPP_ONBOARD_TIMEOUT_S} seconds)")
+                    self.pending_onboard = None
+                else:
+                    logger.info(f"{__name__}: Onboarding completed before timeout (< {DPPHandler.DPP_ONBOARD_TIMEOUT_S} seconds)")
+
+            self.pending_timeout_task = asyncio.ensure_future(onboard_timeout_handler())
+
+            return '', 200
         else:
-            logger.info(f"DPPHandler.onboard_device: Issuing DPP onboarding commands for device '{device_id}' in micronet '{micronet_id}...")
-
-            if 'psk' not in device:
-                raise Exception("Device {device_id} does not have a PSK - cannot onboard")
-                # TODO: Consider generating a PSK?
-            psk = device['psk']
-
-            status_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.StatusCLICommand())
-            logger.info (f"{__name__}: Retrieving ssid...")
-            ssid_list = await status_cmd.get_status_var("ssid")
-            ssid = ssid_list[0]
-            ssid_ascii = ssid.encode("ascii").hex()
-            logger.info(f"DPPHandler.onboard_device:   SSID: {ssid} ({ssid_ascii})")
-
-            qrcode_uri = onboard_params['dpp']['uri']
-            logger.info (f"{__name__}:   DPP QRCode URI: {qrcode_uri}")
-            add_qrcode_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAddQRCodeCLICommand(qrcode_uri))
-            qrcode_id = await add_qrcode_cmd.get_qrcode_id()
-            logger.info(f"{__name__}:   DPP QRCode ID: {qrcode_id}")
-
-            self.pending_onboard = {"micronet":micronet, "device": device, "onboard_params": onboard_params}
-            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitPSKCommand(self.dpp_configurator_id, qrcode_id,
-                                                                     ssid_ascii, psk)
-            await self.hostapd_adapter.send_command(dpp_auth_init_cmd)
-            result = await dpp_auth_init_cmd.get_response()
-            logger.info(f"{__name__}: Auth Init result: {result}")
-
-            if await dpp_auth_init_cmd.was_successful():
-                async def onboard_timeout_handler():
-                    await asyncio.sleep(DPPHandler.DPP_ONBOARD_TIMEOUT_S)
-                    if self.pending_onboard:
-                        logger.info(f"{__name__}: Onboarding TIMED OUT (after {DPPHandler.DPP_ONBOARD_TIMEOUT_S} seconds)")
-                        pend_micronet = self.pending_onboard['micronet']
-                        pend_device = self.pending_onboard['device']
-                        await self.send_dpp_onboard_event(pend_micronet, pend_device, 
-                                                          DPPHandler.EVENT_ONBOARDING_FAILED, 
-                                                          f"Onboarding timed out (after {DPPHandler.DPP_ONBOARD_TIMEOUT_S} seconds)")
-                        self.pending_onboard = None
-                    else:
-                        logger.info(f"{__name__}: Onboarding completed before timeout (< {DPPHandler.DPP_ONBOARD_TIMEOUT_S} seconds)")
-
-                self.pending_timeout_task = asyncio.ensure_future(onboard_timeout_handler())
-
-                return '', 200
-            else:
-                self.pending_onboard = None
-                return f"Onboarding could not be initiated ({result})", 500
+            self.pending_onboard = None
+            return f"Onboarding could not be initiated ({result})", 500
 
 
     async def handle_hostapd_cli_event(self, event):
