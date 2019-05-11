@@ -70,7 +70,7 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
                                                                  self.simulated_event_wait_s/2,
                                                                  reason="This is progress"))
             sim_terminal_event = DPPHandler.EVENT_ONBOARDING_COMPLETE \
-                                 if self.simulate_response_events is "with success" \
+                                 if self.simulate_response_events == "with success" \
                                  else DPPHandler.EVENT_ONBOARDING_FAILED
             logger.info (f"DPPHandler.onboard_device: simulating {sim_terminal_event} response to onboard {device_id} "
                          f"in {self.simulated_event_wait_s} seconds")
