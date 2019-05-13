@@ -380,8 +380,8 @@ class HostapdAdapter:
             await self.get_response()
             return self.success
 
-    class DPPAuthInitPSKCommand(HostapdCLICommand):
-        def __init__ (self, configurator_id, qrcode_id, ssid, psk, event_loop=asyncio.get_event_loop()):
+    class DPPAuthInitCommand(HostapdCLICommand):
+        def __init__ (self, configurator_id, qrcode_id, ssid, psk=None, event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
             self.configurator_id = configurator_id
             self.qrcode_id = qrcode_id
@@ -390,7 +390,14 @@ class HostapdAdapter:
             self.success = False
 
         def get_command_string(self):
-            return f"dpp_auth_init peer={self.qrcode_id} conf=sta-psk ssid={self.ssid} psk={self.psk} configurator={self.configurator_id}"
+            ssid_asciihex = self.ssid.encode("ascii").hex()
+            cmd = f"dpp_auth_init peer={self.qrcode_id} ssid={ssid_asciihex} configurator={self.configurator_id}"
+            if self.psk:
+                cmd += f"conf=sta-psk psk={self.psk}"
+            else:
+                cmd += "conf=sta-dpp"
+
+            return cmd
 
         async def process_response_data(self, response):
             try:

@@ -46,12 +46,13 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         device = conf_model.check_device_reference(micronet_id, device_id)
 
         akms = onboard_params['dpp']['akms']
-        if 'psk' not in akms:
-            raise InvalidUsage (503, message="Only PSK AKM is currently supported")
-        if 'psk' not in device:
-            raise InvalidUsage (503, message="Device {device_id} does not have a PSK - cannot onboard")
-            # TODO: Consider generating a PSK?
-        psk = device['psk']
+        if 'dpp' in akms:
+            pass
+        elif 'psk' in akms:
+            if 'psk' not in device:
+                raise InvalidUsage (503, message="Device {device_id} does not have a PSK - cannot onboard")
+        else:
+            raise InvalidUsage(503, message="Only PSK- and DPP-based on-boarding are currently supported")
 
         if self.simulate_response_events:
             async def send_dpp_onboard_event_delayed(event_name, delay, reason=None, terminal=False):
@@ -85,7 +86,6 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         logger.info (f"{__name__}: Retrieving ssid...")
         ssid_list = await status_cmd.get_status_var("ssid")
         ssid = ssid_list[0]
-        ssid_ascii = ssid.encode("ascii").hex()
         logger.info(f"DPPHandler.onboard_device:   SSID: {ssid} ({ssid_ascii})")
 
         qrcode_uri = onboard_params['dpp']['uri']
@@ -95,8 +95,14 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"{__name__}:   DPP QRCode ID: {qrcode_id}")
 
         self.pending_onboard = {"micronet":micronet, "device": device, "onboard_params": onboard_params}
-        dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitPSKCommand(self.dpp_configurator_id, qrcode_id,
-                                                                 ssid_ascii, psk)
+        if 'dpp' in akms:
+            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, ssid)
+        elif 'psk' in akms:
+            psk = device['psk']
+            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, ssid, psk=psk)
+        else:
+            raise InvalidUsage(503, message="Only PSK- and DPP-based on-boarding are currently supported")
+
         await self.hostapd_adapter.send_command(dpp_auth_init_cmd)
         result = await dpp_auth_init_cmd.get_response()
         logger.info(f"{__name__}: Auth Init result: {result}")
