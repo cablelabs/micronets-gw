@@ -393,9 +393,9 @@ class HostapdAdapter:
             ssid_asciihex = self.ssid.encode("ascii").hex()
             cmd = f"dpp_auth_init peer={self.qrcode_id} ssid={ssid_asciihex} configurator={self.configurator_id}"
             if self.psk:
-                cmd += f"conf=sta-psk psk={self.psk}"
+                cmd += f" conf=sta-psk psk={self.psk}"
             else:
-                cmd += "conf=sta-dpp"
+                cmd += " conf=sta-dpp"
 
             return cmd
 

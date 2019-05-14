@@ -86,7 +86,7 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         logger.info (f"{__name__}: Retrieving ssid...")
         ssid_list = await status_cmd.get_status_var("ssid")
         ssid = ssid_list[0]
-        logger.info(f"DPPHandler.onboard_device:   SSID: {ssid} ({ssid_ascii})")
+        logger.info(f"DPPHandler.onboard_device:   SSID: {ssid}")
 
         qrcode_uri = onboard_params['dpp']['uri']
         logger.info (f"{__name__}:   DPP QRCode URI: {qrcode_uri}")
@@ -131,7 +131,6 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
 
     async def handle_hostapd_cli_event(self, event):
         logger.info(f"DPPHandler.handle_hostapd_cli_event({event})")
-        logger.info(f"DPPHandler.handle_hostapd_cli_event({event}): pending_onboard {self.pending_onboard}")
         if self.pending_onboard:
             micronet = self.pending_onboard['micronet']
             device = self.pending_onboard['device']
