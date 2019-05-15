@@ -13,10 +13,11 @@ import logging
 logger = logging.getLogger ('micronets-gw-service')
 
 class GatewayServiceConf:
-    def __init__ (self, ws_connection, dhcp_adapter, flow_adapter, min_update_interval_s):
+    def __init__ (self, ws_connection, dhcp_adapter, flow_adapter, hostapd_adapter, min_update_interval_s):
         self.ws_connection = ws_connection
         self.dhcp_adapter = dhcp_adapter
         self.flow_adapter = flow_adapter
+        self.hostapd_adapter = hostapd_adapter
         self.min_update_interval_s = min_update_interval_s
         self.update_conf_task = None
         read_conf = dhcp_adapter.read_from_conf ()
@@ -43,6 +44,8 @@ class GatewayServiceConf:
         self.dhcp_adapter.save_to_conf (self.micronet_list, self.device_lists)
         if self.flow_adapter:
             await self.flow_adapter.update(self.micronet_list, self.device_lists)
+        if self.hostapd_adapter:
+            await self.hostapd_adapter.update(self.micronet_list, self.device_lists)
 
     #
     # micronet Operations
@@ -52,6 +55,7 @@ class GatewayServiceConf:
             raise InvalidUsage (404, message=f"micronet '{micronet_id}' doesn't exist in micronet list")
         if micronet_id not in self.device_lists:
             raise InvalidUsage (404, message=f"micronet '{micronet_id}' doesn't exist in device list")
+        return self.micronet_list[micronet_id]
 
     def check_micronet_unique (self, micronet):
         micronet_id = micronet ['micronetId'].lower ()
@@ -159,12 +163,14 @@ class GatewayServiceConf:
         micronet_devices = self.device_lists [micronet_id]
         if device_id not in micronet_devices:
             raise InvalidUsage (404, message=f"Device '{device_id}' doesn't exist in micronet '{micronet_id}'")
+        return micronet_devices[device_id]
 
     def check_device_unique (self, device_id, micronet_id):
         device_list = self.device_lists [micronet_id]
         if device_id in device_list:
             raise InvalidUsage (409, message=f"Supplied device '{device_id}' already exists for "
                                              f"micronet '{micronet_id}'");
+        return device_id
 
     def check_device_for_micronet (self, device, micronet):
         ipv4_net_params = micronet ['ipv4Network']

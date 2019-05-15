@@ -1,6 +1,6 @@
 from quart import request, jsonify
 from ipaddress import IPv4Address, IPv4Network
-from app import app, get_conf_model
+from app import app, get_conf_model, get_dpp_handler
 from .utils import InvalidUsage, get_ipv4_hostports_for_hostportspec, parse_portspec
 
 import re
@@ -290,7 +290,7 @@ async def check_device (device, required):
         check_for_unrecognized_entries (network_address, ['ipv4'])
         check_ipv4_address_field (network_address, 'ipv4', required)
 
-    check_wpa_psk (device, 'psk', required)
+    check_wpa_psk (device, 'psk', False)
 
     await check_rules (device, 'outRules', False)
     await check_rules (device, 'inRules', False)
@@ -354,6 +354,30 @@ async def delete_device (micronet_id, device_id):
     check_micronet_id (micronet_id, request.path)
     check_device_id (device_id, request.path)
     return await get_conf_model ().delete_device (micronet_id, device_id)
+
+@app.route (api_prefix + '/micronets/<micronet_id>/devices/<device_id>/onboard', methods=['PUT'])
+async def onboard_device (micronet_id, device_id):
+    micronet_id = micronet_id.lower ()
+    device_id = device_id.lower ()
+    check_micronet_id (micronet_id, request.path)
+    check_device_id (device_id, request.path)
+    top_level = await request.get_json ()
+    check_for_unrecognized_entries (top_level, ['dpp'])
+    dpp_obj = top_level['dpp']
+    check_for_unrecognized_entries(dpp_obj, ['uri','akms'])
+    uri = check_field (dpp_obj, 'uri', str, True)
+    akms = check_akms (dpp_obj, 'akms', True)
+    return await get_dpp_handler().onboard_device (micronet_id, device_id, top_level)
+
+valid_akms = ("psk", "dpp", "sae")
+
+def check_akms (container, field_name, required):
+    akms = check_field (container, field_name, (list), required)
+    if akms:
+        for akm in akms:
+            if akm not in valid_akms:
+                raise InvalidUsage (400, message=f"akms entry '{akm}' is invalid (must be one of: {valid_akms})")
+    return akms
 
 async def check_lease_event (lease_event):
     event_fields = check_field (lease_event, 'leaseChangeEvent', dict, True)

@@ -39,18 +39,14 @@ else:
 
 app.config.from_object (config)
 
-logging_filename = app.config ['LOGFILE_PATH']
-logging_filemode = app.config ['LOGFILE_MODE']
-logging_level = app.config ['LOGGING_LEVEL']
+logging_filename = app.config.get('LOGFILE_PATH')
+logging_filemode = app.config.get('LOGFILE_MODE')
+logging_level = app.config.get('LOGGING_LEVEL')
 logging.basicConfig (level=logging_level, filename=logging_filename, filemode=logging_filemode,
                      format='%(asctime)s %(name)s: %(levelname)s %(message)s')
 print (f"Logging to logfile {logging_filename} (level {logging_level})")
 
 logger.info (f"Loading app module using {config}")
-
-conf_model = None
-dhcp_adapter = None
-ws_connector = None
 
 def get_logger():
     return logger
@@ -61,9 +57,13 @@ def get_conf_model ():
 def get_ws_connector():
     return ws_connector
 
+def get_dpp_handler():
+    return dpp_handler
+
 if not 'DHCP_ADAPTER' in app.config:
     exit (f"A DHCP_ADAPTER must be defined in the selected configuration ({app.config})")
 
+dhcp_adapter = None
 adapter = app.config ['DHCP_ADAPTER'].upper ()
 if adapter == "MOCK":
     from .mock_adapter import MockAdapter
@@ -82,13 +82,14 @@ else:
 
 from .ws_connector import WSConnector
 
+ws_connector = None
 try:
     ws_connector_enabled = app.config['WEBSOCKET_CONNECTION_ENABLED']
-    ws_server_address = app.config ['WEBSOCKET_SERVER_ADDRESS']
-    ws_server_port = app.config ['WEBSOCKET_SERVER_PORT']
-    ws_server_path = app.config ['WEBSOCKET_SERVER_PATH']
-    ws_tls_certkey_file = app.config['WEBSOCKET_TLS_CERTKEY_FILE']
-    ws_tls_ca_cert_file = app.config['WEBSOCKET_TLS_CA_CERT_FILE']
+    ws_server_address = app.config.get('WEBSOCKET_SERVER_ADDRESS')
+    ws_server_port = app.config.get('WEBSOCKET_SERVER_PORT')
+    ws_server_path = app.config.get('WEBSOCKET_SERVER_PATH')
+    ws_tls_certkey_file = app.config.get('WEBSOCKET_TLS_CERTKEY_FILE')
+    ws_tls_ca_cert_file = app.config.get('WEBSOCKET_TLS_CA_CERT_FILE')
     ws_connector = WSConnector (ws_server_address, ws_server_port, ws_server_path,
                                 tls_certkey_file=ws_tls_certkey_file,
                                 tls_ca_file=ws_tls_ca_cert_file)
@@ -100,28 +101,17 @@ except Exception as ex:
     logger.info ("Error starting websocket connector:", exc_info=True)
     exit (1)
 
-from .dpp_handler import DPPHandler
-
-try:
-    dpp_handler_enabled = app.config['DPP_HANDLER_ENABLED']
-    dpp_handler = DPPHandler ()
-    if dpp_handler_enabled:
-        ws_connector.register_handler (dpp_handler)
-    else:
-        logger.info("Not initiating dpp handler (DPP handler or Websocket connection disabled)")
-except Exception as ex:
-    logger.info ("Error registering DPP handler:", exc_info=True)
-    exit (1)
-
 from .hostapd_adapter import HostapdAdapter
 
+hostapd_adapter = None
 try:
     hostapd_adapter_enabled = app.config['HOSTAPD_ADAPTER_ENABLED']
-    hostapd_adapter = None
     if hostapd_adapter_enabled:
-        hostapd_cli_path = app.config['HOSTAPD_CLI_PATH']
-        logger.info(f"hostapd adapter enabled (hostapd cli path {hostapd_cli_path})")
-        hostapd_adapter = HostapdAdapter(hostapd_cli_path)
+        hostapd_cli_path = app.config.get('HOSTAPD_CLI_PATH')
+        hostapd_psk_file_path = app.config.get('HOSTAPD_PSK_FILE_PATH')
+        logger.info(f"hostapd adapter enabled (hostapd_psk_file_path {hostapd_psk_file_path}"
+                                             f",hostapd cli path {hostapd_cli_path})")
+        hostapd_adapter = HostapdAdapter(hostapd_psk_file_path, hostapd_cli_path)
         asyncio.ensure_future(hostapd_adapter.connect())
     else:
         logger.info("Not initiating hostapd adapter (disabled via config)")
@@ -129,7 +119,21 @@ except Exception as ex:
     logger.info ("Error starting hostapd adapter:", exc_info=True)
     exit (1)
 
-from .gateway_service_conf import GatewayServiceConf
+from .dpp_handler import DPPHandler
+
+dpp_handler = None
+try:
+    dpp_handler_enabled = app.config['DPP_HANDLER_ENABLED']
+    if dpp_handler_enabled:
+        dpp_handler = DPPHandler(app.config, hostapd_adapter)
+        ws_connector.register_handler (dpp_handler)
+        if hostapd_adapter:
+            hostapd_adapter.register_cli_event_handler(dpp_handler)
+    else:
+        logger.info("Not initiating dpp handler (DPP handler disabled)")
+except Exception as ex:
+    logger.info ("Error registering DPP handler:", exc_info=True)
+    exit (1)
 
 flow_adapter = None
 try:
@@ -142,16 +146,19 @@ try:
 except Exception as ex:
     logger.warning ("Error starting flow adapter:", exc_info=True)
 
+from .gateway_service_conf import GatewayServiceConf
+
+conf_model = None
 try:
     min_dhcp_conf_update_int_s = app.config ['MIN_DHCP_UPDATE_INTERVAL_S']
     logger.info (f"Minimum DHCP update interval (seconds): {min_dhcp_conf_update_int_s}")
-    conf_model = GatewayServiceConf (ws_connector, dhcp_adapter, flow_adapter, min_dhcp_conf_update_int_s)
+    conf_model = GatewayServiceConf (ws_connector, dhcp_adapter, flow_adapter, hostapd_adapter,
+                                     min_dhcp_conf_update_int_s)
 except Exception as ex:
     logger.info ("Error starting with adapter:", exc_info=True)
     exit (1)
 
-if flow_adapter:
-    asyncio.ensure_future(conf_model.update_conf())
+asyncio.ensure_future(conf_model.update_conf())
 
 # Initialize the API
 from . import gateway_service_api
