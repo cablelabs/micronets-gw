@@ -20,7 +20,7 @@ class BaseConfig:
     # For this command, the first parameter will be the bridge name and the second the flow filename
     FLOW_ADAPTER_ENABLED = False
     DPP_HANDLER_ENABLED = False
-    DPP_CONFIG_KEY_FILE = pathlib.Path (__file__).parent.joinpath ("dpp_config.key")
+    DPP_CONFIG_KEY_FILE = pathlib.Path (__file__).parent.joinpath ("lib/hostapd-dpp-configurator.key")
     HOSTAPD_ADAPTER_ENABLED = False
     SIMULATE_ONBOARD_RESPONSE_EVENTS = False
 
