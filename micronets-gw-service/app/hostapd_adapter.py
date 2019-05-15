@@ -149,11 +149,6 @@ class HostapdAdapter:
                     logger.info(f"HostapdAdapter:read_cli_output: hostapd CLI is now READY")
                     self.cli_ready = True
                     asyncio.run_coroutine_threadsafe(self.process_hostapd_ready(), self.event_loop)
-                cli_event_match = HostapdAdapter.cli_event_re.match(line)
-                if cli_event_match:
-                    event_data = cli_event_match.group(2).strip()
-                    asyncio.run_coroutine_threadsafe(self.process_event(event_data), self.event_loop)
-                    continue
                 if not command:
                     try:
                         command = self.command_queue.get(block=False)
@@ -176,6 +171,12 @@ class HostapdAdapter:
                                                          command.event_loop)
                         response_data = None
                         command = None
+                else:
+                    # This is assuming avents aren't delivered while a command response is being processed
+                    cli_event_match = HostapdAdapter.cli_event_re.match(line)
+                    if cli_event_match:
+                        event_data = cli_event_match.group(2).strip()
+                        asyncio.run_coroutine_threadsafe(self.process_event(event_data), self.event_loop)
             except Exception as ex:
                 logger.warning(f"HostapdAdapter:read_cli_output: Error processing data: {ex}", exc_info=True)
         self.cli_connected = False
@@ -474,9 +475,9 @@ class HostapdAdapter:
                         if line == "OK":
                             self.success = self.c_sign_key and self.net_access_key and self.dpp_connector
                             continue
-                        sign_response_elem = HostapdAdapter.DPPConfiguratorDPPSignCommand.sign_response_re.match(line)
+                        sign_response_elem = HostapdAdapter.DPPConfiguratorDPPSignCLICommand.sign_response_re.match(line)
                         if sign_response_elem:
-                            (param_name, param_val) = sign_response_elem.group
+                            (param_name, param_val) = sign_response_elem.groups()
                             if param_name == "DPP-CONNECTOR":
                                 self.dpp_connector = param_val
                             elif param_name == "DPP-C-SIGN-KEY":
@@ -576,6 +577,39 @@ async def run_dpp_tests():
     result = await dpp_auth_init_cmd.get_response()
     logger.info (f"{__name__}: Auth Init result: {result}")
 
+async def run_dpp_akm_tests():
+    logger.info (f"{__name__}: Running dpp akm tests...")
+    hostapd_adapter = HostapdAdapter(None, "/opt/micronets-hostapd/bin/hostapd_cli", [])
+    await hostapd_adapter.connect()
+    logger.info (f"{__name__}: CLI Connected.")
+
+    await asyncio.sleep(2)
+
+    status_cmd = await hostapd_adapter.send_command(HostapdAdapter.StatusCLICommand())
+    logger.info (f"{__name__}: Retrieving ssid...")
+    ssid_list = await status_cmd.get_status_var("ssid")
+    ssid = ssid_list[0]
+    logger.info(f"{__name__}: SSID: {ssid}")
+
+    add_configurator_cmd = HostapdAdapter.DPPAddConfiguratorCLICommand(curve="prime256v1")
+    await hostapd_adapter.send_command(add_configurator_cmd)
+    dpp_configurator_id = await add_configurator_cmd.get_configurator_id()
+    logger.info (f"{__name__}: Configurator ID: {dpp_configurator_id}")
+
+    logger.info (f"{__name__}: Creating a DPP Connector for the AP")
+    dpp_config_sign_cmd = HostapdAdapter.DPPConfiguratorDPPSignCLICommand(dpp_configurator_id, ssid)
+    await hostapd_adapter.send_command(dpp_config_sign_cmd)
+    dpp_connector = await dpp_config_sign_cmd.get_connector()
+    logger.info (f"{__name__}:   Connector: {dpp_connector}")
+    dpp_c_sign_key = await dpp_config_sign_cmd.get_c_sign_key()
+    logger.info (f"{__name__}:   DPP c-sign-key: {dpp_c_sign_key}")
+    dpp_net_access_key = await dpp_config_sign_cmd.get_net_access_key()
+    logger.info (f"{__name__}:   Net access key: {dpp_net_access_key}")
+    
+    await hostapd_adapter.send_command(HostapdAdapter.SetCLICommand("dpp_connector", dpp_connector))
+    await hostapd_adapter.send_command(HostapdAdapter.SetCLICommand("dpp_csign", dpp_c_sign_key))
+    await hostapd_adapter.send_command(HostapdAdapter.SetCLICommand("dpp_netaccesskey", dpp_net_access_key))
+
 if __name__ == '__main__':
     print (f"{__name__}: Starting\n")
     logging.basicConfig(level="DEBUG")
@@ -586,7 +620,7 @@ if __name__ == '__main__':
     event_loop = asyncio.get_event_loop ()
     try:
         logger.info (f"{__name__}: Starting event loop...")
-        event_loop.run_until_complete(run_tests())
+        event_loop.run_until_complete(run_dpp_akm_tests())
         event_loop.run_forever()
         logger.info (f"{__name__}: Event loop exited")
     except Exception as Ex:
