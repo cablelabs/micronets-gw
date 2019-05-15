@@ -318,6 +318,25 @@ class HostapdAdapter:
             await self.get_response()
             return self.sta_macs
 
+    class SetCLICommand(HostapdCLICommand):
+        def __init__ (self, setting_name, setting_value, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.setting_name = setting_name
+            self.setting_value = setting_value
+            self.success = False
+
+        def get_command_string(self):
+            return f"set {self.setting_name} {self.setting_value}"
+
+        async def process_response_data(self, response):
+            try:
+                self.success = "OK" in response
+            finally:
+                await super().process_response_data(response)
+
+        async def was_successful(self):
+            await self.get_response()
+            return self.success
 
     class DPPAddConfiguratorCLICommand(HostapdCLICommand):
         def __init__ (self, curve=None, key=None, event_loop=asyncio.get_event_loop()):
@@ -348,7 +367,7 @@ class HostapdAdapter:
         async def get_configurator_id(self):
             response = await self.get_response()
             if not self.success:
-                raise Exception("Unexpected response ({responses})")
+                raise Exception(f"Unexpected response: ({response})")
             return self.configurator_id
 
     class DPPAddQRCodeCLICommand(HostapdCLICommand):
@@ -376,7 +395,7 @@ class HostapdAdapter:
         async def get_qrcode_id(self):
             response = await self.get_response()
             if not self.success:
-                raise Exception("Unexpected response ({responses})")
+                raise Exception(f"Unexpected response: ({response})")
             return self.qrcode_id
 
         async def was_successful(self):
@@ -425,6 +444,70 @@ class HostapdAdapter:
                 self.success = "OK" in response
             finally:
                 await super().process_response_data(response)
+
+        async def was_successful(self):
+            await self.get_response()
+            return self.success
+
+    class DPPConfiguratorDPPSignCLICommand(HostapdCLICommand):
+        def __init__ (self, configurator_id, ssid, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.configurator_id = configurator_id
+            self.ssid = ssid
+            self.success = False
+            self.c_sign_key = None
+            self.net_access_key = None
+            self.dpp_connector = None
+
+        def get_command_string(self):
+            ssid_asciihex = self.ssid.encode("ascii").hex()
+            return f"dpp_configurator_sign conf=ap-dpp ssid={ssid_asciihex} configurator={self.configurator_id}"
+
+        sign_response_re = re.compile("^<3>([-A-Z0-9]+)(?: (.+))?$")
+
+        async def process_response_data(self, response):
+            try:
+                for line in response.splitlines():
+                    # TODO: REMOVE ME
+                    logger.info(f"DPPConfiguratorDPPSignCLICommand.process_response_data: Looking at line: {line}")
+                    try:
+                        if line == "OK":
+                            self.success = self.c_sign_key and self.net_access_key and self.dpp_connector
+                            continue
+                        sign_response_elem = HostapdAdapter.DPPConfiguratorDPPSignCommand.sign_response_re.match(line)
+                        if sign_response_elem:
+                            (param_name, param_val) = sign_response_elem.group
+                            if param_name == "DPP-CONNECTOR":
+                                self.dpp_connector = param_val
+                            elif param_name == "DPP-C-SIGN-KEY":
+                                self.c_sign_key = param_val
+                            elif param_name == "DPP-NET-ACCESS-KEY":
+                                self.net_access_key = param_val
+                            else:
+                                pass
+                    except Exception as ex:
+                        logger.warning(f"DPPConfiguratorDPPSignCLICommand.process_response_data: Error processing status line {line}: {ex}",
+                                       exc_info=True)
+            finally:
+                await super().process_response_data(response)
+
+        async def get_connector(self):
+            response = await self.get_response()
+            if not self.success:
+                raise Exception(f"Unexpected response: ({response})")
+            return self.dpp_connector
+
+        async def get_c_sign_key(self):
+            response = await self.get_response()
+            if not self.success:
+                raise Exception(f"Unexpected response: ({response})")
+            return self.c_sign_key
+
+        async def get_net_access_key(self):
+            response = await self.get_response()
+            if not self.success:
+                raise Exception(f"Unexpected response: ({response})")
+            return self.net_access_key
 
         async def was_successful(self):
             await self.get_response()
