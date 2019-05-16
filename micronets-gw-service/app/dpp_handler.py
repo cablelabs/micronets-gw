@@ -180,7 +180,7 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
 
         try:
             if self.dpp_ap_connector_file.exists():
-                self.dpp_ap_connector = json.reads(self.dpp_ap_connector_file.read_text())
+                self.dpp_ap_connector = json.loads(self.dpp_ap_connector_file.read_text())
                 logger.info(f"DPPHandler.handle_hostapd_ready: Loaded AP Connector from {self.dpp_ap_connector_file}")
             else:
                 # Create the AP's connector and persist it
@@ -196,7 +196,8 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
                 self.dpp_ap_connector = {"dpp_connector": dpp_connector,
                                          "dpp_csign": dpp_c_sign_key,
                                          "dpp_netaccesskey": dpp_net_access_key}
-                self.dpp_ap_connector_file.write_text(self.dpp_ap_connector)
+                dpp_ap_connector_json = json.dumps(self.dpp_ap_connector, indent=3) + "\n"
+                self.dpp_ap_connector_file.write_text(dpp_ap_connector_json)
             await self.hostapd_adapter.send_command(HostapdAdapter.SetCLICommand("dpp_connector",
                                                                                  self.dpp_ap_connector['dpp_connector']))
             await self.hostapd_adapter.send_command(HostapdAdapter.SetCLICommand("dpp_csign",

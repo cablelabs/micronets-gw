@@ -150,6 +150,7 @@ class HostapdAdapter:
                     self.cli_ready = True
                     asyncio.run_coroutine_threadsafe(self.process_hostapd_ready(), self.event_loop)
                 if not command:
+                    response_data = None
                     try:
                         command = self.command_queue.get(block=False)
                     except Empty:
