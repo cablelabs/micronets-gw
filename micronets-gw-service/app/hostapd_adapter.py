@@ -214,6 +214,9 @@ class HostapdAdapter:
             """Return the raw response data. Subclasses may provide accessors for specific data elements."""
             return await self.response_future
 
+        def __str__(self):
+            return type(self).__name__ + ": " + self.get_command_string()
+
     async def send_command(self, command):
         if not isinstance(command, HostapdAdapter.HostapdCLICommand):
             raise TypeError
