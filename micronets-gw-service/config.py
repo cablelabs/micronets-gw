@@ -21,6 +21,7 @@ class BaseConfig:
     FLOW_ADAPTER_ENABLED = False
     DPP_HANDLER_ENABLED = False
     DPP_CONFIG_KEY_FILE = pathlib.Path (__file__).parent.joinpath ("lib/hostapd-dpp-configurator.key")
+    DPP_AP_CONNECTOR_FILE = pathlib.Path (__file__).parent.joinpath ("lib/hostapd-dpp-ap-connector.json")
     HOSTAPD_ADAPTER_ENABLED = False
     SIMULATE_ONBOARD_RESPONSE_EVENTS = False
 
