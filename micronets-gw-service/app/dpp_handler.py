@@ -29,6 +29,9 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         self.pending_onboard = None
         self.dpp_config_key_file = Path (config ['DPP_CONFIG_KEY_FILE'])
         self.dpp_configurator_id = None
+        self.dpp_ap_connector_file = Path (config ['DPP_AP_CONNECTOR_FILE'])
+        self.dpp_ap_connector = None
+        self.ssid = None
 
     async def handle_ws_message(self, message):
         logger.info("DPPHandler.handle_ws_message: {message}")
@@ -88,12 +91,6 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
 
         logger.info(f"DPPHandler.onboard_device: Issuing DPP onboarding commands for device '{device_id}' in micronet '{micronet_id}...")
 
-        status_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.StatusCLICommand())
-        logger.info (f"{__name__}: Retrieving ssid...")
-        ssid_list = await status_cmd.get_status_var("ssid")
-        ssid = ssid_list[0]
-        logger.info(f"DPPHandler.onboard_device:   SSID: {ssid}")
-
         qrcode_uri = onboard_params['dpp']['uri']
         logger.info (f"{__name__}:   DPP QRCode URI: {qrcode_uri}")
         add_qrcode_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAddQRCodeCLICommand(qrcode_uri))
@@ -101,10 +98,10 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"{__name__}:   DPP QRCode ID: {qrcode_id}")
 
         if 'dpp' in akms:
-            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, ssid)
+            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid)
         elif 'psk' in akms:
             psk = device['psk']
-            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, ssid, psk=psk)
+            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid, psk=psk)
         else:
             raise InvalidUsage(503, message="Only PSK- and DPP-based on-boarding are currently supported")
 
@@ -135,7 +132,6 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
                                                               f"DPP Authorization failed {dpp_auth_init_cmd.get_command_string()} returned: ({result})"))
         return '', 200
 
-
     async def handle_hostapd_cli_event(self, event):
         logger.info(f"DPPHandler.handle_hostapd_cli_event({event})")
         if self.pending_onboard:
@@ -157,10 +153,17 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
 
     async def handle_hostapd_ready(self):
         logger.info(f"DPPHandler.handle_hostapd_ready()")
-        dpp_config_key = None
+
+        status_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.StatusCLICommand())
+        logger.info (f"DPPHandler.handle_hostapd_ready: Retrieving ssid...")
+        ssid_list = await status_cmd.get_status_var("ssid")
+        self.ssid = ssid_list[0]
+        logger.info(f"DPPHandler.handle_hostapd_ready:   SSID: {self.ssid}")
+
         if self.dpp_config_key_file.exists():
             try:
                 dpp_config_key = self.dpp_config_key_file.read_text()
+                logger.info(f"DPPHandler.handle_hostapd_ready: Loaded DPP configurator key from {self.dpp_config_key_file}")
             except Exception as ex:
                 logger.warning(f"DPPHandler: handle_hostapd_ready: Caught exception reading {self.dpp_config_key_file}: {ex}")
                 return
@@ -168,11 +171,43 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
             # Create a prime256v1 key
             dpp_config_key = ecdsa.SigningKey.generate(curve=ecdsa.NIST256p).to_der().hex()
             self.dpp_config_key_file.write_text(dpp_config_key)
+            logger.info(f"DPPHandler.handle_hostapd_ready: Saved new configurator key to {self.dpp_config_key_file}")
 
         add_configurator_cmd = HostapdAdapter.DPPAddConfiguratorCLICommand(curve="prime256v1", key=dpp_config_key)
         await self.hostapd_adapter.send_command(add_configurator_cmd)
         self.dpp_configurator_id = await add_configurator_cmd.get_configurator_id()
         logger.info(f"DPPHandler.handle_hostapd_ready: DPP Configurator ID: {self.dpp_configurator_id}")
+
+        try:
+            if self.dpp_ap_connector_file.exists():
+                self.dpp_ap_connector = json.loads(self.dpp_ap_connector_file.read_text())
+                logger.info(f"DPPHandler.handle_hostapd_ready: Loaded AP Connector from {self.dpp_ap_connector_file}")
+            else:
+                # Create the AP's connector and persist it
+                logger.info(f"DPPHandler: handle_hostapd_ready: Creating a DPP Connector for the AP")
+                dpp_config_sign_cmd = HostapdAdapter.DPPConfiguratorDPPSignCLICommand(self.dpp_configurator_id, self.ssid)
+                await self.hostapd_adapter.send_command(dpp_config_sign_cmd)
+                dpp_connector = await dpp_config_sign_cmd.get_connector()
+                logger.info(f"DPPHandler: handle_hostapd_ready:   Connector: {dpp_connector}")
+                dpp_c_sign_key = await dpp_config_sign_cmd.get_c_sign_key()
+                logger.info(f"DPPHandler: handle_hostapd_ready:   DPP c-sign-key: {dpp_c_sign_key}")
+                dpp_net_access_key = await dpp_config_sign_cmd.get_net_access_key()
+                logger.info(f"DPPHandler: handle_hostapd_ready:   Net access key: {dpp_net_access_key}")
+                self.dpp_ap_connector = {"dpp_connector": dpp_connector,
+                                         "dpp_csign": dpp_c_sign_key,
+                                         "dpp_netaccesskey": dpp_net_access_key}
+                dpp_ap_connector_json = json.dumps(self.dpp_ap_connector, indent=3) + "\n"
+                self.dpp_ap_connector_file.write_text(dpp_ap_connector_json)
+            await self.hostapd_adapter.send_command(HostapdAdapter.SetCLICommand("dpp_connector",
+                                                                                 self.dpp_ap_connector['dpp_connector']))
+            await self.hostapd_adapter.send_command(HostapdAdapter.SetCLICommand("dpp_csign",
+                                                                                 self.dpp_ap_connector['dpp_csign']))
+            await self.hostapd_adapter.send_command(HostapdAdapter.SetCLICommand("dpp_netaccesskey",
+                                                                                 self.dpp_ap_connector['dpp_netaccesskey']))
+        except Exception as ex:
+            logger.warning(f"DPPHandler: handle_hostapd_ready: Caught exception processing DPP AP connector {self.dpp_ap_connector_file}: {ex}",
+                           exc_info=True)
+            return
 
     async def send_dpp_onboard_event(self, micronet, device, event_name, reason=None):
         ws_connector = get_ws_connector()
