@@ -27,17 +27,18 @@ fi
 
 ovs_vsctl() {
     debug_log "running: ovs-vsctl $@"
-    ovs-vsctl --timeout=5 "$@"
+    ovs-vsctl "$@"
 }
 
 ovs_ofctl() {
     debug_log "running: ovs-ofctl $@"
-    ovs-ofctl --timeout=5 "$@"
+    ovs-ofctl "$@"
 }
 
 clear_iptables() {
     iptables --table filter --flush
     iptables --table nat --flush
+    sysctl -w net.ipv4.ip_forward=0
 }
 
 reset_ovsdb() {
@@ -51,9 +52,18 @@ reset_ovsdb() {
 config_iptables_bridge_uplink() {
     BRIDGE_INTERFACE=$1
     UPLINK_INTERFACE=$2
-    iptables --table filter --append FORWARD --in-interface ${UPLINK_INTERFACE} -j ACCEPT
-    iptables --table nat --append POSTROUTING --out-interface ${BRIDGE_INTERFACE} -j MASQUERADE
-    sysctl -w net.ipv4.ip_forward=1
+    debug_log "Configuring NAT with uplink interface ${UPLINK_INTERFACE}, bridge interface ${BRIDGE_INTERFACE}..."
+    iptables --table nat --append POSTROUTING --out-interface ${UPLINK_INTERFACE} \
+	-j MASQUERADE
+    iptables --table filter --append FORWARD --in-interface ${UPLINK_INTERFACE} --out-interface  ${BRIDGE_INTERFACE} \
+	-m state --state ESTABLISHED,RELATED -j ACCEPT
+    iptables --table filter --append FORWARD --in-interface ${UPLINK_INTERFACE} \
+	-m state --state NEW,INVALID -j LOG $LOG_OPTS --log-prefix 'FW-DROP (NEW/INVALID-FWD):'
+    iptables --table filter --append FORWARD --in-interface ${UPLINK_INTERFACE} \
+	-m state --state NEW,INVALID -j DROP
+    iptables --table filter --append FORWARD --out-interface ${UPLINK_INTERFACE} \
+	-j ACCEPT
+    /sbin/sysctl -w net.ipv4.ip_forward=1
 }
 
 dump_iptables() {
@@ -65,6 +75,8 @@ is_mac_addr() {
     [ $(echo "$@" | sed -E 's/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}/foundamac/g') = "foundamac" ]
 }
 
+debug_log "running micronets $0 (${MODE})"
+
 if (ovs_vsctl --version) > /dev/null 2>&1; then :; else
     exit 0
 fi
@@ -72,11 +84,13 @@ fi
 if /etc/init.d/openvswitch-switch status > /dev/null 2>&1; then
     debug_log "openvswitch-switch service already started"
 else
-    debug_log "starting openvswitch-switch service"
     # NOTE: This assumes that this script will start OVS (and start it only once)
-    #       It would probably be more correct to reset the DB via the OVS startup script
+    #       It would probably be more correct to reset the DB via the OVS startup script.
+    #       Also make sure that READ_INTERFACES=no is set in /etc/default/openvswitch-switch
     reset_ovsdb
+    debug_log "starting openvswitch-switch service..."
     /etc/init.d/openvswitch-switch start
+    debug_log "completed /etc/init.d/openvswitch-switch start."
 fi
 
 if [ "${MODE}" = "start" ]; then
@@ -85,7 +99,7 @@ if [ "${MODE}" = "start" ]; then
     case "${IF_OVS_TYPE}" in
         OVSBridge)
                 clear_iptables ${IFACE}
-                ovs_vsctl -- --may-exist add-br ${IFACE} ${IF_OVS_OPTIONS}\
+                ovs_vsctl -- --may-exist add-br ${IFACE} ${IF_OVS_OPTIONS} \
                     ${IF_OVS_MANAGER+-- set-manager $IF_OVS_MANAGER} \
                     ${IF_OVS_PROTOCOLS+-- set bridge ${IFACE} protocols=$IF_OVS_PROTOCOLS} \
                     ${OVS_EXTRA+-- $OVS_EXTRA}
@@ -93,25 +107,31 @@ if [ "${MODE}" = "start" ]; then
                 # Delete any/all flows for the bridge
                 ovs_ofctl del-flows ${IFACE}
 
-                if [ -z "${IF_OVS_BRIDGE_UPLINK_PORT}" ]; then
-                    debug_log "Error: ovs_bridge_uplink_port entry missing for OVSBridge ${IFACE} declaration!"
-                else
-                    mac_addr=$(/sbin/ethtool -P "${IF_OVS_BRIDGE_UPLINK_PORT}" | cut -b 20-37)
-                    if is_mac_addr $mac_addr; then
-                        ovs_vsctl set bridge ${IFACE} other-config:hwaddr="${mac_addr}"
-                        clear_iptables
-                        config_iptables_bridge_uplink ${IFACE} ${IF_OVS_BRIDGE_UPLINK_PORT}
+                if [ ! -z "${IF_OVS_BRIDGE_MAC}" ]; then
+                    if is_mac_addr ${IF_OVS_BRIDGE_MAC}; then
+                        ovs_vsctl set bridge ${IFACE} other-config:hwaddr="${IF_OVS_BRIDGE_MAC}"
                     else
-                        debug_log "Invalid MAC address found for ${IF_OVS_BRIDGE_UPLINK_PORT} in ovs_bridge_uplink_port entry of OVSBridge ${IFACE} declaration (\"$mac_addr\")"
+                        debug_log "ERROR: Invalid MAC address found for ovs_bridge_mac of OVSBridge ${IFACE} declaration (\"${IF_OVS_BRIDGE_MAC}\")"
                     fi
+                fi
+
+                if [ -z "${IF_OVS_BRIDGE_UPLINK_PORT}" ]; then
+                    debug_log "Warning: ovs_bridge_uplink_port entry missing for OVSBridge ${IFACE} declaration"
+                else
+                    clear_iptables
+                    config_iptables_bridge_uplink ${IFACE} ${IF_OVS_BRIDGE_UPLINK_PORT}
                 fi
 
                 if [ ! -z "${IF_OVS_PORTS}" ]; then
                     ifup --allow=${IFACE} ${IF_OVS_PORTS}
                 fi
 
+                # Disable ICMP redirects on the bridge interface (so hosts aren't directed to find each other)
+                /sbin/sysctl -w net.ipv4.conf.${IFACE}.send_redirects = 0
+                # /sbin/sysctl -w net.ipv6.conf.${IFACE}.send_redirects = 0
+
                 # NORMAL flow .aka L2 Learning switch mode.
-                ovs_ofctl add-flow ${IFACE} "table=0 priority=0 actions=normal"
+                ovs_ofctl add-flow ${IFACE} "table=0 priority=0 actions=NORMAL"
                 ;;
 
         OVSPort)
@@ -120,21 +140,53 @@ if [ "${MODE}" = "start" ]; then
                     ${IF_OVS_PORT_REQ+-- set Interface ${IFACE} ofport_request=${IF_OVS_PORT_REQ}} \
                     ${OVS_EXTRA+-- $OVS_EXTRA}
 
-		if [ "${IF_OVS_PORT_INITIAL_STATE}" = "blocked" ]; then
-		    if [ -z "${IF_OVS_PORT_REQ}" ]; then
+                if [ "${IF_OVS_PORT_INITIAL_STATE}" = "blocked" ]; then
+                    if [ -z "${IF_OVS_PORT_REQ}" ]; then
                         debug_log "Error: ovs_port_initial_state entry requires a ovs_port_req entry"
-		    else
-		        # Setup a flow to block all traffic to the port (until a controller is connected)
-		        ovs_ofctl add-flow "${IF_OVS_BRIDGE}" "table=0 priority=10 in_port=${IF_OVS_PORT_REQ} actions=drop"
-		    fi
-		fi
+                    else
+                        # Setup a flow to block all traffic to the port (until a controller is connected)
+                        debug_log "Setting initial state of ${IFACE} (port ${IF_OVS_PORT_REQ}) to blocked"
+                        ovs_ofctl add-flow "${IF_OVS_BRIDGE}" "table=0 priority=10 in_port=${IF_OVS_PORT_REQ} actions=drop"
+                    fi
+                fi
+
+                if [ "${IF_OVS_PORT_INITIAL_STATE}" = "bridged" ]; then
+                    if [ -z "${IF_OVS_PORT_REQ}" ]; then
+                        debug_log "Error: ovs_port_initial_state entry requires a ovs_port_req entry"
+                    else
+                        # Setup a flow to allow all traffic to the port (until a controller is connected)
+                        debug_log "Setting initial state of ${IFACE} (port ${IF_OVS_PORT_REQ}) to bridged"
+                        ovs_ofctl add-flow "${IF_OVS_BRIDGE}" "table=0 priority=10 in_port=${IF_OVS_PORT_REQ} actions=NORMAL"
+                    fi
+                fi
 
                 ip link set ${IFACE} up
                 ;;
         OVSIntPort)
                 ovs_vsctl -- --may-exist add-port "${IF_OVS_BRIDGE}"\
-                    ${IFACE} ${IF_OVS_OPTIONS} -- set Interface ${IFACE}\
-                    type=internal ${OVS_EXTRA+-- $OVS_EXTRA}
+                    ${IFACE} ${IF_OVS_OPTIONS} \
+                    -- set Interface ${IFACE} ${IF_OVS_PORT_REQ+ ofport_request=${IF_OVS_PORT_REQ}} type=internal \
+                    ${OVS_EXTRA+-- $OVS_EXTRA}
+
+                if [ "${IF_OVS_PORT_INITIAL_STATE}" = "blocked" ]; then
+                    if [ -z "${IF_OVS_PORT_REQ}" ]; then
+                        debug_log "Error: ovs_port_initial_state entry requires a ovs_port_req entry"
+                    else
+                        # Setup a flow to block all traffic to the port (until a controller is connected)
+                        debug_log "Setting initial state of ${IFACE} (port ${IF_OVS_PORT_REQ}) to blocked"
+                        ovs_ofctl add-flow "${IF_OVS_BRIDGE}" "table=0 priority=10 in_port=${IF_OVS_PORT_REQ} actions=drop"
+                    fi
+                fi
+
+                if [ "${IF_OVS_PORT_INITIAL_STATE}" = "bridged" ]; then
+                    if [ -z "${IF_OVS_PORT_REQ}" ]; then
+                        debug_log "Error: ovs_port_initial_state entry requires a ovs_port_req entry"
+                    else
+                        # Setup a flow to block all traffic to the port (until a controller is connected)
+                        debug_log "Setting initial state of ${IFACE} (port ${IF_OVS_PORT_REQ}) to bridged"
+                        ovs_ofctl add-flow "${IF_OVS_BRIDGE}" "table=0 priority=10 in_port=${IF_OVS_PORT_REQ} actions=NORMAL"
+                    fi
+                fi
 
                 ip link set ${IFACE} up
                 ;;
