@@ -145,7 +145,7 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
             elif event.startswith("DPP-AUTH-SUCCESS") or event.startswith("DPP-CONF-SENT"):
                 asyncio.ensure_future(self.send_dpp_onboard_event(micronet, device, DPPHandler.EVENT_ONBOARDING_PROGRESS, 
                                                                   f"DPP Progress ({event})"))
-            elif event.startswith("AP-STA-CONNECTED") and device['macAddress']['eui48'] in event:
+            elif event.startswith("AP-STA-CONNECTED") and device['macAddress']['eui48'].lower() in event:
                 self.pending_onboard = None
                 self.pending_timeout_task.cancel()
                 asyncio.ensure_future(self.send_dpp_onboard_event(micronet, device, DPPHandler.EVENT_ONBOARDING_COMPLETE, 
