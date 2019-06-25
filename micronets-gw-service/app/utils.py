@@ -74,11 +74,12 @@ async def unroll_hostportspec_list (hostportspec_list):
         unrolled_host_list += addrs_for_spec
     return unrolled_host_list
 
-
-portspec_pattern = "(?:(?P<startport>[0-9]+)(?:-(?P<endport>[0-9]+))?)?(?:/(?P<protocol>tcp|udp))?"
-# e.g. 22/tcp, 1000-2000, 1200-1300/udp, /tcp
+portspec_pattern = "(?:(?P<port>[0-9]+)(?:/(?P<protocol>tcp|udp))?)"
+# e.g. 22/tcp, 1000, 1200/udp, /tcp
 
 portspec_re = re.compile ("^" + portspec_pattern + "$")
+
+portlistspec_re = re.compile ("^(?:" + portspec_pattern + ")+$")
 
 async def get_ipv4_hostports_for_hostportspec (hostandportspec):
     if not hostandportspec:
@@ -112,7 +113,7 @@ async def get_ipv4_hostports_for_hostportspec (hostandportspec):
     return hostandport_list
 
 hostportspec_pattern = "(?P<ip_addr>" + ip_addr_pattern + "(?:/\d{1,3})?)" + "(?::" + portspec_pattern + ")?"
-# e.g. 1.2.3.4, 1.2.3.4:22/tcp, 1.2.3.0/24:1-1024, 1.2.0.0/16:1024-2000/udp
+# e.g. 1.2.3.4, 1.2.3.4:22/tcp, 1.2.3.0/24:/tcp, 1.2.0.0/16:25,465,587,2525
 
 hostportspec_re = re.compile ("^" + hostportspec_pattern + "$")
 
@@ -120,24 +121,33 @@ def parse_portspec (portspec):
     m = portspec_re.match(portspec)
     if not m:
         raise Exception(f"Port specification '{portspec}' is invalid")
-    portspec_elems = m.groupdict() # Will return {'startport': x, 'endport': y, 'protocol': tcp/udp}
-    if 'startport' not in portspec_elems:
+    portspec_elems = m.groupdict() # Will return {'port': x, 'protocol': tcp/udp}
+    if 'port' not in portspec_elems:
         raise Exception(f"Port specification '{portspec}' does not have a port/start port number")
-    return
+    return m.groupdict()
 
-def parse_hostportspec (portspec):
-    m = hostportspec_re.match(portspec)
+def parse_hostportspec (hostportspec):
+    m = hostportspec_re.match(hostportspec)
     if not m:
-        raise Exception(f"Port specification '{portspec}' is invalid")
-    portspec_elems = m.groupdict() # Will return {'startport': x, 'endport': y, 'protocol': tcp/udp}
-    if 'startport' not in portspec_elems:
-        raise Exception(f"host-port specification '{portspec}' does not have a port/start port number")
-    return portspec_elems
+        raise Exception(f"Port specification '{hostportspec}' is invalid")
+    hostportspec_elems = m.groupdict() # Will return {'port': x, 'protocol': tcp/udp}
+    if 'port' not in hostportspec_elems:
+        raise Exception(f"host-port specification '{hostportspec}' does not have a port number")
+    return hostportspec_elems
 
+def parse_portlistspec (portlistspec):
+    portspecs = portlistspec.split(",")
+    portelem_list = []
+    for portspec in portspecs:
+        portspec_elems = parse_portspec(portspec)
+        if 'port' not in portspec_elems:
+            raise Exception(f"host-port specification '{portspec}' does not have a port number")
+        portelem_list.append(portspec_elems)
+    return portelem_list
 
 async def main():
     print("Running utils tests...")
-    hpsl = ["1.2.3.4", "5.6.7.8:99", "example.com", "bogus.org:80", "www.yahoo.com:443,80,8080", "www.example.com:443/tcp,80/tcp,7/udp"]
+    hpsl = ["1.2.3.4", "5.6.7.8:99", "example.com", "bogus.org:80", "www.yahoo.com:443,80/tcp,8080", "www.example.com:443/tcp,80/tcp,7/udp"]
     for hostportspec in hpsl:
         hostports = await get_ipv4_hostports_for_hostportspec(hostportspec)
         print (f"hostportspecs for {hostportspec}: {hostports}")

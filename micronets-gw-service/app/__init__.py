@@ -141,6 +141,8 @@ try:
         from .open_flow_adapter import OpenFlowAdapter
 
         flow_adapter = OpenFlowAdapter (app.config)
+        if hostapd_adapter:
+            hostapd_adapter.register_cli_event_handler(flow_adapter)
     else:
         logger.info("Not starting OpenFlowAdapter (adapter disabled in config)")
 except Exception as ex:

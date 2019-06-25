@@ -154,10 +154,7 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
     async def handle_hostapd_ready(self):
         logger.info(f"DPPHandler.handle_hostapd_ready()")
 
-        status_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.StatusCLICommand())
-        logger.info (f"DPPHandler.handle_hostapd_ready: Retrieving ssid...")
-        ssid_list = await status_cmd.get_status_var("ssid")
-        self.ssid = ssid_list[0]
+        self.ssid = self.hostapd_adapter.get_status_var('ssid')[0]
         logger.info(f"DPPHandler.handle_hostapd_ready:   SSID: {self.ssid}")
 
         if self.dpp_config_key_file.exists():

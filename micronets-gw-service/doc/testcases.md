@@ -809,7 +809,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     None
 
-* Creating a device restricted to communicating with certain hosts:
+* Creating a device restricted to communicating with certain hosts (using outRules):
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -824,6 +824,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                "outRules": [
                   {"action": "allow", "dest": "8.8.8.8"},
                   {"action": "allow", "dest": "12.34.56.0/24"},
+                  {"action": "allow", "dest": "example.com"},
                   {"action": "allow", "dest": "www.ietf.org:443/tcp"},
                   {"action": "deny"} ]
            }
@@ -835,40 +836,40 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     ```json
     {
         "device": {
-            "deviceId": "MyDevice01",
+            "deviceId": "MyDevice03",
             "macAddress": {
-               "eui48": "00:23:12:0f:b0:26"
+               "eui48": "b8:27:eb:75:a4:8a"
             },
             "networkAddress": {
                 "ipv4": "192.168.1.42"
             },
             "outRules": [
-                {"action": "deny", "dest": "8.8.8.8"},
-                {"action": "deny", "dest": "12.34.56.0/24"},
-                {"action": "deny", "dest": "www.ietf.org"},
-                {"action": "deny", "destPort": "1024-20000"},
-                {"action": "allow"} ]
+                  {"action": "allow", "dest": "8.8.8.8"},
+                  {"action": "allow", "dest": "12.34.56.0/24"},
+                  {"action": "allow", "dest": "example.com"},
+                  {"action": "allow", "dest": "www.ietf.org:80/tcp,443/tcp"},
+                  {"action": "deny"} ]
         }
     }
     ```
 
-* Creating a device which is prevented from communicating with certain hosts or certain ports:
+* Creating a device which is prevented from communicating with certain hosts or certain ports (using outRules):
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                "deviceId": "MyDevice03",
                "macAddress": {
-                   "eui48": "b8:27:eb:75:a4:8a"
+                   "eui48": "b8:27:eb:75:a4:8b"
                },
                "networkAddress": {
-                   "ipv4": "192.168.1.42"
+                   "ipv4": "192.168.1.43"
                },
                "outRules": [
                   {"action": "deny", "dest": "8.8.8.8"},
                   {"action": "deny", "dest": "12.34.56.0/24"},
                   {"action": "deny", "dest": "www.ietf.org"},
-                  {"action": "deny", "destPort": "1024-20000"},
+                  {"action": "deny", "destPort": "25,465,587,2525"},
                   {"action": "allow"} ]
            }
         }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
@@ -879,23 +880,57 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     ```json
     {
         "device": {
-            "deviceId": "MyDevice01",
+            "deviceId": "MyDevice03",
             "macAddress": {
-               "eui48": "00:23:12:0f:b0:26"
+               "eui48": "b8:27:eb:75:a4:8b"
             },
             "networkAddress": {
-                "ipv4": "192.168.1.42"
+                "ipv4": "192.168.1.43"
             },
             "outRules": [
                 {"action": "deny", "dest": "8.8.8.8"},
                 {"action": "deny", "dest": "12.34.56.0/24"},
                 {"action": "deny", "dest": "www.ietf.org"},
+                {"action": "deny", "destPort": "25,465,587,2525"},
                 {"action": "allow"} ]
         }
     }
     ```
 
-* Initiating DPP onboarding:
+* Creating a device restricted to communicating with certain hosts (using allowHosts):
+
+    ```
+    curl -X POST -H "Content-Type: application/json" -d '{
+           "device": {
+               "deviceId": "MyDevice03",
+               "macAddress": {
+                   "eui48": "b8:27:eb:75:a4:8c"
+               },
+               "networkAddress": {
+                   "ipv4": "192.168.1.44"
+               },
+               "allowHosts": ["8.8.8.8", "12.34.56.0/24", "www.yahoo.com"]
+           }
+        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+    ```
+
+    Expected output: (status code 201)
+
+    ```json
+    {
+        "device": {
+            "deviceId": "MyDevice03",
+            "macAddress": {
+               "eui48": "b8:27:eb:75:a4:8c"
+            },
+            "networkAddress": {
+                "ipv4": "192.168.1.44"
+            },
+            "allowHosts": ["8.8.8.8", "12.34.56.0/24", "www.yahoo.com"]        }
+    }
+    ```
+
+* Initiating DPP onboarding (with PSK AKM):
 
     DPP onboarding can be initiated by providing a 
 

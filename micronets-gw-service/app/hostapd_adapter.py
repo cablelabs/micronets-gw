@@ -29,6 +29,7 @@ class HostapdAdapter:
         self.event_loop = None
         self.cli_connected = False
         self.cli_ready = False
+        self.status_vars = None
 
     class HostapdCLIEventHandler:
         def __init__ (self, event_prefixes):
@@ -185,6 +186,9 @@ class HostapdAdapter:
 
     async def process_hostapd_ready(self):
         logger.info(f"HostapdAdapter:process_hostapd_ready()")
+        status_cmd = await self.send_command(HostapdAdapter.StatusCLICommand())
+        logger.info (f"HostapdAdapter:process_hostapd_ready: Retrieving status...")
+        self.status_vars = await status_cmd.get_status_dict()
         for handler in self.event_handler_table:
             asyncio.ensure_future(handler.handle_hostapd_ready())
 
@@ -197,6 +201,11 @@ class HostapdAdapter:
             for handler in self.event_handler_table:
                 if handler.event_prefixes is None or event_data.startswith(handler.event_prefixes):
                     asyncio.ensure_future(handler.handle_hostapd_cli_event(event_data))
+
+    def get_status_var(self, var_name):
+        if not self.status_vars:
+            raise Exception("The Hostapd adapter status variables aren't initialized")
+        return self.status_vars.get(var_name, None)
 
     class HostapdCLICommand:
         def __init__ (self, event_loop = asyncio.get_event_loop()):

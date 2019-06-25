@@ -1,7 +1,7 @@
 from quart import request, jsonify
 from ipaddress import IPv4Address, IPv4Network
 from app import app, get_conf_model, get_dpp_handler
-from .utils import InvalidUsage, get_ipv4_hostports_for_hostportspec, parse_portspec
+from .utils import InvalidUsage, get_ipv4_hostports_for_hostportspec, parse_portlistspec
 
 import re
 import netaddr
@@ -244,6 +244,17 @@ async def check_rule (rule):
 
     return rule
 
+async def check_hostspecs (container, field_name, required):
+    hosts = check_field (container, field_name, (list), required)
+    if hosts:
+        for host in hosts:
+            try:
+                hosts = await get_ipv4_hostports_for_hostportspec (host)
+            except Exception as ex:
+                raise InvalidUsage (400, message=f"Supplied hostname '{host}' in field '{field_name}' "
+                                    f"of '{container}' is not valid: {ex}")
+    return hosts
+
 async def check_hostspec (container, field_name, required):
     hostspec = check_field (container, field_name, (str), required)
     if not hostspec:
@@ -260,14 +271,15 @@ def check_portspec (container, field_name, required):
     if not portspec:
         return None
     try:
-        portspec_fields = parse_portspec (portspec)
+        portspecelem_list = parse_portlistspec (portspec)
     except Exception as ex:
         raise InvalidUsage (400, message=f"Supplied port specification '{portspec}' in field '{field_name}' "
                             f"of '{container}' is not valid: {ex}")
     return portspec
 
 async def check_device (device, required):
-    check_for_unrecognized_entries (device, ['deviceId', 'macAddress', 'networkAddress', 'psk', 'outRules', 'inRules'])
+    check_for_unrecognized_entries (device, ['deviceId', 'macAddress', 'networkAddress', 'psk', 'outRules', 'inRules',
+                                             'allowHosts','denyHosts'])
     device_id = check_field (device, 'deviceId', str, required)
     if device_id:
         device_id = device_id.lower ()
@@ -293,6 +305,8 @@ async def check_device (device, required):
 
     await check_rules (device, 'outRules', False)
     await check_rules (device, 'inRules', False)
+    await check_hostspecs (device, 'allowHosts', False)
+    await check_hostspecs (device, 'denyHosts', False)
 
 async def check_devices (devices, required):
     for device in devices:
@@ -361,8 +375,10 @@ async def onboard_device (micronet_id, device_id):
     check_micronet_id (micronet_id, request.path)
     check_device_id (device_id, request.path)
     top_level = await request.get_json ()
+    logger.info(f"onboad_device: top_level: {top_level}")
     check_for_unrecognized_entries (top_level, ['dpp'])
     dpp_obj = top_level['dpp']
+    logger.info(f"onboad_device: dpp_obj: {dpp_obj}")
     check_for_unrecognized_entries(dpp_obj, ['uri','akms'])
     uri = check_field (dpp_obj, 'uri', str, True)
     akms = check_akms (dpp_obj, 'akms', True)

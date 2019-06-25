@@ -40,9 +40,13 @@ class DnsMasqAdapter:
     # dhcp-hostsfile=/home/micronut/projects/micronets/micronets-dhcp/dnsmasq-hosts
     dhcp_hostfile_re = re.compile ('dhcp-hostsfile\s*=\s*(.+)$')
 
-    # Device: mydevice03, inRules: [], outRules: [], psk: 736b697070657220697320612076657279207665727920676f6f642063617422
-    dhcp_device_prefix_re = re.compile ('^\s*#\sDevice:\s*(\w.[\w-]*)\s*,\s*inRules:\s*(\[[^\[\]]*\]),'
-                                        '\s*outRules:\s*(\[[^\[\]]*\])\s*,\s*psk:\s*(\w+)\s*$', re.ASCII)
+    # Device: mydevice03, inRules: [], outRules: [], allowHosts: [], denyHosts: ["8.8.8.8"],psk: []
+    dhcp_device_prefix_re = re.compile ('^\s*#\sDevice:\s*(\w.[\w-]*)\s*,\s*'
+                                        'inRules:\s*(\[[^\[\]]*\]),\s*'
+                                        'outRules:\s*(\[[^\[\]]*\]),\s*'
+                                        'allowHosts:\s*(\[[^\[\]]*\]),\s*'
+                                        'denyHosts:\s*(\[[^\[\]]*\]),\s*'
+                                        'psk:\s*(\w*)\s*$', re.ASCII)
 
     # 08:00:27:e5:77:c5,micronet-client-1,set:micronet-client-1,10.40.0.71,2m
     dhcp_host_re = re.compile ('^\s*dhcp-host\s*=\s*(' + mac_addr_pattern + ')\s*,\s*(\w.[\w-]*)\s*,'
@@ -94,15 +98,21 @@ class DnsMasqAdapter:
                 prefix_host_id = dhcp_host_prefix_match.group(1)
                 prefix_host_out_rules_str = dhcp_host_prefix_match.group(2)
                 prefix_host_in_rules_str = dhcp_host_prefix_match.group(3)
-                prefix_host_psk_str = dhcp_host_prefix_match.group(4)
+                prefix_host_allow_hosts_str = dhcp_host_prefix_match.group(4)
+                prefix_host_deny_hosts_str = dhcp_host_prefix_match.group(5)
+                prefix_host_psk_str = dhcp_host_prefix_match.group(6)
                 logger.info(f"DnsMasqAdapter.parse_conffile:  Found host {prefix_host_id}: "
-                            f"outRules:{prefix_host_out_rules_str}, denyHosts:{prefix_host_in_rules_str}, "
+                            f"outRules:{prefix_host_out_rules_str}, inRules:{prefix_host_in_rules_str}, "
+                            f"allowHosts:{prefix_host_out_rules_str}, denyHosts:{prefix_host_in_rules_str}, "
                             f"psk:{prefix_host_psk_str}")
 
                 prefix_host_out_rules = json.loads(prefix_host_out_rules_str)
                 prefix_host_in_rules = json.loads(prefix_host_in_rules_str)
+                prefix_host_allow_hosts = json.loads(prefix_host_allow_hosts_str)
+                prefix_host_deny_hosts = json.loads(prefix_host_deny_hosts_str)
                 logger.info(f"DnsMasqAdapter.parse_conffile:  Found host {prefix_host_id}: "
-                            f"outRules:{prefix_host_out_rules}, inRules:{prefix_host_in_rules}")
+                            f"outRules:{prefix_host_out_rules}, inRules:{prefix_host_in_rules}"
+                            f"allowHosts:{prefix_host_allow_hosts}, denyHosts:{prefix_host_deny_hosts}")
             if (comment_line_re.match (line)):
                 continue
             dhcp_range_match_result = self.dhcp_range_re.match (line)
@@ -200,6 +210,10 @@ class DnsMasqAdapter:
                     device ['outRules'] = prefix_host_out_rules
                 if len(prefix_host_in_rules) > 0:
                     device ['inRules'] = prefix_host_in_rules
+                if len(prefix_host_allow_hosts) > 0:
+                    device ['allowHosts'] = prefix_host_allow_hosts
+                if len(prefix_host_deny_hosts) > 0:
+                    device ['denyHosts'] = prefix_host_deny_hosts
                 device ['psk'] = prefix_host_psk_str
                 device_list = devices_list [micronet_id]
                 device_list [prefix_host_id] = device
@@ -285,13 +299,21 @@ class DnsMasqAdapter:
                     in_rules = json.dumps(device['inRules'])
                 else:
                     in_rules = []
+                if 'allowHosts' in device:
+                    allow_hosts = json.dumps(device['allowHosts'])
+                else:
+                    allow_hosts = []
+                if 'denyHosts' in device:
+                    deny_hosts = json.dumps(device['denyHosts'])
+                else:
+                    deny_hosts = []
                 psk = device.get('psk')
                 if (len(device_id) <= 12):
                     short_device_id = device_id
                 else:
                     short_device_id = device_id[0:8]+device_id[-4:]
-                outfile.write ("\n# Device: {}, inRules: {}, outRules: {}, psk: {}\n"
-                               .format (device_id, out_rules, in_rules, psk))
+                outfile.write ("\n# Device: {}, inRules: {}, outRules: {}, allowHosts: {}, denyHosts: {},psk: {}\n"
+                               .format (device_id, out_rules, in_rules, allow_hosts, deny_hosts, psk))
                 # 08:00:27:3c:ae:02,micronet-client-2,set:micronet-client-2,10.50.0.43,2m
                 outfile.write ("dhcp-host={},{},set:{},{},{}\n"
                                .format (mac_addr, short_device_id, device_id, ip_addr, lease_period))

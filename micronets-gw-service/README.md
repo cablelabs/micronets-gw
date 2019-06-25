@@ -375,9 +375,9 @@ All request URIs are prefixed by **/micronets/v1/gateway** unless otherwise note
 | ------------------------ | -------------- | -------- | --------------------------------------- | ------------- 
 | action                   | string         | Y        | One of "deny" or "allow"                | "allow"      |
 | source                   | array (string) | N        | Source hosts/address(es)/network(s). DNS hostname, Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["8.8.8.8", "12.34.56.0/24", "www.cablelabs.com"] |
-| sourcePort               | string         | N        | Source port(s)                          | "22/tcp", "1234-1244/udp", "1111/tcp,2222/udp" |
+| sourcePort               | string         | N        | Source port(s)                          | "22/tcp", "123", "1111/tcp,2222/udp" |
 | dest                     | array (string) | N        | Destination hosts/address(es)/network(s). Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["12.34.56.0/24", "www.ietf.org:80/tcp,443/tcp"] |
-| destPort                 | string         | N        | Destination port(s)                     | "2112/tcp", "1300-1400/udp", "1111/udp,2222/tcp"| 
+| destPort                 | string         | N        | Destination port(s)                     | "2112/tcp", "37", "1111/udp,2222/tcp"| 
 
 #### Notes:
 
@@ -402,7 +402,7 @@ Examples of Micronets-Rule lists:
 ```
 ```json
 [
-   {"action": "deny", "destPort": "1-1000"},
+   {"action": "deny", "destPort": "21,37,42,43"},
    {"action": "allow"}
 ]
 ```
