@@ -15,9 +15,9 @@ logger = logging.getLogger ('micronets-gw-service')
 class DnsMasqAdapter:
     lease_duration_re = 'infinite|[0-9]+[hm]?'
 
-    # # Micronet: testmicronet001, ovsBridge: brmn001, interface: enxac7f3ee61832
-    # # Micronet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0, vlan: 2112
-    dhcp_range_prefix_re = re.compile ('^\s*#\s*Micronet:\s*(\w.[\w-]*)\s*,\s*ovsBridge:\s*(\w+)\s*,'
+    # # Micronet: testmicronet001, interface: enxac7f3ee61832
+    # # Micronet: wired-micronet-1, interface: enp3s0, vlan: 2112
+    dhcp_range_prefix_re = re.compile ('^\s*#\s*Micronet:\s*(\w.[\w-]*)\s*,'
                                        '\s*interface:\s*(\w+)(?:\s*,\s*vlan:\s*([0-9]+))?\s*$',
                                        re.ASCII)
 
@@ -40,7 +40,7 @@ class DnsMasqAdapter:
     # dhcp-hostsfile=/home/micronut/projects/micronets/micronets-dhcp/dnsmasq-hosts
     dhcp_hostfile_re = re.compile ('dhcp-hostsfile\s*=\s*(.+)$')
 
-    # # Micronet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
+    # Device: mydevice03, inRules: [], outRules: [], psk: 736b697070657220697320612076657279207665727920676f6f642063617422
     dhcp_device_prefix_re = re.compile ('^\s*#\sDevice:\s*(\w.[\w-]*)\s*,\s*inRules:\s*(\[[^\[\]]*\]),'
                                         '\s*outRules:\s*(\[[^\[\]]*\])\s*,\s*psk:\s*(\w+)\s*$', re.ASCII)
 
@@ -87,8 +87,7 @@ class DnsMasqAdapter:
                 continue
             dhcp_range_prefix_match_result = self.dhcp_range_prefix_re.match (line)
             if (dhcp_range_prefix_match_result):
-                (prefix_micronet_id, prefix_ovs_bridge, prefix_interface, prefix_vlan) \
-                    = dhcp_range_prefix_match_result.groups()
+                (prefix_micronet_id, prefix_interface, prefix_vlan) = dhcp_range_prefix_match_result.groups()
                 continue
             dhcp_host_prefix_match = self.dhcp_device_prefix_re.match (line)
             if dhcp_host_prefix_match:
@@ -129,7 +128,6 @@ class DnsMasqAdapter:
                 micronet = {}
                 micronet ['micronetId'] = micronet_id
                 micronet ['ipv4Network'] = {'network' : str (network.network_address), 'mask' : str (network.netmask)}
-                micronet ['ovsBridge'] = prefix_ovs_bridge
                 micronet ['interface'] = prefix_interface
                 micronet ['vlan'] = prefix_vlan
                 micronets [micronet_id] = micronet
@@ -241,15 +239,13 @@ class DnsMasqAdapter:
 
     def write_micronets (self, outfile, micronets):
         for micronet_id, micronet in micronets.items ():
-            # # Micronet: wired-micronet-1, ovsBridge: brmn001, interface: enp3s0
-            ovs_switch = micronet ['ovsBridge']
+            # # Micronet: wired-micronet-1, interface: enp3s0
             interface = micronet ['interface']
             if 'vlan' in micronet:
                 vlan = micronet ['vlan']
             else:
                 vlan = None
-            outfile.write ("# Micronet: {}, ovsBridge: {}, interface: {}, vlan: {}\n"
-                           .format (micronet_id, ovs_switch, interface, vlan))
+            outfile.write ("# Micronet: {}, interface: {}, vlan: {}\n".format (micronet_id, interface, vlan))
             ipv4_params = micronet ['ipv4Network']
             network_addr = ipv4_params['network']
             netmask = ipv4_params ['mask']

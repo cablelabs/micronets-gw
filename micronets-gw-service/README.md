@@ -107,8 +107,7 @@ Note: Currently only data type _application/json_ is supported.
         string
     ],
     "interface": string,
-    "vlan": integer,
-    "ovsBridge": string
+    "vlan": integer
 }
 ```
 
@@ -123,7 +122,6 @@ Note: Currently only data type _application/json_ is supported.
 | nameservers              | list (string)   | N        | The IP addresses of nameservers for the subnet | ["8.8.8.8", "4.4.4.4"] |
 | interface                | string          | Y        | The network interface on the gateway the subnet is associated with | "wlp2s0"
 | vlan                     | integer         | N        | The network interface on the gateway the subnet is associated with | 201
-| ovsBridge                | string          | Y        | The OpenVSwitch bridge the interface is connected to on the gateway | "brmn001"
 | outRules                 | list (object)   | N        | Micronet-Rules for outbound connections for devices in the micronet | “outRules": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
 | inRules                  | list (object)   | N        | Micronet-Rules for inbound connections for devices in the micronet | “inRules": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
 

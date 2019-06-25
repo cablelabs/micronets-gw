@@ -127,7 +127,7 @@ def check_vlan (container, field_name, required):
                                     f"'{field_name}' is not valid: vlans must be between 1 and 4094")
 
 def check_micronet (micronet, micronet_id=None, required=True):
-    check_for_unrecognized_entries (micronet, ['micronetId','ipv4Network','nameservers','ovsBridge','interface','vlan'])
+    check_for_unrecognized_entries (micronet, ['micronetId','ipv4Network','nameservers','interface','vlan'])
     body_micronet_id = check_field (micronet, 'micronetId', str, required)
     if micronet_id and body_micronet_id:
         if micronet_id != body_micronet_id:
@@ -139,7 +139,6 @@ def check_micronet (micronet, micronet_id=None, required=True):
     check_micronet_id (micronet_id, micronet)
     check_ipv4_network (micronet, micronet_id, required)
     check_nameservers (micronet, 'nameservers', False)
-    check_field (micronet, 'ovsBridge', str, required)
     check_field (micronet, 'interface', str, required)
     check_vlan (micronet, 'vlan', False) # Optional
 

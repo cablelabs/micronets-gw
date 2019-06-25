@@ -4,7 +4,7 @@
 
 dhcp-script=/Users/craig/projects/micronets/micronets-gw/micronets-gw-service/bin/dnsmasq_lease_notify.py
 
-# Micronet: mockmicronet007, ovsBridge: brmn001, interface: wlp2s0, vlan: 101
+# Micronet: mockmicronet007, interface: wlp2s0, vlan: 101
 dhcp-range=set:mockmicronet007,192.168.1.0,static,255.255.255.0,10m
 dhcp-option=tag:mockmicronet007, option:router,192.168.1.1
 dhcp-option=tag:mockmicronet007, option:dns-server,1.2.3.4,1.2.3.5

@@ -146,14 +146,10 @@ class OpenFlowAdapter:
             cur_table = 10
             for micronet_id, micronet in micronet_list.items ():
                 micronet_int = micronet ['interface']
-                micronet_bridge = micronet ['ovsBridge']
                 micronet_network = micronet ['ipv4Network']['network']
                 cur_micronet_table = cur_table
                 cur_table += 1
                 logger.info (f"Creating flow rules for micronet {micronet_id} (interface {micronet_int})")
-                if micronet_bridge != self.bridge_name:
-                    raise Exception(f"micronet {micronet_id} has an unexpected bridge name ('{micronet_bridge}')"
-                                    f" - expected {self.bridge_name}")
 
                 if micronet_int not in self.ovs_micronet_interfaces:
                     raise Exception (f"interface {micronet_int} in micronet {micronet_id} not found "
