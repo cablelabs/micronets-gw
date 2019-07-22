@@ -548,7 +548,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
         cur_priority = 815
 
         device_id = device['deviceId']
-        accept_action = f"resubmit(,{OpenFlowAdapter.to_device_table})"
+        accept_action = f"resubmit(,{OpenFlowAdapter.to_localhost_table})"
         hostport_spec_list = None
         if 'allowHosts' in device:
             hosts = device['allowHosts']
