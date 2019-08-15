@@ -14,6 +14,7 @@ class BaseConfig:
     WEBSOCKET_CONNECTION_ENABLED = False
     # NOTE: The WEBSOCKET_SERVER_PATH should be unique to the gateway/subscriber if using the proxy
     WEBSOCKET_SERVER_PATH = '/micronets/v1/ws-proxy/gw-test/micronets-gw-0001'
+    WEBSOCKET_SERVER_PORT = 5050
     WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces"
@@ -28,7 +29,6 @@ class BaseConfig:
 class BaseGatewayConfig:
     LOGFILE_PATH = pathlib.Path (__file__).parent.joinpath ("micronets-gw.log")
     WEBSOCKET_SERVER_ADDRESS = "ws-proxy-api.micronets.in"
-    WEBSOCKET_SERVER_PORT = 5050
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {flow_file}'
     HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
     HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
