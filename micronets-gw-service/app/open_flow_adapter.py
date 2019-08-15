@@ -1,9 +1,9 @@
 import re, logging, tempfile, netifaces, asyncio
 
-
 from pathlib import Path
 from .utils import blank_line_re, comment_line_re, get_ipv4_hostports_for_hostportspec, parse_portspec, \
-                   parse_hostportspec, unroll_hostportspec_list
+                   parse_hostportspec, unroll_hostportspec_list, mac_addr_re, parse_macportspec
+
 from subprocess import call
 from .hostapd_adapter import HostapdAdapter
 
@@ -400,9 +400,9 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
         except Exception as ex:
             logger.warning(f"OpenFlowAdapter.create_flows_for_device: Caught exception {ex}", exc_info=True)
 
-    def flow_fields_for_spec_elems(self, direction, ip_addr, port, protocol):
+    def flow_fields_for_ip_host(self, direction, ip_addr, port, protocol):
         if not (direction == "src" or direction == "dst"):
-            raise Exception(f"flow_fields_for_spec_elems direction is {direction} (must be 'src' or 'dst')")
+            raise Exception(f"flow_fields_for_ip_host direction is {direction} (must be 'src' or 'dst')")
         if not protocol:
             if ip_addr or port:
                 protocol = "ip,"
@@ -411,6 +411,21 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
         ip_rule = f"ip_{direction}={ip_addr}," if ip_addr else ""
         port_rule = f"tcp_{direction}={port}," if port else ""
         combined_rule = protocol + ip_rule + port_rule
+        return combined_rule
+
+    def flow_fields_for_mac_host(self, direction, mac_addr, port, protocol):
+        if not (direction == "src" or direction == "dst"):
+            raise Exception(f"flow_fields_for_ip_host direction is {direction} (must be 'src' or 'dst')")
+        if not protocol:
+            if port:
+                protocol = "ip,"
+            else:
+                protocol = ""
+        else:
+            protocol = protocol + ","
+        eth_rule = f"eth_{direction}={mac_addr}," if mac_addr else ""
+        port_rule = f"tcp_{direction}={port}," if port else ""
+        combined_rule = protocol + eth_rule + port_rule
         return combined_rule
 
     async def create_out_rules_for_device(self, in_port, device_mac, device, micronet, outfile):
@@ -438,9 +453,10 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
             for rule in out_rules:
                 try:
                     logger.info(f"OpenFlowAdapter.create_out_rules_for_device: processing {device_id} out-rule: {rule}")
-                    if 'source' in rule:
-                        raise Exception("'source' is not supported in 'outRules' (rule {rule})")
-                    rule_dest = rule.get('dest', None)
+                    if 'sourceIp' in rule:
+                        raise Exception("'sourceIp' is not supported in 'outRules' (rule {rule})")
+                    rule_dest_ip = rule.get('destIp', None)
+                    rule_dest_mac = rule.get('destMac', None)
                     rule_dest_port = rule.get('destPort', None)
                     rule_action = rule['action']
                     logger.info(f"OpenFlowAdapter.create_out_rules_for_device:   action: {rule_action}")
@@ -453,19 +469,33 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                             logger.info(
                                 f"OpenFlowAdapter.create_out_rules_for_device:     destPort fields: {destport_spec_fields}")
                             (port, protocol) = destport_spec_fields.values()
-                            field_rules =  self.flow_fields_for_spec_elems("dst", None, port, protocol)
+                            field_rules =  self.flow_fields_for_ip_host("dst", None, port, protocol)
                             flowrule = f"add table={OpenFlowAdapter.from_micronets_table},priority={cur_priority}, " \
                                        f"in_port={in_port},dl_src={device_mac},{field_rules} actions={action}"
                             logger.info(f"OpenFlowAdapter.create_out_rules_for_device:     flowrule: {flowrule}")
                             outfile.writelines((flowrule, "\n"))
-                    elif rule_dest:
-                        dest_list = await get_ipv4_hostports_for_hostportspec(rule_dest)
+                    elif rule_dest_ip:
+                        dest_list = await get_ipv4_hostports_for_hostportspec(rule_dest_ip)
                         for dest_spec in dest_list:
-                            logger.info(f"OpenFlowAdapter.create_out_rules_for_device:     dest: {dest_spec}")
+                            logger.info(f"OpenFlowAdapter.create_out_rules_for_device:     dest ip: {dest_spec}")
                             dest_fields = parse_hostportspec(dest_spec)
                             logger.info(f"OpenFlowAdapter.create_out_rules_for_device:     dest_fields: {dest_fields}")
                             (ip_addr, port, protocol) = dest_fields.values()
-                            field_rules = self.flow_fields_for_spec_elems("dst", ip_addr, port, protocol)
+                            field_rules = self.flow_fields_for_ip_host("dst", ip_addr, port, protocol)
+                            flowrule = f"add table={OpenFlowAdapter.from_micronets_table},priority={cur_priority}, " \
+                                       f"in_port={in_port},dl_src={device_mac},{field_rules} actions={action}"
+                            logger.info(f"OpenFlowAdapter.create_out_rules_for_device:     flowrule: {flowrule}")
+                            outfile.writelines((flowrule, "\n"))
+                    elif rule_dest_mac:
+                        dest_list = await get_ipv4_hostports_for_hostportspec(rule_dest_mac)
+                        logger.info(f"OpenFlowAdapter.create_out_rules_for_device:     dest_list for {rule_dest_mac}: {dest_list}")
+                        for dest_spec in dest_list:
+                            logger.info(f"OpenFlowAdapter.create_out_rules_for_device:     dest mac: {dest_spec}")
+                            dest_fields = parse_macportspec(dest_spec)
+                            logger.info(
+                                f"OpenFlowAdapter.create_out_rules_for_device:     dest_fields: {dest_fields}")
+                            (mac_addr, port, protocol) = dest_fields.values()
+                            field_rules = self.flow_fields_for_mac_host("dst", mac_addr, port, protocol)
                             flowrule = f"add table={OpenFlowAdapter.from_micronets_table},priority={cur_priority}, " \
                                        f"in_port={in_port},dl_src={device_mac},{field_rules} actions={action}"
                             logger.info(f"OpenFlowAdapter.create_out_rules_for_device:     flowrule: {flowrule}")
@@ -479,7 +509,8 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                         outfile.writelines((flowrule, "\n"))
                     cur_priority -= 1
                 except Exception as ex:
-                    logger.warning(f"OpenFlowAdapter.create_out_rules_for_device: Error processing rule {rule}: {ex}")
+                    logger.warning(f"OpenFlowAdapter.create_out_rules_for_device: Error processing rule {rule}: {ex}",
+                                   exc_info=True)
 
     async def create_in_rules_for_device(self, in_port, device_mac, device, micronet, outfile):
         cur_priority = 800
@@ -503,7 +534,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     logger.info(f"OpenFlowAdapter.create_in_rules_for_device: processing {device_id} in-rule: {rule}")
                     if 'dest' in rule:
                         raise Exception("'dest' is not supported in 'inRules' (rule {rule})")
-                    rule_src = rule.get('source', None)
+                    rule_src = rule.get('sourceIp', None)
                     rule_dest_port = rule.get('destPort', None)
                     rule_action = rule['action']
                     logger.info(f"OpenFlowAdapter.create_in_rules_for_device:   action: {rule_action}")
@@ -516,7 +547,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                             logger.info(
                                 f"OpenFlowAdapter.create_in_rules_for_device:     destPort fields: {destport_spec_fields}")
                             (port, protocol) = destport_spec_fields.values()
-                            field_rules = self.flow_fields_for_spec_elems("dst", None, port, protocol)
+                            field_rules = self.flow_fields_for_ip_host("dst", None, port, protocol)
                             flowrule = f"add table={OpenFlowAdapter.to_micronets_table},priority={cur_priority}, " \
                                        f"dl_dst={device_mac},{field_rules} actions={action}"
                             logger.info(f"OpenFlowAdapter.create_in_rules_for_device:     flowrule: {flowrule}")
@@ -528,7 +559,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                             src_fields = parse_hostportspec(src_spec)
                             logger.info(f"OpenFlowAdapter.create_in_rules_for_device:     src_fields: {src_fields}")
                             (ip_addr, port, protocol) = src_fields.values()
-                            field_rules = self.flow_fields_for_spec_elems("src", ip_addr, port, protocol)
+                            field_rules = self.flow_fields_for_ip_host("src", ip_addr, port, protocol)
                             flowrule = f"add table={OpenFlowAdapter.to_micronets_table},priority={cur_priority}, " \
                                        f"dl_dst={device_mac},{field_rules} actions={action}"
                             logger.info(f"OpenFlowAdapter.create_in_rules_for_device:     flowrule: {flowrule}")
@@ -589,12 +620,36 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                             f"processing {device_id} allow/deny host: {hostport_spec}")
                 # hostport_spec examples: 1.2.3.4, 3.4.5.6/32:22, 1.2.3.4/32:80/tcp,443/tcp,7,39/udp
                 hostport_split = hostport_spec.split(':')
-                hostspec = hostport_split[0]
+                mac_addr = None
+                ip_addr = None
+                portspec = None
+                if len(hostport_split) >= 6:
+                    # Looks like a 6-byte MAC address
+                    mac_addr = hostport_spec[0:17]
+                    portspec = hostport_spec[18:]
+                    logger.info(f"OpenFlowAdapter.create_allowdenyhosts_rules_for_device: "
+                                f"processing mac address {mac_addr} with portspec {portspec}")
+                    if not mac_addr_re.match(mac_addr):
+                        raise Exception(
+                            f"Mac address specification '{mac_addr}' in host specification '{hostport_spec}' is invalid")
+                elif len(hostport_split) == 2:
+                    ip_addr = hostport_split[0]
+                    portspec = hostport_split[1]
+                elif len(hostport_split) == 1:
+                    ip_addr = hostport_split[0]
+                else:
+                    raise Exception(
+                        f"Host address/port specification '{hostport_spec}' is invalid")
 
-                if len(hostport_split) == 1:
-                    # Need to create an ip-only filter
+                if mac_addr:
+                    dest_spec = f"eth_dst={mac_addr}"
+                else:
+                    dest_spec = f"ip,ip_dst={ip_addr}"
+
+                if not portspec:
+                    # Need to create an address-only filter
                     outfile.write(f"add table={OpenFlowAdapter.from_micronets_table},priority={cur_priority}, "
-                                  f"in_port={in_port},dl_src={device_mac},ip,ip_dst={hostspec}, actions={match_action}\n")
+                                  f"in_port={in_port},dl_src={device_mac},{dest_spec}, actions={match_action}\n")
                 else:
                     # Need to create a ip+port filter(s)
                     portspec = hostport_split[1]
@@ -610,11 +665,11 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
                     if filter_tcp:
                         outfile.write(f"add table={OpenFlowAdapter.from_micronets_table},priority={cur_priority}, "
-                                      f"in_port={in_port},dl_src={device_mac},tcp,ip_dst={hostspec},tcp_dst={portspec}, "
+                                      f"in_port={in_port},dl_src={device_mac},{dest_spec},tcp,tcp_dst={portspec}, "
                                       f"actions={match_action}\n")
                     if filter_udp:
                         outfile.write(f"add table={OpenFlowAdapter.from_micronets_table},priority={cur_priority}, "
-                                      f"in_port={in_port},dl_src={device_mac},udp,ip_dst={hostspec},udp_dst={portspec}, "
+                                      f"in_port={in_port},dl_src={device_mac},{dest_spec},udp,udp_dst={portspec}, "
                                       f"actions={match_action}\n")
             # Write the default rule for the device
             cur_priority = 805

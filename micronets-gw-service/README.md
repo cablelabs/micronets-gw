@@ -122,8 +122,8 @@ Note: Currently only data type _application/json_ is supported.
 | nameservers              | list (string)   | N        | The IP addresses of nameservers for the subnet | ["8.8.8.8", "4.4.4.4"] |
 | interface                | string          | Y        | The network interface on the gateway the subnet is associated with | "wlp2s0"
 | vlan                     | integer         | N        | The network interface on the gateway the subnet is associated with | 201
-| outRules                 | list (object)   | N        | Micronet-Rules for outbound connections for devices in the micronet | “outRules": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
-| inRules                  | list (object)   | N        | Micronet-Rules for inbound connections for devices in the micronet | “inRules": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
+| outRules                 | list (object)   | N        | Micronet-Rules for outbound connections for devices in the micronet | “outRules": [{“action": “allow", “destIp": “api.acme.com:443/tcp"}]|
+| inRules                  | list (object)   | N        | Micronet-Rules for inbound connections for devices in the micronet | “inRules": [{“action": “allow", “sourceIp": “20.30.40.0/24", “destPort": “22/tcp"} ]|
 
 ##### Notes:
 * **inRules** and **outRules** are processed in the order they are defined.
@@ -177,8 +177,8 @@ Note: Currently only data type _application/json_ is supported.
 | networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | "192.168.1.42" |
 | networkAddress.ipv6      | string        | N        | The IPv6 network definition | "fe80::104c:20b6:f71a:4e55" |
 | psk                      | string        | N        | A 32-bit PSK (64 hex digits) hex-encoded WPA key or 6-63 character ASCII password | "my bad pa55word!", "0102030405...20" |
-| outRules                 | list (object) | N        | Micronet-Rules for outbound connections | “outRules": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
-| inRules                  | list (object) | N        | Micronet-Rules for inbound connections | “inRules": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
+| outRules                 | list (object) | N        | Micronet-Rules for outbound connections | “outRules": [{“action": “allow", “destIp": “api.acme.com:443/tcp"}]|
+| inRules                  | list (object) | N        | Micronet-Rules for inbound connections | “inRules": [{“action": “allow", “sourceIp": “20.30.40.0/24", “destPort": “22/tcp"} ]|
 
 ##### Notes:
 * The psk field is only relevant for wifi micronets currently
@@ -360,11 +360,11 @@ All request URIs are prefixed by **/micronets/v1/gateway** unless otherwise note
 ```json
 {
     "action": string,
-    "source": [
+    "sourceIp": [
         string
     ],
     "sourcePort": string,
-    "dest": [
+    "destIp": [
         string
     ],
     "destPort": string
@@ -374,9 +374,9 @@ All request URIs are prefixed by **/micronets/v1/gateway** unless otherwise note
 | Property name            | Value          | Required | Description                             | Example      |
 | ------------------------ | -------------- | -------- | --------------------------------------- | ------------- 
 | action                   | string         | Y        | One of "deny" or "allow"                | "allow"      |
-| source                   | array (string) | N        | Source hosts/address(es)/network(s). DNS hostname, Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["8.8.8.8", "12.34.56.0/24", "www.cablelabs.com"] |
+| sourceIp                 | array (string) | N        | Source hosts/address(es)/network(s). DNS hostname, Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["8.8.8.8", "12.34.56.0/24", "www.cablelabs.com"] |
 | sourcePort               | string         | N        | Source port(s)                          | "22/tcp", "123", "1111/tcp,2222/udp" |
-| dest                     | array (string) | N        | Destination hosts/address(es)/network(s). Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["12.34.56.0/24", "www.ietf.org:80/tcp,443/tcp"] |
+| destIp                   | array (string) | N        | Destination hosts/address(es)/network(s). Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["12.34.56.0/24", "www.ietf.org:80/tcp,443/tcp"] |
 | destPort                 | string         | N        | Destination port(s)                     | "2112/tcp", "37", "1111/udp,2222/tcp"| 
 
 #### Notes:
