@@ -122,8 +122,8 @@ Note: Currently only data type _application/json_ is supported.
 | nameservers              | list (string)   | N        | The IP addresses of nameservers for the subnet | ["8.8.8.8", "4.4.4.4"] |
 | interface                | string          | Y        | The network interface on the gateway the subnet is associated with | "wlp2s0"
 | vlan                     | integer         | N        | The network interface on the gateway the subnet is associated with | 201
-| outRules                 | list (object)   | N        | Micronet-Rules for outbound connections for devices in the micronet | “outRules": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
-| inRules                  | list (object)   | N        | Micronet-Rules for inbound connections for devices in the micronet | “inRules": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
+| outRules                 | list (object)   | N        | Micronet-Rules for outbound connections for devices in the micronet | “outRules": [{“action": “allow", “destIp": “api.acme.com:443/tcp"}]|
+| inRules                  | list (object)   | N        | Micronet-Rules for inbound connections for devices in the micronet | “inRules": [{“action": “allow", “sourceIp": “20.30.40.0/24", “destPort": “22/tcp"} ]|
 
 ##### Notes:
 * **inRules** and **outRules** are processed in the order they are defined.
@@ -162,8 +162,17 @@ Note: Currently only data type _application/json_ is supported.
        "ipv4": string,
        "ipv6": string
     },
-    "restrictions": [
+    "outRules": [
        object
+    ],
+    "inRules": [
+       object
+    ],
+    "allowHosts": [
+       string
+    ],
+    "denyHosts": [
+       string
     ]
 }
 ```
@@ -177,8 +186,10 @@ Note: Currently only data type _application/json_ is supported.
 | networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | "192.168.1.42" |
 | networkAddress.ipv6      | string        | N        | The IPv6 network definition | "fe80::104c:20b6:f71a:4e55" |
 | psk                      | string        | N        | A 32-bit PSK (64 hex digits) hex-encoded WPA key or 6-63 character ASCII password | "my bad pa55word!", "0102030405...20" |
-| outRules                 | list (object) | N        | Micronet-Rules for outbound connections | “outRules": [{“action": “allow", “dest": “api.acme.com:443/tcp"}]|
-| inRules                  | list (object) | N        | Micronet-Rules for inbound connections | “inRules": [{“action": “allow", “source": “20.30.40.0/24", “destPort": “22/tcp"} ]|
+| outRules                 | list (object) | N        | Micronet-Rules for outbound connections | “outRules": [{“action": “allow", “destIp": “api.acme.com:443/tcp"}]|
+| inRules                  | list (object) | N        | Micronet-Rules for inbound connections | “inRules": [{“action": “allow", “sourceIp": “20.30.40.0/24", “destPort": “22/tcp"} ]|
+| allowHosts               | list (string) | N        | A list of hosts that the device is allowed to connect to exclusively (either dotted IP address, CIDR format, DNS name, or MAC address) | ["8.8.8.8", "12.34.56.0/24", "www.example.com",  "00:23:12:0f:b0:26"] |
+| denyHosts                | list (string) | N        | A list of hosts that the device is not allowed to connect to (either dotted IP address, CIDR format, DNS name, or MAC address) | ["8.8.8.8", "12.34.56.0/24", "www.example.com",  "00:23:12:0f:b0:26"] |
 
 ##### Notes:
 * The psk field is only relevant for wifi micronets currently
@@ -186,8 +197,9 @@ Note: Currently only data type _application/json_ is supported.
 * **inRules** and **outRules** are processed in the order they are defined.
 * If **inRules** or **outRules** is non-empty, the default action is "deny"
 * If no **outRules** are defined, all outgoing device connections/packets are allowed. 
-* If no **inRules** are defined, no inbound connections are allowed other than data related to allowed outgoing connections.
+* If no **inRules** are defined, no inbound data is allowed other than data related to outgoing connections.
 * If **inRules** or **outRules** is defined, it overrides the corresponding definition in the contained micronet 
+* allowHosts/denyHosts are to be deprecated in favor of in/outRules. Don't use them together!
 
 #### Micronet Device Endpoints/Operations
 
@@ -360,30 +372,30 @@ All request URIs are prefixed by **/micronets/v1/gateway** unless otherwise note
 ```json
 {
     "action": string,
-    "source": [
-        string
-    ],
+    "sourceIp": string,
+    "sourceMac": string,
     "sourcePort": string,
-    "dest": [
-        string
-    ],
+    "destIp": string,
+    "destMac": string,
     "destPort": string
 }
 ```
 
-| Property name            | Value          | Required | Description                             | Example      |
-| ------------------------ | -------------- | -------- | --------------------------------------- | ------------- 
-| action                   | string         | Y        | One of "deny" or "allow"                | "allow"      |
-| source                   | array (string) | N        | Source hosts/address(es)/network(s). DNS hostname, Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["8.8.8.8", "12.34.56.0/24", "www.cablelabs.com"] |
-| sourcePort               | string         | N        | Source port(s)                          | "22/tcp", "123", "1111/tcp,2222/udp" |
-| dest                     | array (string) | N        | Destination hosts/address(es)/network(s). Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | ["12.34.56.0/24", "www.ietf.org:80/tcp,443/tcp"] |
-| destPort                 | string         | N        | Destination port(s)                     | "2112/tcp", "37", "1111/udp,2222/tcp"| 
+| Property name       | Value  | Required | Description                             | Example      |
+| ------------------- | ------ | -------- | --------------------------------------- | ------------- 
+| action              | string | Y        | One of "deny" or "allow"                | "allow"      |
+| sourceIp            | string | N        | Source IP hosts/address/network(s). DNS hostname, Dotted IPs, CIDR notation, and optional port/protocol notation support. A port with no protocol will match both TCP and UDP. | "8.8.8.8", "12.34.56.0/24", "www.cablelabs.com:443/tcp" |
+| sourceMac           | string | N        | Source MAC address in EUI-48 format with optional port/protocol notation support. A MAC address with no protocol will match all traffic for that host  | "b8:27:eb:75:a4:8b", "b8:27:eb:75:a4:8b:udp" |
+| sourcePort          | string | N        | Source port(s)                          | "22/tcp", "123", "1111/tcp,2222/udp" |
+| destIp              | string | N        | Destination hosts/address(es)/network(s). Dotted IPs, CIDR notation, and port/protocol notation support. A port with no protocol will match both TCP and UDP.  | "12.34.56.0/24", "www.ietf.org:80/tcp,443/tcp" |
+| destMac             | string | N        | Destination MAC address in EUI-48 format with optional port/protocol notation support. A MAC address with no protocol will match all traffic for that host  | "b8:27:eb:75:a4:8b", "b8:27:eb:75:a4:8b:80/tcp" |
+| destPort            | string | N        | Destination port(s)                     | "2112/tcp", "37", "1111/udp,2222/tcp"| 
 
 #### Notes:
 
-* hostnames will be expanded to one or more IP addresses via DNS
+* hostnames will be expanded to one or more IP addresses via DNS by the gateway
 * port designations may include "/tcp" or "/udp" to specify the protocol. If omitted, the rule will apply to both tcp and udp ports.
-* If no ports are specified in a rule, the rule applies to all ports on the host(s)
+* If no ports are specified in a rule, the rule applies to all TCP and UDP traffic on the host(s)
 
 Examples of Micronets-Rule lists:
 
@@ -391,6 +403,7 @@ Examples of Micronets-Rule lists:
 [
    {"action": "allow", "destIp": "api.acme.com:443/tcp"},
    {"action": "allow", "destIp": "1.2.3.0/24"},
+   {"action": "allow", "destMac": "00:23:12:0f:b0:26"},
    {"action": "deny"}
 ]
 ```

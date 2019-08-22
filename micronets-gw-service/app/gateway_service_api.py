@@ -230,16 +230,17 @@ async def check_rules (container, field_name, required):
     return rules
 
 async def check_rule (rule):
-    check_for_unrecognized_entries (rule, ['action', 'source', 'sourcePort', 'dest', 'destPort'])
+    check_for_unrecognized_entries (rule, ['action', 'sourceIp', 'sourcePort', 'destIp', 'destMac', 'destPort'])
     action = check_field (rule, 'action', str, True)
     if not (action == "allow" or action == "deny"):
         raise InvalidUsage(400, message=f"Supplied action '{action}' in rule '{rule}' is not valid "
                                         "(allowed actions are 'allow" and 'deny')
 
-    await check_hostspec (rule, 'source', False)
+    await check_hostspec (rule, 'sourceIp', False)
     check_portspec (rule, 'sourcePort', False)
 
-    await check_hostspec (rule, 'dest', False)
+    await check_hostspec (rule, 'destIp', False)
+    await check_hostspec (rule, 'destMac', False)
     check_portspec (rule, 'destPort', False)
 
     return rule

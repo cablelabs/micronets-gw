@@ -822,10 +822,11 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.42"
                },
                "outRules": [
-                  {"action": "allow", "dest": "8.8.8.8"},
-                  {"action": "allow", "dest": "12.34.56.0/24"},
-                  {"action": "allow", "dest": "example.com"},
-                  {"action": "allow", "dest": "www.ietf.org:443/tcp"},
+                  {"action": "allow", "destIp": "8.8.8.8"},
+                  {"action": "allow", "destIp": "12.34.56.0/24"},
+                  {"action": "allow", "destIp": "example.com"},
+                  {"action": "allow", "destIp": "www.ietf.org:443/tcp"},
+                  {"action": "allow", "destMac": "00:23:12:0f:b0:26"},
                   {"action": "deny"} ]
            }
         }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
@@ -844,10 +845,11 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "ipv4": "192.168.1.42"
             },
             "outRules": [
-                  {"action": "allow", "dest": "8.8.8.8"},
-                  {"action": "allow", "dest": "12.34.56.0/24"},
-                  {"action": "allow", "dest": "example.com"},
-                  {"action": "allow", "dest": "www.ietf.org:80/tcp,443/tcp"},
+                  {"action": "allow", "destIp": "8.8.8.8"},
+                  {"action": "allow", "destIp": "12.34.56.0/24"},
+                  {"action": "allow", "destIp": "example.com"},
+                  {"action": "allow", "destIp": "www.ietf.org:80/tcp,443/tcp"},
+                  {"action": "allow", "destMac": "00:23:12:0f:b0:26"},
                   {"action": "deny"} ]
         }
     }
@@ -866,10 +868,11 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.43"
                },
                "outRules": [
-                  {"action": "deny", "dest": "8.8.8.8"},
-                  {"action": "deny", "dest": "12.34.56.0/24"},
-                  {"action": "deny", "dest": "www.ietf.org"},
+                  {"action": "deny", "destIp": "8.8.8.8"},
+                  {"action": "deny", "destIp": "12.34.56.0/24"},
+                  {"action": "deny", "destIp": "www.ietf.org"},
                   {"action": "deny", "destPort": "25,465,587,2525"},
+                  {"action": "deny", "destMac": "00:23:12:0f:b0:26"},
                   {"action": "allow"} ]
            }
         }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
@@ -888,16 +891,17 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "ipv4": "192.168.1.43"
             },
             "outRules": [
-                {"action": "deny", "dest": "8.8.8.8"},
-                {"action": "deny", "dest": "12.34.56.0/24"},
-                {"action": "deny", "dest": "www.ietf.org"},
+                {"action": "deny", "destIp": "8.8.8.8"},
+                {"action": "deny", "destIp": "12.34.56.0/24"},
+                {"action": "deny", "destIp": "www.ietf.org"},
                 {"action": "deny", "destPort": "25,465,587,2525"},
+                {"action": "deny", "destMac": "00:23:12:0f:b0:26"},
                 {"action": "allow"} ]
         }
     }
     ```
 
-* Creating a device restricted to communicating with certain hosts (using allowHosts):
+* Creating a device restricted to communicating with certain hosts (using hosts):
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -909,7 +913,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                "networkAddress": {
                    "ipv4": "192.168.1.44"
                },
-               "allowHosts": ["8.8.8.8", "12.34.56.0/24", "www.yahoo.com"]
+               "allowHosts": ["8.8.8.8", "12.34.56.0/24", "www.yahoo.com", "b8:27:eb:75:a4:8b"]
            }
         }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
     ```
@@ -926,13 +930,14 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
             "networkAddress": {
                 "ipv4": "192.168.1.44"
             },
-            "allowHosts": ["8.8.8.8", "12.34.56.0/24", "www.yahoo.com"]        }
+            "allowHosts": ["8.8.8.8", "12.34.56.0/24", "www.yahoo.com", "b8:27:eb:75:a4:8b"]
+        }
     }
     ```
 
 * Initiating DPP onboarding (with PSK AKM):
 
-    DPP onboarding can be initiated by providing a 
+    DPP onboarding can be initiated by providing a DPP URI to the device `onboard` endpoint.
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
