@@ -595,6 +595,11 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 hostport_spec_list += micronet['nameservers']
             if 'nameservers' in device:
                 hostport_spec_list += device['nameservers']
+            ipv4Network = micronet.get('ipv4Network')
+            if ipv4Network:
+                gateway = ipv4Network.get('gateway')
+                if gateway:
+                    hostport_spec_list.append(gateway)
             match_action = accept_action
             default_action = OpenFlowAdapter.drop_action
         elif 'denyHosts' in device:
