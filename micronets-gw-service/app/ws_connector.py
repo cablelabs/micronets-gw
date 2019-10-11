@@ -4,6 +4,7 @@ import pathlib
 import ssl
 import multidict
 import logging
+import aiohttp
 
 from quart import Quart, Request, json
 from app import app
@@ -27,12 +28,12 @@ class WSMessageHandler:
 
 
 class WSConnector:
-    def __init__ (self, ws_server_address, ws_server_port, ws_server_path,
+    def __init__ (self, ws_url, ws_lookup_url, gateway_id,
                         tls_certkey_file = None, tls_ca_file = None, retry_interval_s = 20):
         logger.info ("WSConnector: initializing...")
-        self.ws_server_address = ws_server_address
-        self.ws_server_port = ws_server_port
-        self.ws_server_path = ws_server_path
+        self.ws_url = ws_url
+        self.ws_lookup_url = ws_lookup_url
+        self.gateway_id = gateway_id
         self.handler_table = {}
         self.websocket = None
         self.message_id = 0
@@ -40,7 +41,7 @@ class WSConnector:
         self.tls_certkey_file = tls_certkey_file
         self.tls_ca_file = tls_ca_file
         self.retry_interval_s = retry_interval_s
-        logger.info (f"WSConnector: Websocket server/path: {ws_server_address}:{ws_server_port}/{ws_server_path}")
+        logger.info (f"WSConnector: Websocket URL (None=URL Lookup): {ws_url}")
         logger.info (f"WSConnector: Client cert-key File: {tls_certkey_file}")
         logger.info (f"WSConnector: CA File: {tls_ca_file}")
 
@@ -75,13 +76,6 @@ class WSConnector:
         await self.websocket.send (message_json)
         return message_id
 
-    def get_connect_uri (self):
-        if (self.tls_certkey_file):
-            scheme = "wss"
-        else:
-            scheme = "ws"
-        return f"{scheme}://{self.ws_server_address}:{self.ws_server_port}{self.ws_server_path}"
-
     async def setup_connection (self):
         logger.debug ("WSConnector: setup_connection: starting...")
         ssl_context = None
@@ -102,13 +96,19 @@ class WSConnector:
             ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED
             ssl_context.check_hostname = False
 
-        dest_uri = self.get_connect_uri ()
         while (True):
+            # We want to do this lookup/substitution on every connect, in case the
+            #  gateway-to-subscriber mapping changes on the portal
+            dest_url = None
             try:
-                await self.init_connection (dest_uri, ssl_context=ssl_context)
+                if self.ws_url:
+                    dest_url = self.ws_url
+                else:
+                    dest_url = await self.get_websocket_url_for_gateway(self.gateway_id)
+                await self.init_connection (dest_url, ssl_context=ssl_context)
             except Exception as ex:
                 logger.warn (f"WSConnector: setup_connection: Error connecting "
-                             f"to {self.ws_server_address}:{self.ws_server_port}: {ex}", exc_info=False)
+                             f"to {dest_url}: {ex}", exc_info=False)
                 # Note: Set "exc_info=True" to get a detailed traceback
                 logger.info (f"WSConnector: Sleeping {self.retry_interval_s} seconds before reconnecting...")
                 await asyncio.sleep (self.retry_interval_s)
@@ -131,6 +131,18 @@ class WSConnector:
         await self.wait_for_hello_message ()
         self.hello_received = True
         logger.info (f"WSConnector: HELLO handshake complete.")
+
+    async def get_websocket_url_for_gateway (self, gateway_id):
+        logger.info (f"WSConnector: get_websocket_url_for_gateway({gateway_id})...")
+        async with aiohttp.ClientSession() as session:
+            url = f"https://dev.mso-portal-api.micronets.in/portal/v1/socket?gatewayId={gateway_id}"
+            logger.info(f"WSConnector: get_websocket_url_for_gateway({gateway_id}): Retrieving {url}")
+            async with session.get(url) as response:
+                json_response = await response.json()
+                logger.info(f"WSConnector: get_websocket_url_for_gateway({gateway_id}): Received response: {json_response}")
+                gateway_websocket_url = json_response['socketUrl']
+                logger.info(f"WSConnector: get_websocket_url_for_gateway({gateway_id}): Received URL: {gateway_websocket_url}")
+                return gateway_websocket_url
 
     async def send_hello_message (self, peer_id):
         message = {'messageType': 'CONN:HELLO',

@@ -12,9 +12,7 @@ class BaseConfig:
     SERVER_BASE_DIR = pathlib.Path (__file__).parent
     SERVER_BIN_DIR = SERVER_BASE_DIR.joinpath ("bin")
     WEBSOCKET_CONNECTION_ENABLED = False
-    # NOTE: The WEBSOCKET_SERVER_PATH should be unique to the gateway/subscriber if using the proxy
-    WEBSOCKET_SERVER_PATH = '/micronets/v1/ws-proxy/gw-test/micronets-gw-0001'
-    WEBSOCKET_SERVER_PORT = 5050
+    WEBSOCKET_LOOKUP_URL = 'https://dev.mso-portal-api.micronets.in/api/portal/v1/socket?gatewayId={gateway_id}'
     WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces"
@@ -28,10 +26,11 @@ class BaseConfig:
 
 class BaseGatewayConfig:
     LOGFILE_PATH = pathlib.Path (__file__).parent.joinpath ("micronets-gw.log")
-    WEBSOCKET_SERVER_ADDRESS = "ws-proxy-api.micronets.in"
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {flow_file}'
     HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
     HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
+    # Set this iff you want to disable websocket URL lookup using MSO Portal (MSO_PORTAL_WEBSOCKET_LOOKUP_ENDPOINT)
+    #    WEBSOCKET_URL = "wss://ws-proxy-api.micronets.in:5050/micronets/v1/ws-proxy/gw-test/{gateway_id}"
 
 #
 # Mock Adapter Configurations
@@ -39,6 +38,7 @@ class BaseGatewayConfig:
 
 class BaseMockConfig (BaseConfig):
     DHCP_ADAPTER = "Mock"
+    GATEWAY_ID = "mock-gw"
 
 class MockDevelopmentConfig (BaseMockConfig):
     LISTEN_HOST = "127.0.0.1"
@@ -48,10 +48,8 @@ class MockDevelopmentConfig (BaseMockConfig):
 
 class MockDevelopmentConfigWithWebsocket (MockDevelopmentConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
-    WEBSOCKET_SERVER_ADDRESS = "localhost"
-    WEBSOCKET_SERVER_PORT = 5050
+    WEBSOCKET_URL = "wss://localhost:5050/micronets/v1/ws-proxy/gw/mock-gw"
     DPP_HANDLER_ENABLED = True
-    WEBSOCKET_SERVER_ADDRESS = "localhost"
     SIMULATE_ONBOARD_RESPONSE_EVENTS = "with success"
 
 #
@@ -104,7 +102,7 @@ class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
 
 class DnsmasqDevelopmentConfigWithLocalWebsocket (DnsmasqDevelopmentConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
-    WEBSOCKET_SERVER_ADDRESS = "localhost"
+    WEBSOCKET_URL = "wss://localhost:5050/micronets/v1/ws-proxy/gw/mock-gw"
     DPP_HANDLER_ENABLED = True
     SIMULATE_ONBOARD_RESPONSE_EVENTS = "with success"
 

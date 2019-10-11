@@ -1,6 +1,6 @@
 from quart import Quart, Request, request
 
-import os, argparse, config, sys, traceback, asyncio, websockets, logging
+import os, argparse, config, sys, traceback, asyncio, socket, websockets, logging
 
 from .utils import InvalidUsage
 
@@ -63,6 +63,17 @@ def get_dpp_handler():
 if not 'DHCP_ADAPTER' in app.config:
     exit (f"A DHCP_ADAPTER must be defined in the selected configuration ({app.config})")
 
+subscriber_id = app.config.get('SUBSCRIBER_ID')
+
+gateway_id = app.config.get('GATEWAY_ID')
+if not gateway_id:
+    gateway_id = socket.gethostname().split(".")[0]
+
+logger.info (f"Starting gateway \"{gateway_id}\"")
+
+if subscriber_id:
+    logger.info(f"Subscriber ID override: \"{subscriber_id}\"")
+
 dhcp_adapter = None
 adapter = app.config ['DHCP_ADAPTER'].upper ()
 if adapter == "MOCK":
@@ -84,13 +95,13 @@ from .ws_connector import WSConnector
 
 ws_connector = None
 try:
-    ws_connector_enabled = app.config['WEBSOCKET_CONNECTION_ENABLED']
-    ws_server_address = app.config.get('WEBSOCKET_SERVER_ADDRESS')
-    ws_server_port = app.config.get('WEBSOCKET_SERVER_PORT')
-    ws_server_path = app.config.get('WEBSOCKET_SERVER_PATH')
+    ws_connector_enabled = app.config.get('WEBSOCKET_CONNECTION_ENABLED')
+    ws_url = app.config.get('WEBSOCKET_URL')
+    ws_lookup_url = app.config.get('WEBSOCKET_LOOKUP_URL')
     ws_tls_certkey_file = app.config.get('WEBSOCKET_TLS_CERTKEY_FILE')
     ws_tls_ca_cert_file = app.config.get('WEBSOCKET_TLS_CA_CERT_FILE')
-    ws_connector = WSConnector (ws_server_address, ws_server_port, ws_server_path,
+
+    ws_connector = WSConnector (ws_url, ws_lookup_url, gateway_id,
                                 tls_certkey_file=ws_tls_certkey_file,
                                 tls_ca_file=ws_tls_ca_cert_file)
     if ws_connector_enabled:
