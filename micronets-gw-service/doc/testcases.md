@@ -20,9 +20,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "gateway":"192.168.1.1"
                 },
                 "interface": "wlp2s0",
-                "ovsBridge": "brmn001",
                 "vlan": 101,
-                "nameservers": ["1.2.3.4","1.2.3.5"]
+                "nameservers": ["8.8.8.8","4.4.4.4"]
             }
         }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
@@ -34,7 +33,6 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
         "micronet": {
             "micronetId": "mockmicronet007",
             "interface": "wlp2s0",
-            "ovsBridge": "brmn001",
             "vlan": 101,
             "ipv4Network": {
                 "network": "192.168.1.0",
@@ -42,8 +40,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "gateway": "192.168.1.1"
             },
             "nameservers": [
-                "1.2.3.4",
-                "1.2.3.5"
+                "8.8.8.8",
+                "4.4.4.4"
             ]
         }
     }
@@ -60,7 +58,6 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "mask": "255.255.255.0"
                 },
                 "interface": "wlp2s0",
-                "ovsBridge": "brmn001",
                 "vlan": 102
             }
         }' http://localhost:5000/micronets/v1/gateway/micronets
@@ -77,7 +74,6 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "mask": "255.255.255.0"
             },
             "interface": "wlp2s0",
-            "ovsBridge": "brmn001",
             "vlan": 102
         }
     }
@@ -96,7 +92,6 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "gateway": "192.168.8.1"
                 },
                 "interface": "wlp2s0",
-                "ovsBridge": "brmn001",
                 "vlan": 108,
                 "nameservers": [
                     "4.4.4.4",
@@ -111,7 +106,6 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "gateway": "192.168.9.1"
                 },
                 "interface": "wlp2s0",
-                "ovsBridge": "brmn001",
                 "vlan": 109
             }
         ] }
@@ -132,7 +126,6 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "broadcast": "192.168.8.255"
                 },
                 "interface": "wlp2s0",
-                "ovsBridge": "brmn001",
                 "vlan": 108,
                 "nameservers": [
                     "4.4.4.4",
@@ -148,7 +141,6 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "broadcast": "192.168.9.255"
                 },
                 "interface": "wlp2s0",
-                "ovsBridge": "brmn001",
                 "vlan": 109
             }
         ]
@@ -175,7 +167,6 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "gateway": "192.168.8.1"
                 },
                 "interface": "wlp2s0",
-                "ovsBridge": "brmn001",
                 "vlan": 108,
                 "nameservers": [
                     "4.4.4.4",
@@ -190,7 +181,6 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "gateway": "192.168.9.1"
                 },
                 "interface": "wlp2s0",
-                "ovsBridge": "brmn001",
                 "vlan": 109
             }
         ]
@@ -224,11 +214,10 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "gateway": "192.168.1.2"
             },
             "interface": "wlp2s0",
-            "ovsBridge": "brmn001",
             "vlan": 101,
             "nameservers": [
-                "1.2.3.4",
-                "1.2.3.5"
+                "8.8.8.8",
+                "4.4.4.4"
             ]
         }
     }
@@ -237,7 +226,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
             "micronet": {
-                "nameservers": ["1.2.3.4", "1.2.3.5"]
+                "nameservers": ["8.8.8.8", "4.4.4.4"]
             }
         }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
     ```
@@ -254,11 +243,10 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "gateway": "192.168.1.2"
             },
             "interface": "wlp2s0",
-            "ovsBridge": "brmn001",
             "vlan": 101,
             "nameservers": [
-                "1.2.3.4",
-                "1.2.3.5"
+                "8.8.8.8",
+                "4.4.4.4"
             ]
         }
     }
@@ -286,11 +274,10 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "gateway": "192.168.1.3"
             },
             "interface": "wlp2s0",
-            "ovsBridge": "brmn001",
             "vlan": 101,
             "nameservers": [
-                "1.2.3.4",
-                "1.2.3.5"
+                "8.8.8.8",
+                "4.4.4.4"
             ]
         }
     }
@@ -330,9 +317,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "gateway":"192.168.1.1"
                 },
                 "interface": "wlp2s0",
-                "ovsBridge": "brmn001",
                 "vlan": 101,
-                "nameservers": ["1.2.3.4","1.2.3.5"]
+                "nameservers": ["8.8.8.8","4.4.4.4"]
             }
         }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
@@ -356,9 +342,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "mask": "255.255.255.0"
                 },
                 "interface": "wlp2s0",
-                "ovsBridge": "brmn001",
                 "vlan": 101,
-                "nameservers": ["1.2.3.4","1.2.3.5"]
+                "nameservers": ["8.8.8.8","4.4.4.4"]
             }
         }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
@@ -367,7 +352,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```json
     {
-        "message": "Supplied micronet ID 'bad micronet name' in '{'micronetId': 'bad micronet name', 'ipv4Network': {'network': '192.168.1.0', 'mask': '255.255.255.0'}, 'nameservers': ['1.2.3.4', '1.2.3.5']}' is not alpha-numeric"
+        "message": "Supplied micronet ID 'bad micronet name' in '{'micronetId': 'bad micronet name', 'ipv4Network': {'network': '192.168.1.0', 'mask': '255.255.255.0'}, 'nameservers': ['8.8.8.8', '4.4.4.4']}' is not alpha-numeric"
     }
     ```
 
@@ -381,8 +366,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "mask": "255.255.255.0"
                 },
                 "interface": "wlp2s0",
-                "ovsBridge": "brmn001",
-                "nameservers": ["1.2.3.4","1.2.3.5"]
+                "nameservers": ["8.8.8.8","4.4.4.4"]
             }
         }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
@@ -391,7 +375,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```json
     {
-        "message": "Required field 'micronetId' missing from {'ipv4Network': {'network': '192.168.1.0', 'mask': '255.255.255.0'}, 'nameservers': ['1.2.3.4', '1.2.3.5']}"
+        "message": "Required field 'micronetId' missing from {'ipv4Network': {'network': '192.168.1.0', 'mask': '255.255.255.0'}, 'nameservers': ['8.8.8.8', '4.4.4.4']}"
     }
     ```
 
@@ -404,8 +388,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "ipv4Network": {
                     "network": "192.168.1.0"
                 },
-                "interface": "wlp2s0",
-                "ovsBridge": "brmn001"
+                "interface": "wlp2s0"
             }
         }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
@@ -429,8 +412,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "mask": "255.255.255.0",
                     "gateway":"192.168.2.1"
                 },
-                "interface": "wlp2s0",
-                "ovsBridge": "brmn001"
+                "interface": "wlp2s0"
             }
         }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
@@ -454,8 +436,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "mask": "255.255.255.0",
                     "gateway":"192.168.1.1"
                 },
-                "interface": "wlp2s0",
-                "ovsBridge": "brmn001"
+                "interface": "wlp2s0"
             }
         }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
@@ -468,8 +449,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "mask": "255.255.0.0",
                     "gateway":"192.168.2.1"
                 },
-                "interface": "wlp2s0",
-                "ovsBridge": "brmn001"
+                "interface": "wlp2s0"
             }
         }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
@@ -494,7 +474,6 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "gateway":"192.168.1.2"
                 },
                 "interface": "wlp2s0",
-                "ovsBridge": "brmn001",
                 "vlan": 101
             }
         }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
@@ -1169,7 +1148,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "mask": "255.255.255.0",
                     "gateway":"192.168.1.1"
                 },
-                "nameservers": ["1.2.3.4","1.2.3.5"]
+                "nameservers": ["8.8.8.8","4.4.4.4"]
             }
         }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
@@ -1206,7 +1185,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "mask": "255.255.255.0",
                    "gateway":"192.168.1.1"
                },
-               "nameservers": ["1.2.3.4","1.2.3.5"]
+               "nameservers": ["8.8.8.8","4.4.4.4"]
            }
         }' http://localhost:5000/micronets/v1/gateway/micronets
     ```
