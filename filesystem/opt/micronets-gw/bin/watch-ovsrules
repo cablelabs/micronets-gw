@@ -1,0 +1,2 @@
+#!/bin/sh
+watch -d "sudo ovs-ofctl dump-flows brmn001 --names | /opt/micronets-gw/bin/format-ofctl-dump"

@@ -1,0 +1,10 @@
+#!/bin/bash
+# Can pipe output of "ovs-ofctl dump-flows" into this
+#  e.g. sudo ovs-ofctl dump-flows brmn001 --names | format_ofctl_dump
+#  e.g. watch "sudo ovs-ofctl dump-flows brmn001 --names | format_ofctl_dump"
+#  Use --sort and --rsort to control display order.  The --names/--no-names and --stats/--no-stats options also affect output formatting.
+#  sudo ovs-ofctl dump-flows
+awk -F '[, ]' '{printf "%-09.9s %-12.12s %-17.17s %s %s %s %s %s %s %s %s %s %s\n", $6, $12, $8, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23}' \
+	| sort -k 1.7bn -k 2.10rbn 
+
+# Alternate form: sudo ovs-ofctl dump-flows brmn001 --sort --no-stats (this awk isn't setup for this format however)

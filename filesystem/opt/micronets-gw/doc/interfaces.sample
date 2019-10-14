@@ -8,7 +8,7 @@
 #
 auto brmn001
 allow-ovs brmn001
-iface brmn001 inet dhcp
+iface brmn001 inet manual
   ovs_type OVSBridge
   # This is the port that's connected to the Internet
   ovs_bridge_uplink_port enp1s0
@@ -38,11 +38,11 @@ iface brmn001 inet static
 # The uplink port
 #
 
-# This may already be defined in the system-provided interfaces file. This 
-# interface should have a default gateway and must NOT be listed in the 
+# An uplink may already be defined in the system-provided interfaces file.
+# This interface should have a default gateway and must NOT be listed in the 
 # ovs_ports line of the bridge definition.
-allow-brmn001 enp1s0
-  iface enp1s0 inet dhcp
+auto enp1s0
+iface enp1s0 inet dhcp
 
 #
 # A wireless interface managed by the Micronets gateway
