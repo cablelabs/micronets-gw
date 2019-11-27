@@ -32,6 +32,7 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         self.dpp_ap_connector_file = Path (config ['DPP_AP_CONNECTOR_FILE'])
         self.dpp_ap_connector = None
         self.ssid = None
+        self.freq = None
 
     async def handle_ws_message(self, message):
         logger.info("DPPHandler.handle_ws_message: {message}")
@@ -98,10 +99,12 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"{__name__}:   DPP QRCode ID: {qrcode_id}")
 
         if 'dpp' in akms:
-            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid)
+            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid,
+                                                                  freq=self.freq)
         elif 'psk' in akms:
             psk = device['psk']
-            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid, psk=psk)
+            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid,
+                                                                  psk=psk, freq=self.freq)
         else:
             raise InvalidUsage(503, message="Only PSK- and DPP-based on-boarding are currently supported")
 
@@ -156,6 +159,9 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
 
         self.ssid = self.hostapd_adapter.get_status_var('ssid')[0]
         logger.info(f"DPPHandler.handle_hostapd_ready:   SSID: {self.ssid}")
+
+        self.freq = self.hostapd_adapter.get_status_var('freq')
+        logger.info(f"DPPHandler.handle_hostapd_ready:   FREQ: {self.freq}")
 
         if self.dpp_config_key_file.exists():
             try:
