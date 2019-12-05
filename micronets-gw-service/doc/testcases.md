@@ -920,8 +920,8 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```
     curl -X PUT -H "Content-Type: application/json" -d '{
-           "akms": ["psk"],
            "dpp": {
+               "akms": ["psk"],
                "uri": "DPP:C:81/1;M:2c:d0:5a:6e:ca:3c;I:KYZRQ;K:MDkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDIgAC/nFQKV1+CErzr6QCUT0jFIno3CaTRr3BW2n0ThU4mAw=;;"
            }
        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices/MyDevice03/onboard

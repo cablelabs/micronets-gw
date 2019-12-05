@@ -171,7 +171,7 @@ except Exception as ex:
     logger.info ("Error starting with adapter:", exc_info=True)
     exit (1)
 
-asyncio.ensure_future(conf_model.update_conf())
+asyncio.ensure_future(conf_model.queue_conf_update())
 
 # Initialize the API
 from . import gateway_service_api

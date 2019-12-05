@@ -46,6 +46,10 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
             raise InvalidUsage (503, message="Only one onboard process can be performed at a time (currently onboarding "
                                             f"device {pending_device_id} into micronet (pending_micronet_id))")
         conf_model = get_conf_model()
+
+        # Make sure an pending updates have been processed
+        await conf_model.update_conf_now()
+
         micronet = conf_model.check_micronet_reference(micronet_id)
         device = conf_model.check_device_reference(micronet_id, device_id)
 
