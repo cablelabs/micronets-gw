@@ -29,18 +29,31 @@ class GatewayServiceConf:
         logger.info ("Device lists:")
         logger.info (json.dumps (self.device_lists, indent=2))
 
-    async def update_conf (self):
-        if self.update_conf_task:
-            logger.info("Cancelling queued configuration update...")
-            self.update_conf_task.cancel ()
+    async def queue_conf_update (self):
+        self.cancel_queued_update()
         logger.info ("Queueing configuration update...")
         self.update_conf_task = asyncio.ensure_future (self.update_conf_delayed())
 
     async def update_conf_delayed (self):
         await asyncio.sleep(self.min_update_interval_s)
-        logger.info ("Updating configuration...")
+        await self.update_conf()
 
+    def cancel_queued_update(self):
+        if self.update_conf_task and not self.update_conf_task.cancelled():
+            logger.info("Cancelling queued configuration update...")
+            self.update_conf_task.cancel ()
+            try:
+                self.update_conf_task.result()
+            except Exception as ex:
+                pass
         self.update_conf_task = None
+
+    async def update_conf_now(self):
+        self.cancel_queued_update()
+        logger.info ("Updating configuration...")
+        await self.update_conf()
+
+    async def update_conf (self):
         self.dhcp_adapter.save_to_conf (self.micronet_list, self.device_lists)
         if self.flow_adapter:
             await self.flow_adapter.update(self.micronet_list, self.device_lists)
@@ -102,7 +115,7 @@ class GatewayServiceConf:
             micronet_id = micronet ['micronetId'].lower ()
             self.micronet_list [micronet_id] = micronet
             self.device_lists [micronet_id] = {}
-        await self.update_conf ()
+        await self.queue_conf_update ()
         return jsonify ({'micronets': micronets}), 201
 
     async def create_micronet (self, micronet):
@@ -111,14 +124,14 @@ class GatewayServiceConf:
         micronet_id = micronet ['micronetId'].lower ()
         self.micronet_list [micronet_id] = micronet
         self.device_lists [micronet_id] = {}
-        await self.update_conf ()
+        await self.queue_conf_update ()
         return jsonify ({'micronet': micronet}), 201
 
     async def delete_all_micronets (self):
         logger.info (f"GatewayServiceConf.delete_all_devices: micronet list: {self.micronet_list}")
         self.micronet_list.clear()
         self.device_lists.clear()
-        await self.update_conf ()
+        await self.queue_conf_update ()
         return '', 204
 
     async def update_micronet (self, micronet_update, micronet_id):
@@ -138,7 +151,7 @@ class GatewayServiceConf:
 
         self.micronet_list [micronet_id] = updated_micronet
 
-        await self.update_conf ()
+        await self.queue_conf_update ()
         return jsonify ({'micronet': updated_micronet}), 200
 
     async def get_micronet (self, micronet_id):
@@ -153,7 +166,7 @@ class GatewayServiceConf:
         self.check_micronet_reference (micronet_id)
         del self.micronet_list [micronet_id]
         del self.device_lists [micronet_id]
-        await self.update_conf ()
+        await self.queue_conf_update ()
         return '', 204
 
     #
@@ -247,7 +260,7 @@ class GatewayServiceConf:
         logger.info (f"GatewayServiceConf.delete_all_devices ({micronet_id})")
         self.check_micronet_reference (micronet_id)
         self.device_lists [micronet_id].clear ()
-        await self.update_conf ()
+        await self.queue_conf_update ()
         return '', 204
 
     async def create_device (self, device, micronet_id):
@@ -261,7 +274,7 @@ class GatewayServiceConf:
         self.check_device_mac_unique (device)
         self.check_device_ip_unique (device, micronet_id)
         device_list [device_id] = device
-        await self.update_conf ()
+        await self.queue_conf_update ()
         return jsonify ({'device': device}), 201
 
     async def create_devices (self, devices, micronet_id):
@@ -280,7 +293,7 @@ class GatewayServiceConf:
         for device in devices:
             device_id = device ['deviceId'].lower ()
             device_list [device_id] = device
-        await self.update_conf ()
+        await self.queue_conf_update ()
         return jsonify ({'devices': devices}), 201
 
     async def update_device (self, device_update, micronet_id, device_id):
@@ -303,7 +316,7 @@ class GatewayServiceConf:
         self.check_device_ip_unique (updated_device, micronet_id, excluded_device_id = device_id)
 
         device_list [device_id] = updated_device
-        await self.update_conf ()
+        await self.queue_conf_update ()
         return jsonify ({'device': updated_device}), 200
 
     async def get_device (self, micronet_id, device_id):
@@ -318,7 +331,7 @@ class GatewayServiceConf:
         self.check_micronet_reference (micronet_id)
         self.check_device_reference (micronet_id, device_id)
         del self.device_lists [micronet_id] [device_id]
-        await self.update_conf ()
+        await self.queue_conf_update ()
         return '', 204
 
     async def process_dhcp_lease_event (self, dhcp_lease_event):

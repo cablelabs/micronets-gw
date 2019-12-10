@@ -7,7 +7,7 @@ class BaseConfig:
     SECRET_KEY = os.environ.get ('SECRET_KEY') or 'A SECRET KEY'
     LISTEN_HOST = "0.0.0.0"
     LISTEN_PORT = 5000
-    MIN_DHCP_UPDATE_INTERVAL_S = 5
+    MIN_DHCP_UPDATE_INTERVAL_S = 2
     DEFAULT_LEASE_PERIOD = '10m'
     SERVER_BASE_DIR = pathlib.Path (__file__).parent
     SERVER_BIN_DIR = SERVER_BASE_DIR.joinpath ("bin")
