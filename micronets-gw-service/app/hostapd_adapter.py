@@ -414,12 +414,14 @@ class HostapdAdapter:
             return self.success
 
     class DPPAuthInitCommand(HostapdCLICommand):
-        def __init__ (self, configurator_id, qrcode_id, ssid, psk=None, freq=None, event_loop=asyncio.get_event_loop()):
+        def __init__ (self, configurator_id, qrcode_id, ssid, psk=None, passphrase=None, freq=None,
+                      event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
             self.configurator_id = configurator_id
             self.qrcode_id = qrcode_id
             self.ssid = ssid
             self.psk = psk
+            self.passphrase = passphrase
             self.freq = freq
             self.success = False
 
@@ -428,6 +430,9 @@ class HostapdAdapter:
             cmd = f"dpp_auth_init peer={self.qrcode_id} ssid={ssid_asciihex} configurator={self.configurator_id}"
             if self.psk:
                 cmd += f" conf=sta-psk psk={self.psk}"
+            elif self.passphrase:
+                pass_asciihex = self.passphrase.encode("ascii").hex()
+                cmd += f" conf=sta-psk pass={pass_asciihex}"
             else:
                 cmd += " conf=sta-dpp"
 
