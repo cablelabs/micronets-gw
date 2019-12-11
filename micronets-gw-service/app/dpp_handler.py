@@ -108,13 +108,15 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         elif 'psk' in akms:
             psk = device['psk']
             if len(psk) == 64:
+                logger.info (f"{__name__}:   Performing PSK-based DPP onboarding (psk: {psk})")
                 dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid,
                                                                       psk=psk, freq=self.freq)
             else:
+                logger.info (f"{__name__}:   Performing passphrase-based DPP onboarding (pass: {psk})")
                 dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid,
                                                                       passphrase=psk, freq=self.freq)
         else:
-            raise InvalidUsage(503, message="Only PSK- and DPP-based on-boarding are currently supported")
+            raise InvalidUsage(503, message="Only PSK, passphrase, and DPP-based on-boarding are currently supported")
 
         self.pending_onboard = {"micronet":micronet, "device": device, "onboard_params": onboard_params}
         asyncio.ensure_future(self.send_dpp_onboard_event(micronet, device, DPPHandler.EVENT_ONBOARDING_STARTED, 
