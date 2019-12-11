@@ -107,8 +107,12 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
                                                                   freq=self.freq)
         elif 'psk' in akms:
             psk = device['psk']
-            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid,
-                                                                  psk=psk, freq=self.freq)
+            if len(psk) == 64:
+                dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid,
+                                                                      psk=psk, freq=self.freq)
+            else:
+                dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid,
+                                                                      passphrase=psk, freq=self.freq)
         else:
             raise InvalidUsage(503, message="Only PSK- and DPP-based on-boarding are currently supported")
 
