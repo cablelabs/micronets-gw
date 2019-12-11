@@ -432,7 +432,7 @@ class HostapdAdapter:
                 cmd += f" conf=sta-psk psk={self.psk}"
             elif self.passphrase:
                 pass_asciihex = self.passphrase.encode("ascii").hex()
-                cmd += f" conf=sta-psk pass={self.pass_asciihex}"
+                cmd += f" conf=sta-psk pass={pass_asciihex}"
             else:
                 cmd += " conf=sta-dpp"
 
