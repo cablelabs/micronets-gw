@@ -139,6 +139,7 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         else:
             asyncio.ensure_future(self.send_dpp_onboard_event(micronet, device, DPPHandler.EVENT_ONBOARDING_FAILED, 
                                                               f"DPP Authorization failed {dpp_auth_init_cmd.get_command_string()} returned: ({result})"))
+            self.pending_onboard = None
         return '', 200
 
     async def handle_hostapd_cli_event(self, event):
