@@ -414,7 +414,7 @@ class HostapdAdapter:
             return self.success
 
     class DPPAuthInitCommand(HostapdCLICommand):
-        def __init__ (self, configurator_id, qrcode_id, ssid, psk=None, passphrase=None, freq=None,
+        def __init__ (self, configurator_id, qrcode_id, ssid, akms, psk=None, passphrase=None, freq=None,
                       event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
             self.configurator_id = configurator_id
@@ -422,20 +422,39 @@ class HostapdAdapter:
             self.ssid = ssid
             self.psk = psk
             self.passphrase = passphrase
+            self.akms = akms
             self.freq = freq
             self.success = False
+            self.passphrase_asciihex = None
+            if self.passphrase:
+                self.passphrase_asciihex = self.passphrase.encode("ascii").hex()
 
         def get_command_string(self):
             ssid_asciihex = self.ssid.encode("ascii").hex()
             cmd = f"dpp_auth_init peer={self.qrcode_id} ssid={ssid_asciihex} configurator={self.configurator_id}"
-            if self.psk:
-                cmd += f" conf=sta-psk psk={self.psk}"
-            elif self.passphrase:
-                pass_asciihex = self.passphrase.encode("ascii").hex()
-                cmd += f" conf=sta-psk pass={pass_asciihex}"
-            else:
-                cmd += " conf=sta-dpp"
 
+            # Currently allowed configs: psk, sae, dpp, psk+sae, dpp+sae, dpp+psk+sae
+            # (see dpp_configuration_alloc in src/common/dpp.c of hostap sources)
+            akm_str = ""
+            if 'dpp' in self.akms:
+                akm_str += "+dpp"
+            if 'psk' in self.akms:
+                if not (self.psk or self.passphrase):
+                    raise Exception(f"'psk' included in AKMS but no PSK or passphrase provided")
+                akm_str += "+psk"
+            if 'sae' in self.akms:
+                if not self.passphrase:
+                    raise Exception(f"'sae' included in AKMS but no passphrase provided")
+                akm_str += "+sae"
+            if len(akm_str) == 0:
+                raise Exception(f"No valid akms elements found (akms: {self.akms})")
+            # Note: akm_str will have an extra "+" at the front
+            cmd += f" conf=sta-{akm_str[1:]}"
+
+            if self.psk:
+                cmd += f" psk={self.psk}"
+            if self.passphrase_asciihex:
+                cmd += f" pass={self.passphrase_asciihex}"
             if self.freq:
                 cmd += f" neg_freq={self.freq}"
 

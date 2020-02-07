@@ -102,21 +102,17 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         qrcode_id = await add_qrcode_cmd.get_qrcode_id()
         logger.info(f"{__name__}:   DPP QRCode ID: {qrcode_id}")
 
-        if 'dpp' in akms:
-            dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid,
-                                                                  freq=self.freq)
-        elif 'psk' in akms:
-            psk = device['psk']
-            if len(psk) == 64:
-                logger.info (f"{__name__}:   Performing PSK-based DPP onboarding (psk: {psk})")
-                dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid,
-                                                                      psk=psk, freq=self.freq)
-            else:
-                logger.info (f"{__name__}:   Performing passphrase-based DPP onboarding (pass: {psk})")
-                dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid,
-                                                                      passphrase=psk, freq=self.freq)
+        dev_psk = device.get("psk")
+        # For now, the psk field is dual-purpose. For WPA2, a <64char "psk" will be converted into a PSK internally
+        # So send it through as a PSK and a passphrase
+        if len(dev_psk) == 64:
+            psk = dev_psk
+            passphrase = None
         else:
-            raise InvalidUsage(503, message="Only PSK, passphrase, and DPP-based on-boarding are currently supported")
+            psk = None
+            passphrase = dev_psk
+        dpp_auth_init_cmd = HostapdAdapter.DPPAuthInitCommand(self.dpp_configurator_id, qrcode_id, self.ssid,
+                                                              akms, psk=psk, passphrase=passphrase, freq=self.freq)
 
         self.pending_onboard = {"micronet":micronet, "device": device, "onboard_params": onboard_params}
         asyncio.ensure_future(self.send_dpp_onboard_event(micronet, device, DPPHandler.EVENT_ONBOARDING_STARTED, 
