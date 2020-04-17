@@ -57,14 +57,27 @@ class HostapdAdapter:
             logger.info(f"HostapdAdapter.update: No PSK file configured, so nothing to do")
 
         with self.hostapd_psk_path.open ('w') as outfile:
-            logger.info (f"HostapdAdapter.update: Writing PSKs to {self.hostapd_psk_path.absolute ()}")
+            bss_list = list(self.get_status_var('bss').values())
+            logger.info (f"HostapdAdapter.update: Writing PSKs to {self.hostapd_psk_path.absolute ()} "
+                         f"for BSS {bss_list}")
             outfile.write ("# THIS WPA-PSK FILE IS MANAGED BY THE MICRONETS GATEWAY SERVICE\n\n")
             outfile.write ("# MODIFICATIONS TO THIS FILE WILL BE OVER-WRITTEN\n\n")
             for micronet_id, devices in device_lists.items ():
                 micronet = micronet_list.get(micronet_id)
                 vlan_id = micronet.get('vlan')
+                interface_id = micronet.get('interface')
 
-                outfile.write (f"# DEVICES FOR MICRONET {micronet_id} (vlan {vlan_id})\n")
+                if interface_id not in bss_list:
+                    logger.info(f"HostapdAdapter.update: micronet {micronet_id} interface {interface_id} "
+                                f"not in BSS list {bss_list} - skipping")
+                    continue
+
+                if not vlan_id:
+                    logger.info(f"HostapdAdapter.update: no VLAN for micronet {micronet_id} - skipping")
+                    outfile.write(f"# No VLAN for device {micronet_id}\n\n")
+                    continue
+
+                outfile.write (f"# DEVICES FOR MICRONET {micronet_id} (interface {interface_id}, vlan {vlan_id})\n")
                 outfile.write ("###############################################################\n\n")
                 for device_id, device in devices.items ():
                     psk = device.get('psk')

@@ -18,7 +18,7 @@ class DnsMasqAdapter:
     # # Micronet: testmicronet001, interface: enxac7f3ee61832
     # # Micronet: wired-micronet-1, interface: enp3s0, vlan: 2112
     dhcp_range_prefix_re = re.compile ('^\s*#\s*Micronet:\s*(\w.[\w-]*)\s*,'
-                                       '\s*interface:\s*(\w+)(?:\s*,\s*vlan:\s*([0-9]+))?\s*$',
+                                       '\s*interface:\s*(\w+)\s*(?:,\s*vlan:\s*([0-9]+)?\s*)?$',
                                        re.ASCII)
 
     # dhcp-range=set:testmicronet001,10.40.0.0,static,255.255.255.0,3m
@@ -111,7 +111,7 @@ class DnsMasqAdapter:
                 prefix_host_allow_hosts = json.loads(prefix_host_allow_hosts_str)
                 prefix_host_deny_hosts = json.loads(prefix_host_deny_hosts_str)
                 logger.info(f"DnsMasqAdapter.parse_conffile:  Found host {prefix_host_id}: "
-                            f"outRules:{prefix_host_out_rules}, inRules:{prefix_host_in_rules}"
+                            f"outRules:{prefix_host_out_rules}, inRules:{prefix_host_in_rules}, "
                             f"allowHosts:{prefix_host_allow_hosts}, denyHosts:{prefix_host_deny_hosts}")
             if (comment_line_re.match (line)):
                 continue
@@ -139,7 +139,8 @@ class DnsMasqAdapter:
                 micronet ['micronetId'] = micronet_id
                 micronet ['ipv4Network'] = {'network' : str (network.network_address), 'mask' : str (network.netmask)}
                 micronet ['interface'] = prefix_interface
-                micronet ['vlan'] = prefix_vlan
+                if prefix_vlan:
+                    micronet ['vlan'] = prefix_vlan
                 micronets [micronet_id] = micronet
                 devices_list [micronet_id] = {}
                 prefix_micronet_id = None
@@ -157,8 +158,6 @@ class DnsMasqAdapter:
                     raise Exception ("Invalid router/gateway address '{}'".format (router_address))
                 micronet = micronets [micronet_id]
                 logger.debug (f"DnsMasqAdapter.parse_conffile: micronet {micronet_id}: {micronet}")
-                logger.debug (f"DnsMasqAdapter.parse_conffile: micronet {micronet_id}"
-                              f"ipv4Network: {micronet ['ipv4Network']}")
                 micronet ['ipv4Network']['gateway'] = str (addr)
                 continue
             dhcp_range_dns_server_match = self.dhcp_range_dns_server_re.match (line)
@@ -214,7 +213,8 @@ class DnsMasqAdapter:
                     device ['allowHosts'] = prefix_host_allow_hosts
                 if len(prefix_host_deny_hosts) > 0:
                     device ['denyHosts'] = prefix_host_deny_hosts
-                device ['psk'] = prefix_host_psk_str
+                if prefix_host_psk_str:
+                    device ['psk'] = prefix_host_psk_str
                 device_list = devices_list [micronet_id]
                 device_list [prefix_host_id] = device
                 prefix_host_id = None
@@ -256,10 +256,10 @@ class DnsMasqAdapter:
             # # Micronet: wired-micronet-1, interface: enp3s0
             interface = micronet ['interface']
             if 'vlan' in micronet:
-                vlan = micronet ['vlan']
+                vlan_elem = f", vlan: {micronet ['vlan']}"
             else:
-                vlan = None
-            outfile.write ("# Micronet: {}, interface: {}, vlan: {}\n".format (micronet_id, interface, vlan))
+                vlan_elem = ""
+            outfile.write (f"# Micronet: {micronet_id}, interface: {interface}{vlan_elem}\n")
             ipv4_params = micronet ['ipv4Network']
             network_addr = ipv4_params['network']
             netmask = ipv4_params ['mask']
@@ -307,7 +307,7 @@ class DnsMasqAdapter:
                     deny_hosts = json.dumps(device['denyHosts'])
                 else:
                     deny_hosts = []
-                psk = device.get('psk')
+                psk = device.get('psk',"")
                 if (len(device_id) <= 12):
                     short_device_id = device_id
                 else:

@@ -8,7 +8,7 @@ class BaseConfig:
     LISTEN_HOST = "0.0.0.0"
     LISTEN_PORT = 5000
     MIN_DHCP_UPDATE_INTERVAL_S = 2
-    DEFAULT_LEASE_PERIOD = '10m'
+    DEFAULT_LEASE_PERIOD = '2m'
     SERVER_BASE_DIR = pathlib.Path (__file__).parent
     SERVER_BIN_DIR = SERVER_BASE_DIR.joinpath ("bin")
     WEBSOCKET_CONNECTION_ENABLED = False

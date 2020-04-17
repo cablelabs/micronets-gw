@@ -218,7 +218,7 @@ class GatewayServiceConf:
                     raise InvalidUsage (400, message=f"MAC address of device "
                                                      f"'{device_to_check ['deviceId']}' is not unique "
                                                      f"(MAC address {addr_to_check} found in micronet "
-                                                     f"'{addr_to_check}' device '{device_id}')")
+                                                     f"'{micronet_id}' device '{device_id}')")
 
     def check_device_ip_unique (self, device_to_check, micronet_id, excluded_device_id=None):
         addr_field_to_check = device_to_check ['networkAddress']['ipv4']

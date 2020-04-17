@@ -4,7 +4,7 @@ from pathlib import Path
 from .utils import blank_line_re, comment_line_re, get_ipv4_hostports_for_hostportspec, parse_portspec, \
                    parse_hostportspec, unroll_hostportspec_list, mac_addr_re, parse_macportspec
 
-from subprocess import call
+from subprocess import check_output, STDOUT
 from .hostapd_adapter import HostapdAdapter
 
 logger = logging.getLogger ('micronets-gw-service')
@@ -30,6 +30,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     start_table = 0
     from_micronets_table = 100
+    block_to_micronets_table = 110
     to_localhost_table = 120
     from_localhost_table = 200
     to_micronets_table = 210
@@ -221,6 +222,15 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                             f"actions={OpenFlowAdapter.drop_action}\n")
 
             #
+            # Block TO-MICRONET traffic
+            #
+            # All packets that haven't been given express permission to go to another micronet go through here
+            # The micronet-specific entries will be filled in when we walk the micronets below
+            priority=0
+            flow_file.write(f"add table={OpenFlowAdapter.block_to_micronets_table},priority={priority}, "
+                            f"actions=resubmit(,{OpenFlowAdapter.to_localhost_table})\n")
+
+            #
             # TO-LOCALHOST boilerplate rules
             #
             # All packets that have been "approved" for local delivery go through here
@@ -328,6 +338,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
             for micronet_id, micronet in micronet_list.items ():
                 micronet_int = micronet ['interface']
                 micronet_network = micronet ['ipv4Network']['network']
+                micronet_mask = micronet ['ipv4Network']['mask']
                 logger.info (f"Creating flow rules for micronet {micronet_id} (interface {micronet_int})")
 
                 if micronet_int not in self.ovs_micronet_interfaces:
@@ -340,10 +351,6 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 if not micronet_port:
                     raise Exception(f"Cannot find an ovs port designation for micronet {micronet_id} interface {micronet_int}. "
                                     f"Check the OVSPort entries in the gateway /etc/network/interfaces file")
-                flow_file.write (f"  # table={OpenFlowAdapter.start_table},priority=400: Micronet {micronet_id}"
-                                 f" (interface {micronet_int}, micronet {micronet_network})\n")
-                flow_file.write(f"add table={OpenFlowAdapter.start_table},priority=400, in_port={micronet_port}, "
-                                f"actions=resubmit(,{OpenFlowAdapter.from_micronets_table})\n")
                 # Allow EAPoL traffic to host from wifi port
                 if micronet_int in self.bss.values():
                     # For wlan links, EAPoL packets need to be routed to hostapd to allow authentication
@@ -357,6 +364,17 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     port_for_micronet_devices = micronet_vlan
                 else:
                     port_for_micronet_devices = micronet_port
+
+                # Add rules to start table for handling traffic coming from Micronets
+                flow_file.write (f"  # table={OpenFlowAdapter.start_table},priority=500: Micronet {micronet_id}"
+                                 f" (interface {micronet_int}, micronet {micronet_network}/{micronet_mask})\n")
+                # Handle traffic coming from Micronets for possible egress
+                flow_file.write(f"add table={OpenFlowAdapter.start_table},priority=400, in_port={micronet_port}, "
+                                f"actions=resubmit(,{OpenFlowAdapter.from_micronets_table})\n")
+
+                # Add the block rule to prevent micronet-to-micronet traffic without explicit rules
+                flow_file.write(f"add table={OpenFlowAdapter.block_to_micronets_table},priority=400, "
+                                f"ip,ip_dst={micronet_network}/{micronet_mask}, actions={OpenFlowAdapter.drop_action}\n")
 
                 # Walk the devices in the micronet and create rules
                 for device_id, device in device_lists [micronet_id].items ():
@@ -386,11 +404,11 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
             run_cmd = self.apply_openflow_command.format (**{"ovs_bridge": self.bridge_name,
                                                              "flow_file": flow_file_path})
             try:
-                logger.info ("Running: " + run_cmd)
-                status_code = call (run_cmd.split ())
-                logger.info (f"Flow application command returned status code {status_code}")
+                logger.info ("Applying flows using: " + run_cmd)
+                check_output (run_cmd.split(), stderr=STDOUT)
+                logger.info(f"SUCCESSFULLY APPLIED FLOWS")
             except Exception as e:
-                logger.warning (f"ERROR: Flow application command failed: {e}")
+                logger.warning(f"ERROR APPLYING FLOWS: {e}")
 
     async def create_flows_for_device(self, in_port, device_mac, device, micronet, outfile):
         try:
@@ -429,17 +447,23 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
         return combined_rule
 
     async def create_out_rules_for_device(self, in_port, device_mac, device, micronet, outfile):
-        cur_priority = 800
+        cur_priority = 850
         device_id = device['deviceId']
+        micronet_gateway = micronet['ipv4Network']['gateway']
         outfile.write(f"  # table={OpenFlowAdapter.from_micronets_table},priority={cur_priority}: "
                       f"Out-Rules for Device {device['deviceId']} (mac {device_mac})\n")
+        # Always allow a micronet device to talk to the gateway (need to avoid the micronet-to-micronet filters)
+        outfile.write(f"add table={OpenFlowAdapter.from_micronets_table},priority={cur_priority}, "
+                      f"in_port={in_port},dl_src={device_mac},ip,ip_dst={micronet_gateway}, "
+                      f"actions=resubmit(,{OpenFlowAdapter.to_localhost_table})\n\n")
+        cur_priority = 800
 
         out_rules = device.get('outRules', None)
         if not out_rules:
             # Allow all data out if no out rules
             outfile.write(f"add table={OpenFlowAdapter.from_micronets_table},priority={cur_priority}, "
-                          f"in_port={in_port},dl_src={device_mac} "
-                          f"actions=resubmit(,{OpenFlowAdapter.to_localhost_table})\n\n")
+                          f"in_port={in_port},dl_src={device_mac}, "
+                          f"actions=resubmit(,{OpenFlowAdapter.block_to_micronets_table})\n\n")
         else:
             allow_action = f"resubmit(,{OpenFlowAdapter.to_localhost_table})"
             deny_action = OpenFlowAdapter.drop_action
@@ -503,8 +527,14 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     else:
                         # Just an action
                         logger.info(f"OpenFlowAdapter.create_out_rules_for_device:     unconditional action: {action}")
+                        if rule_action == "allow":
+                            # A blank "allow" should not enable access to devices in other Micronets
+                            flowrule_action = f"resubmit(,{OpenFlowAdapter.block_to_micronets_table})"
+                        else:
+                            flowrule_action = deny_action
+
                         flowrule = f"add table={OpenFlowAdapter.from_micronets_table},priority={cur_priority}, " \
-                                   f"in_port={in_port},dl_src={device_mac}, actions={action}"
+                                   f"in_port={in_port},dl_src={device_mac}, actions={flowrule_action}"
                         logger.info(f"OpenFlowAdapter.create_out_rules_for_device:     flowrule: {flowrule}")
                         outfile.writelines((flowrule, "\n"))
                     cur_priority -= 1
@@ -580,6 +610,8 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
         device_id = device['deviceId']
         accept_action = f"resubmit(,{OpenFlowAdapter.to_localhost_table})"
+        block_2_micronets = f"resubmit(,{OpenFlowAdapter.block_to_micronets_table})"
+
         hostport_spec_list = None
         if 'allowHosts' in device:
             hosts = device['allowHosts']
@@ -608,7 +640,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                         f"processing denyHosts: {hosts}")
             hostport_spec_list = await unroll_hostportspec_list(hosts)
             match_action = OpenFlowAdapter.drop_action
-            default_action = accept_action
+            default_action = block_2_micronets
 
         if hostport_spec_list:
             outfile.write(f"  # table={OpenFlowAdapter.from_micronets_table},priority={cur_priority}: "
