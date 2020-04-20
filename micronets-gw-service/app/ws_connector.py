@@ -135,7 +135,7 @@ class WSConnector:
     async def get_websocket_url_for_gateway (self, gateway_id):
         logger.info (f"WSConnector: get_websocket_url_for_gateway({gateway_id})...")
         async with aiohttp.ClientSession() as session:
-            url = f"https://dev.mso-portal-api.micronets.in/portal/v1/socket?gatewayId={gateway_id}"
+            url = self.ws_lookup_url.format(**{"gateway_id": gateway_id})
             logger.info(f"WSConnector: get_websocket_url_for_gateway({gateway_id}): Retrieving {url}")
             async with session.get(url) as response:
                 json_response = await response.json()

@@ -12,7 +12,7 @@ class BaseConfig:
     SERVER_BASE_DIR = pathlib.Path (__file__).parent
     SERVER_BIN_DIR = SERVER_BASE_DIR.joinpath ("bin")
     WEBSOCKET_CONNECTION_ENABLED = False
-    WEBSOCKET_LOOKUP_URL = 'https://dev.mso-portal-api.micronets.in/api/portal/v1/socket?gatewayId={gateway_id}'
+    WEBSOCKET_LOOKUP_URL = 'https://dev.mso-portal-api.micronets.in/portal/v1/socket?gatewayId={gateway_id}'
     WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces"
