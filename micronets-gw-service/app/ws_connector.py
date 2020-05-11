@@ -84,7 +84,7 @@ class WSConnector:
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             # Setup the client's cert
             client_cert_path = pathlib.Path (self.tls_certkey_file)
-            logger.debug (f"Loading test client certificate from {client_cert_path}")
+            logger.debug (f"Loading client certificate from {client_cert_path}")
             ssl_context.load_cert_chain (client_cert_path)
 
             if (self.tls_ca_file):
