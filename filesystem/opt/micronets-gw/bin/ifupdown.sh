@@ -127,8 +127,8 @@ if [ "${MODE}" = "start" ]; then
                 fi
 
                 # Disable ICMP redirects on the bridge interface (so hosts aren't directed to find each other)
-                /sbin/sysctl -w net.ipv4.conf.${IFACE}.send_redirects = 0
-                # /sbin/sysctl -w net.ipv6.conf.${IFACE}.send_redirects = 0
+                /sbin/sysctl -w net.ipv4.conf.${IFACE}.send_redirects=0
+                # /sbin/sysctl -w net.ipv6.conf.${IFACE}.send_redirects=0
 
                 # NORMAL flow .aka L2 Learning switch mode.
                 ovs_ofctl add-flow ${IFACE} "table=0 priority=0 actions=NORMAL"
