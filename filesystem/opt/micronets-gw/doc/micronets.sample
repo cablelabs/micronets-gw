@@ -1,7 +1,4 @@
-# Note: The entries below are sample definitions to be added to the 
-#       system-provided /etc/network/interfaces file. The definitions 
-#       include custom keywords to setup the OVS bridge and network
-#       configuration.
+# This file can be copied to /etc/network/interfaces.d/
 
 #
 # create an OpenVswitch bridge for Micronets management
@@ -11,9 +8,9 @@ allow-ovs brmn001
 iface brmn001 inet manual
   ovs_type OVSBridge
   # This is the port that's connected to the Internet
-  ovs_bridge_uplink_port enp1s0
+  ovs_bridge_uplink_port eth0
   # the ovs_ports should list all wired and wireless interfaces under Micronets management
-  ovs_ports diagout1 wlp2s0 enp3s0
+  ovs_ports diagout1 wlan0
   ovs_protocols OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13
 
 # Assign IP addresses to the bridge that may be configured as Micronets
@@ -38,33 +35,22 @@ iface brmn001 inet static
 # The uplink port
 #
 
-# An uplink may already be defined in the system-provided interfaces file.
 # This interface should have a default gateway and must NOT be listed in the 
 # ovs_ports line of the bridge definition.
-auto enp1s0
-iface enp1s0 inet dhcp
+auto eth0
+iface eth0 inet dhcp
 
 #
 # A wireless interface managed by the Micronets gateway
 #
-allow-brmn001 wlp2s0
-iface wlp2s0 inet manual
+allow-brmn001 wlan0
+iface wlan0 inet manual
   ovs_type OVSPort
   # The ovs_bridge must match the bridge definition (above)
   ovs_bridge brmn001
   # The port number needs to be unique for the bridge
   ovs_port_req 3
   # Indicates that the port is blocked at startup (until enabled via command)
-  ovs_port_initial_state blocked
-
-#
-# A wired interface managed by the Micronets gateway
-#
-allow-brmn001 enp3s0
-iface enp3s0 inet manual
-  ovs_type OVSPort
-  ovs_bridge brmn001
-  ovs_port_req 4
   ovs_port_initial_state blocked
 
 #

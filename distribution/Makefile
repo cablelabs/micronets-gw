@@ -1,6 +1,7 @@
 .PHONY: all clean distclean deb scp
 
-VERSION=1.0.57
+VERSION=1.0.59
+DIST=U16.04
 FBASE=micronets-gw
 SDIRS=../filesystem
 IBASE=/opt
@@ -13,7 +14,7 @@ SCPHOST=ovs01
 
 PUSHUSER=cpratt
 
-VDIR=$(FBASE)-$(VERSION)
+VDIR=$(FBASE)-$(VERSION)-$(DIST)
 DEBFILE=$(VDIR).deb
 DEBPATH=$(TARGETDIR)/$(DEBFILE)
 IDIR=$(VDIR)$(IBASE)/$(FBASE)

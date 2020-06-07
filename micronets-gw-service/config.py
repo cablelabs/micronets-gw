@@ -15,7 +15,7 @@ class BaseConfig:
     WEBSOCKET_LOOKUP_URL = 'https://dev.mso-portal-api.micronets.in/portal/v1/socket?gatewayId={gateway_id}'
     WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
     WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
-    FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces"
+    FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces.d/micronets"
     # For this command, the first parameter will be the bridge name and the second the flow filename
     FLOW_ADAPTER_ENABLED = False
     DPP_HANDLER_ENABLED = False
