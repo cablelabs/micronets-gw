@@ -118,13 +118,17 @@ def check_nameservers (container, field_name, required):
                                                  f"{ipv4_address_error}")
     return nameservers
 
-
 def check_vlan (container, field_name, required):
     vlan = check_field (container, field_name, int, required)
     if vlan is not None:
         if vlan < 1 or vlan > 4094:
             raise InvalidUsage(400, message=f"Supplied vlan ID '{vlan}' in '{container}' field"
                                     f"'{field_name}' is not valid: vlans must be between 1 and 4094")
+
+@app.route (api_prefix + '/interfaces', methods=['GET'])
+async def get_interfaces ():
+    medium_param = request.args.get("medium")
+    return await get_conf_model().get_interfaces(medium=medium_param)
 
 def check_micronet (micronet, micronet_id=None, required=True):
     check_for_unrecognized_entries (micronet, ['micronetId','ipv4Network','nameservers','interface','vlan'])
