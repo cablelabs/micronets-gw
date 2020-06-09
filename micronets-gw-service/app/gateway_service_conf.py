@@ -63,23 +63,20 @@ class GatewayServiceConf:
     #
     # Interface Operations
     #
-    def retrieve_wireless_interfaces(self):
+    def retrieve_wifi_interfaces(self):
         interfaces = []
         if self.hostapd_adapter:
             bss = self.hostapd_adapter.get_status_var('bss')
             bssid = self.hostapd_adapter.get_status_var('bssid')
             ssid = self.hostapd_adapter.get_status_var('ssid')
             sta_count = self.hostapd_adapter.get_status_var('num_sta')
-            logger.debug(f"GatewayServiceConf get_all_interfaces: bss: {bss}")
-            logger.debug(f"GatewayServiceConf get_all_interfaces: bssid: {bssid}")
-            logger.debug(f"GatewayServiceConf get_all_interfaces: ssid: {ssid}")
 
             for k in bss.keys():
                 int_entry = {"medium": "wifi",
                              "interfaceId": bss[k],
                              "macAddress": bssid[k],
                              "ssid": ssid[k]}
-                logger.info(f"GatewayServiceConf: interface {k}: {json.dumps(int_entry)}")
+                logger.debug(f"GatewayServiceConf: interface {k}: {json.dumps(int_entry)}")
                 interfaces.append(int_entry)
         return interfaces
 
@@ -89,12 +86,12 @@ class GatewayServiceConf:
         return interfaces
 
     async def get_interfaces(self, medium=None):
-        logger.info (f"GatewayServiceConf.get_all_interfaces()")
+        logger.info (f"GatewayServiceConf.get_interfaces()")
         interfaces = []
-        if medium and not (medium == "wireless" or medium == "wired"):
+        if medium and not (medium == "wifi" or medium == "wired"):
             raise InvalidUsage(404, message=f"interface medium '{medium}' is unknown")
-        if medium is None or medium == "wireless":
-            interfaces += self.retrieve_wireless_interfaces()
+        if medium is None or medium == "wifi":
+            interfaces += self.retrieve_wifi_interfaces()
         if medium is None or medium == "wired":
             interfaces += self.retrieve_wired_interfaces()
 
