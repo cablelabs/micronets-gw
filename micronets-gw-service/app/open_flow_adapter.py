@@ -250,6 +250,13 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
             #
 
             #  mac-to-micronet-port mappings go here
+
+            # Special rule to allow UDP broadcast OFFERs through (flood all Micronet ports)
+            priority=100
+            flow_file.write(f"add table={OpenFlowAdapter.from_localhost_table},priority={priority}, "
+                            f"dl_dst=FF:FF:FF:FF:FF:FF,udp,tp_src=67,tp_dst=68, "
+                            f"actions=load:0xFFFB->NXM_NX_REG1[],"
+                            f"resubmit(,{OpenFlowAdapter.to_micronets_table})\n")
             priority=0
             flow_file.write(f"add table={OpenFlowAdapter.from_localhost_table},priority={priority}, "
                             f"actions={OpenFlowAdapter.drop_action}\n")
