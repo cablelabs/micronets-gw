@@ -1,5 +1,5 @@
 Package: micronets-gw
 Maintainer: Craig Pratt <c.pratt@cablelabs.com>
 Architecture: all
-Description: Micronets Gateway Open vSwitch, REST API, and various script/control files
+Description: Micronets Gateway Service and various script/control/utility files
 Depends: python3.6, python-pip, virtualenv, dnsmasq, libopenvswitch (>=2.9.2), openvswitch-common (>=2.9.2), openvswitch-switch (>=2.9.2)
