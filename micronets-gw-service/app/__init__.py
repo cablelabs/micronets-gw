@@ -37,6 +37,8 @@ elif (config_env):
 else:
     config = 'config.MockDevelopmentConfig'
 
+print (f"Running with config {config}")
+
 app.config.from_object (config)
 
 logging_filename = app.config.get('LOGFILE_PATH')
