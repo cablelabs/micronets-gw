@@ -374,6 +374,10 @@ class GatewayServiceConf:
     async def process_dhcp_lease_event (self, dhcp_lease_event):
         logger.info (f"GatewayServiceConf.process_lease_event ({dhcp_lease_event})")
 
+        if not self.ws_connection:
+            logger.info (f"GatewayServiceConf.process_dhcp_lease_event: Ignoring event (No websocket connection)")
+            return f"ignoring event (there's no websocket connection)", 500
+
         event_fields = dhcp_lease_event ['leaseChangeEvent']
         action = event_fields ['action']
 
