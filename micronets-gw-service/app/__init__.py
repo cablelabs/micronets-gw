@@ -103,10 +103,10 @@ try:
     ws_tls_certkey_file = app.config.get('WEBSOCKET_TLS_CERTKEY_FILE')
     ws_tls_ca_cert_file = app.config.get('WEBSOCKET_TLS_CA_CERT_FILE')
 
-    ws_connector = WSConnector (ws_url, ws_lookup_url, gateway_id,
-                                tls_certkey_file=ws_tls_certkey_file,
-                                tls_ca_file=ws_tls_ca_cert_file)
     if ws_connector_enabled:
+        ws_connector = WSConnector(ws_url, ws_lookup_url, gateway_id,
+                                   tls_certkey_file=ws_tls_certkey_file,
+                                   tls_ca_file=ws_tls_ca_cert_file)
         ws_connector.connect ()
     else:
         logger.info("Not initiating websocket connection (Websocket connection disabled)")

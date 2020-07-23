@@ -23,7 +23,7 @@ logging_level = logging.DEBUG
 logging.basicConfig (level=logging_level, filename=logging_filename, filemode=logging_filemode,
                      format='%(asctime)s %(name)s: %(levelname)s %(message)s')
 
-logger = logging.getLogger ('micronets-gw-lease-notify')
+logger = logging.getLogger ('dnsmasq-lease-notify')
 
 def get_env (var_name):
     env = os.environ
