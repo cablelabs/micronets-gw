@@ -221,6 +221,8 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
 
     async def send_dpp_onboard_event(self, micronet, device, event_name, reason=None):
         ws_connector = get_ws_connector()
+        if not ws_connector:
+            return f"No websocket connector configured", 500
         if not ws_connector.is_ready():
             ws_uri = ws_connector.get_connect_uri()
             logger.info (f"DPPHandler.send_dpp_onboard_event: websocket not connected (ws uri: {ws_uri})")
