@@ -1,168 +1,174 @@
-import os, sys, pathlib, logging
+import os, pathlib, logging
 
-app_dir = os.path.abspath (os.path.dirname (__file__))
-
-class BaseConfig:
-    LOGGING_LEVEL = logging.DEBUG
+class BaseConfigSettings:
     SECRET_KEY = os.environ.get ('SECRET_KEY') or 'A SECRET KEY'
-    LISTEN_HOST = "0.0.0.0"
     LISTEN_PORT = 5000
-    MIN_DHCP_UPDATE_INTERVAL_S = 2
-    DEFAULT_LEASE_PERIOD = '2m'
     SERVER_BASE_DIR = pathlib.Path (__file__).parent
     SERVER_BIN_DIR = SERVER_BASE_DIR.joinpath ("bin")
+    SERVER_LIB_DIR = SERVER_BASE_DIR.joinpath ("lib")
+    DB_ADAPTER = "JsonDBFileAdapter"
+    JSONFILEDB_DIR_PATH = SERVER_LIB_DIR
+    ADAPTER_UPDATE_INTERVAL_S = 2
+    DHCP_ADAPTER = "dnsmasq"
+    DHCP_ADAPTER_DEFAULT_LEASE_PERIOD = '2m'
+    DNSMASQ_ADAPTER_LEASE_SCRIPT = SERVER_BIN_DIR.joinpath ("dnsmasq_lease_notify.py")
+    FLOW_ADAPTER_ENABLED = False
+    HOSTAPD_ADAPTER_ENABLED = False
+    DPP_HANDLER_ENABLED = False
+    DPP_CONFIG_KEY_FILE = SERVER_LIB_DIR.joinpath("hostapd-dpp-configurator.key")
+    DPP_AP_CONNECTOR_FILE = SERVER_LIB_DIR.joinpath("hostapd-dpp-ap-connector.json")
+    DPP_HANDLER_SIMULATE_ONBOARD_RESPONSE_EVENTS = False
     WEBSOCKET_CONNECTION_ENABLED = False
     WEBSOCKET_LOOKUP_URL = 'https://dev.mso-portal-api.micronets.in/portal/v1/socket?gatewayId={gateway_id}'
-    WEBSOCKET_TLS_CERTKEY_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-gw-service.pkeycert.pem')
-    WEBSOCKET_TLS_CA_CERT_FILE = pathlib.Path (__file__).parent.joinpath ('lib/micronets-ws-root.cert.pem')
+    WEBSOCKET_TLS_CERTKEY_FILE = SERVER_LIB_DIR.joinpath ('micronets-gw-service.pkeycert.pem')
+    WEBSOCKET_TLS_CA_CERT_FILE = SERVER_LIB_DIR.joinpath ('micronets-ws-root.cert.pem')
+
+#
+# Configure settings for reference gateway (system configured with dependent packages)
+#
+class ReferenceGatewaySettings (BaseConfigSettings):
+    # Note: This is dangerous - don't listen on 0.0.0.0 in production
+    # TODO: Define a way to provide an interface name for listen
+    LISTEN_HOST = "0.0.0.0"
+    LOGFILE_PATH = BaseConfigSettings.SERVER_BASE_DIR.joinpath ("micronets-gw.log")
+    LOGFILE_MODE = 'a'
+    DNSMASQ_ADAPTER_CONF_FILE = '/etc/dnsmasq.d/micronets'
+    DNSMASQ_ADAPTER_RESTART_COMMAND = ['sudo', '/etc/init.d/dnsmasq', 'restart']
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces.d/micronets"
-    # For this command, the first parameter will be the bridge name and the second the flow filename
-    FLOW_ADAPTER_ENABLED = False
-    DPP_HANDLER_ENABLED = False
-    DPP_CONFIG_KEY_FILE = pathlib.Path (__file__).parent.joinpath ("lib/hostapd-dpp-configurator.key")
-    DPP_AP_CONNECTOR_FILE = pathlib.Path (__file__).parent.joinpath ("lib/hostapd-dpp-ap-connector.json")
-    HOSTAPD_ADAPTER_ENABLED = False
-    SIMULATE_ONBOARD_RESPONSE_EVENTS = False
-
-class BaseGatewayConfig:
-    LOGFILE_PATH = pathlib.Path (__file__).parent.joinpath ("micronets-gw.log")
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {flow_file}'
-    HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
     HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
-    # Set this iff you want to disable websocket URL lookup using MSO Portal (MSO_PORTAL_WEBSOCKET_LOOKUP_ENDPOINT)
-    #    WEBSOCKET_URL = "wss://ws-proxy-api.micronets.in:5050/micronets/v1/ws-proxy/gw-test/{gateway_id}"
+    HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
 
 #
-# Mock Adapter Configurations
+# Configure settings for local/development testing
 #
-
-class BaseMockConfig (BaseConfig):
-    DHCP_ADAPTER = "Mock"
-    GATEWAY_ID = "mock-gw"
-
-class MockDevelopmentConfig (BaseMockConfig):
-    LISTEN_HOST = "127.0.0.1"
+class LocalDevelopmentSettings (BaseConfigSettings):
+    # Anything here should be an alternate local setting to what's set in ReferenceGatewayConfig
+    # Anything that's common to local development config and the gateway config should be in BaseConfig
     LOGFILE_PATH = None
     LOGFILE_MODE = None
-    DEBUG = True
-
-class MockDevelopmentConfigWithWebsocket (MockDevelopmentConfig):
-    WEBSOCKET_CONNECTION_ENABLED = True
-    WEBSOCKET_URL = "wss://localhost:5050/micronets/v1/ws-proxy/gw/mock-gw"
-    DPP_HANDLER_ENABLED = True
-    SIMULATE_ONBOARD_RESPONSE_EVENTS = "with success"
-
-#
-# ISC DHCP Adapter Configurations
-#
-
-class BaseIscDhcpConfig (BaseConfig):
-    DHCP_ADAPTER = "IscDhcp"
-    ISC_DHCPD_CONF_FILE = '/etc/dhcp/dhcpd.conf'
-    ISC_DHCPD_RESTART_COMMAND = ['sudo','/etc/init.d/isc-dhcp-server','restart']
-
-class IscDevelopmentConfig (BaseIscDhcpConfig):
     LISTEN_HOST = "127.0.0.1"
-    LOGFILE_PATH = None
-    LOGFILE_MODE = None
-    ISC_DHCPD_CONF_FILE = 'doc/dhcpd-sample.conf'
-    ISC_DHCPD_RESTART_COMMAND = None
-    DEBUG = True
-
-class IscTestingConfig (BaseIscDhcpConfig):
-    WEBSOCKET_CONNECTION_ENABLED = True
-    DEBUG = True
-
-class IscProductionConfig (BaseIscDhcpConfig):
-    WEBSOCKET_CONNECTION_ENABLED = True
-    DPP_HANDLER_ENABLED = True
-    DEBUG = False
-    LOGGING_LEVEL = logging.INFO
-    LOGFILE_MODE = 'a'
-
-#
-# DNSMASQ DHCP Adapter Configurations
-#
-
-class BaseDnsmasqConfig (BaseConfig):
-    DHCP_ADAPTER = "DnsMasq"
-    DNSMASQ_CONF_FILE = '/etc/dnsmasq.d/micronets'
-    DNSMASQ_RESTART_COMMAND = ['sudo','/etc/init.d/dnsmasq','restart']
-    DNSMASQ_LEASE_SCRIPT = BaseConfig.SERVER_BIN_DIR.joinpath ("dnsmasq_lease_notify.py")
-
-class DnsmasqDevelopmentConfig (BaseDnsmasqConfig):
-    DEBUG = True
-    LISTEN_HOST = "127.0.0.1"
-    DNSMASQ_CONF_FILE = 'doc/dnsmasq-config.sample'
-    DNSMASQ_RESTART_COMMAND = []
-    FLOW_ADAPTER_NETWORK_INTERFACES_PATH = BaseConfig.SERVER_BASE_DIR.parent\
+    DNSMASQ_ADAPTER_CONF_FILE = BaseConfigSettings.SERVER_LIB_DIR.joinpath("dnsmasq-config.sample")
+    DNSMASQ_ADAPTER_RESTART_COMMAND = []
+    FLOW_ADAPTER_NETWORK_INTERFACES_PATH = BaseConfigSettings.SERVER_BASE_DIR.parent\
                                            .joinpath("filesystem/opt/micronets-gw/doc/interfaces.sample")
-    HOSTAPD_ADAPTER_ENABLED = True
-    HOSTAPD_PSK_FILE_PATH = 'doc/hostapd.wpa_psk.sample'
-
-class DnsmasqDevelopmentConfigWithLocalWebsocket (DnsmasqDevelopmentConfig):
-    WEBSOCKET_CONNECTION_ENABLED = True
-    WEBSOCKET_URL = "wss://localhost:5050/micronets/v1/ws-proxy/gw/mock-gw"
-    DPP_HANDLER_ENABLED = True
-    SIMULATE_ONBOARD_RESPONSE_EVENTS = "with success"
-
-class DnsmasqDevelopmentConfigWithFlowRules (DnsmasqDevelopmentConfig):
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/sort -t= -k 2n -k 3rn {flow_file}'
+    HOSTAPD_CLI_PATH = None
+    HOSTAPD_PSK_FILE_PATH = BaseConfigSettings.SERVER_LIB_DIR.joinpath("hostapd.wpa_psk")
+
+#
+# Configurations to enable various combinations of adapters and control debug/log levels
+# General settings should NOT go here
+#
+
+
+#
+# Local Development Configs
+#
+class LocalDevelopmentConfig (LocalDevelopmentSettings):
+    GATEWAY_ID = "mock-gw"
+    DEBUG = True
+    LOGGING_LEVEL = logging.DEBUG
     FLOW_ADAPTER_ENABLED = True
 
-class DnsmasqDebugConfig (BaseDnsmasqConfig, BaseGatewayConfig):
+class LocalDevelopmentConfigWithWebsocket (LocalDevelopmentConfig):
+    # Websocket URL will be looked up using the gateway ID
     WEBSOCKET_CONNECTION_ENABLED = True
+
+class LocalDevelopmentConfigWithSimDPPWebsocketEvents (LocalDevelopmentConfig):
+    # Websocket URL will be looked up using the gateway ID
     DPP_HANDLER_ENABLED = True
-    FLOW_ADAPTER_ENABLED = True
-    HOSTAPD_ADAPTER_ENABLED = True
-    LOGFILE_PATH = None
-    DEBUG = True
+    DPP_HANDLER_SIMULATE_ONBOARD_RESPONSE_EVENTS = "with success"
+
+class LocalDevelopmentConfigWithLocalWebsocket (LocalDevelopmentConfig):
+    WEBSOCKET_URL = "wss://localhost:5050/micronets/v1/ws-proxy/gw/mock-gw"
+    WEBSOCKET_CONNECTION_ENABLED = True
+
+class LocalDevelopmentConfigWithSimDPPLocalWebsocketEvents (LocalDevelopmentConfigWithLocalWebsocket,
+                                                            LocalDevelopmentConfigWithSimDPPWebsocketEvents):
+    # Just a mix of the two
+    pass
 
 #
-# Wired-only Configs
+# Wired-only Configs (Note: Wired and wireless are not mutually exclusive. These just don't enable wireless.)
 #
 
-# Note: Wired and wireless are not mutually exclusive. These just don't enable wireless.
-
-class LocalWiredTestingConfig (BaseDnsmasqConfig, BaseGatewayConfig):
-    DEBUG = True
-    LOGFILE_MODE = 'w'  # 'w' clears the log at startup, 'a' appends to the existing log file
-    FLOW_ADAPTER_ENABLED = True
-
-class LocalWiredProductionConfig (LocalWiredTestingConfig):
+class WiredGatewayConfig (ReferenceGatewaySettings):
+    # Note: No websocket connection is setup and hostapd control is disabled. Just DHCP and flow adapter control
     DEBUG = False
     LOGGING_LEVEL = logging.INFO
     LOGFILE_MODE = 'a'
+    FLOW_ADAPTER_ENABLED = True
 
-class WiredTestingConfigWithWebsocket (LocalWiredTestingConfig):
+class WiredGatewayDebugConfig (WiredGatewayConfig):
+    DEBUG = True
+    LOGGING_LEVEL = logging.DEBUG
+    LOGFILE_MODE = 'w'  # 'w' clears the log at startup, 'a' appends to the existing log file
+
+class WiredGatewayConfigWithWebsocketLookup (WiredGatewayConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
 
-class WiredProductionConfigWithWebsocket (LocalWiredProductionConfig):
-    WEBSOCKET_CONNECTION_ENABLED = True
 
 #
 # Wireless Configs
 #
 
-class LocalWirelessTestingConfig (LocalWiredTestingConfig):
-    DEBUG = True
-    LOGFILE_MODE = 'w'  # 'w' clears the log at startup, 'a' appends to the existing log file
+class WirelessGatewayConfig (ReferenceGatewaySettings):
+    # Note: No websocket connection is setup
     DPP_HANDLER_ENABLED = True
     FLOW_ADAPTER_ENABLED = True
     HOSTAPD_ADAPTER_ENABLED = True
+    DEBUG = False
+    LOGGING_LEVEL = logging.INFO
+    LOGFILE_MODE = 'a'  # append to the existing log file
 
-class LocalWirelessProductionConfig (LocalWirelessTestingConfig, LocalWiredProductionConfig):
-    pass
-
-class WirelessTestingConfigWithWebsocket (LocalWirelessTestingConfig):
+class WirelessGatewayConfigWithWebsocket (WirelessGatewayConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
 
-class WirelessProductionConfigWithWebsocket (LocalWirelessProductionConfig):
-    WEBSOCKET_CONNECTION_ENABLED = True
+class WirelessGatewayDebugConfig (WirelessGatewayConfig):
+    DEBUG = True
+    LOGGING_LEVEL = logging.DEBUG
+    LOGFILE_MODE = 'w'  # clears the log at startup
+
+class WirelessGatewayDebugConfigWithWebsocket (WirelessGatewayDebugConfig, WirelessGatewayConfigWithWebsocket):
+    pass
 
 #
-# The default configuration (typically referenced by the /lib/systemd/system/micronets-gw.service file)
+# The default configuration (default for the /lib/systemd/system/micronets-gw.service file)
 #
-class DefaultConfig (LocalWirelessTestingConfig):
+class DefaultConfig (WirelessGatewayDebugConfig):
     pass
+
+
+
+
+
+
+
+class LocalDevelopmentConfigWithLocalWebsocket(LocalDevelopmentConfig):
+    WEBSOCKET_CONNECTION_ENABLED = True
+    # Set this iff you want to disable websocket URL lookup using MSO Portal (MSO_PORTAL_WEBSOCKET_LOOKUP_ENDPOINT)
+    #    WEBSOCKET_URL = "wss://ws-proxy-api.micronets.in:5050/micronets/v1/ws-proxy/gw-test/{gateway_id}"
+    WEBSOCKET_URL = "wss://localhost:5050/micronets/v1/ws-proxy/gw/mock-gw"
+
+
+    WEBSOCKET_LOOKUP_URL = 'https://dev.mso-portal-api.micronets.in/portal/v1/socket?gatewayId={gateway_id}'
+
+
+    WEBSOCKET_CONNECTION_ENABLED = False
+    FLOW_ADAPTER_ENABLED = False
+    DPP_HANDLER_ENABLED = False
+    HOSTAPD_ADAPTER_ENABLED = False
+    DPP_HANDLER_SIMULATE_ONBOARD_RESPONSE_EVENTS = False
+    DPP_HANDLER_ENABLED = False
+    HOSTAPD_ADAPTER_ENABLED = False
+    DPP_HANDLER_SIMULATE_ONBOARD_RESPONSE_EVENTS = False
+
+    FLOW_ADAPTER_ENABLED = False
+    DPP_HANDLER_SIMULATE_ONBOARD_RESPONSE_EVENTS = True
+
+
+
+
+
 
