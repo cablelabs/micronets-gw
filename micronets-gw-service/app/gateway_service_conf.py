@@ -13,21 +13,25 @@ import logging
 logger = logging.getLogger ('micronets-gw-service')
 
 class GatewayServiceConf:
-    def __init__ (self, ws_connection, dhcp_adapter, flow_adapter, hostapd_adapter, min_update_interval_s):
+    def __init__ (self, ws_connection, db_adapter, dhcp_adapter, flow_adapter, hostapd_adapter, min_update_interval_s):
         self.ws_connection = ws_connection
+        self.db_adapter = db_adapter
         self.dhcp_adapter = dhcp_adapter
         self.flow_adapter = flow_adapter
         self.hostapd_adapter = hostapd_adapter
         self.min_update_interval_s = min_update_interval_s
         self.update_conf_task = None
-        read_conf = dhcp_adapter.read_from_conf ()
-        self.micronet_list = read_conf ['micronets']
-        self.device_lists = read_conf ['devices']
-        logger.info ("GatewayServiceConf Instantiated with:")
+        read_conf = db_adapter.read_from_conf()
+        self.micronet_list = read_conf['micronets']
+        self.device_lists = read_conf['devices']
+        self.device_status = {m: dict.fromkeys(self.device_lists[m], "unknown") for m in self.device_lists.keys()}
+        logger.info ("GatewayServiceConf instantiated with:")
         logger.info ("Micronet list:")
         logger.info (json.dumps (self.micronet_list, indent=2))
         logger.info ("Device lists:")
         logger.info (json.dumps (self.device_lists, indent=2))
+        logger.info ("Device status:")
+        logger.info (json.dumps (self.device_status, indent=2))
 
     async def queue_conf_update (self):
         self.cancel_queued_update()
@@ -54,7 +58,9 @@ class GatewayServiceConf:
         await self.update_conf()
 
     async def update_conf (self):
-        self.dhcp_adapter.save_to_conf (self.micronet_list, self.device_lists)
+        await self.db_adapter.update (self.micronet_list, self.device_lists)
+        if self.dhcp_adapter:
+            await self.dhcp_adapter.update (self.micronet_list, self.device_lists)
         if self.flow_adapter:
             await self.flow_adapter.update(self.micronet_list, self.device_lists)
         if self.hostapd_adapter:

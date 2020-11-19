@@ -59,7 +59,7 @@ source /opt/local/bin/virtualenvwrapper.sh-2.7
 If you want to access the REST API directly - running against the mock gateway adapter, use:
 
 ```
-python ./runner.py -c config.MockDevelopmentConfig
+python ./runner.py -c config.LocalDevelopmentConfig
 ```
 
 If you want to have the gateway service connect to a websocket for access to the REST API and to receive notifications,
@@ -71,7 +71,7 @@ that can be used to verify the authenticity of the websocket server.
 In this case, you can start the Micronets gateway service using:
 
 ```
-python ./runner.py -c config.MockDevelopmentConfigWithWebsocket
+python ./runner.py -c config.LocalDevelopmentConfigWithWebsocket
 ```
 
 To exit the virtual environment use `deactivate`. You can continue working with the Micronets gateway service by running `workon micronets-gw-service`.

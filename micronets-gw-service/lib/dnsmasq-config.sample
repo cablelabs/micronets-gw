@@ -1,0 +1,24 @@
+# THIS CONF FILE IS MANAGED BY THE MICRONETS GW SERVICE
+
+# MODIFICATIONS TO THIS FILE WILL BE OVER-WRITTEN
+
+dhcp-script=/Users/craig/projects/micronets/micronets-gw/micronets-gw-service/bin/dnsmasq_lease_notify.py
+
+# Micronet: mockmicronet008, interface: wlp2s0, vlan: 102
+dhcp-range=set:mockmicronet008,192.168.2.0,static,255.255.255.0,2m
+
+# Micronet: mockmicronet007, interface: wlp2s0
+dhcp-range=set:mockmicronet007,192.168.1.0,static,255.255.255.0,2m
+dhcp-option=tag:mockmicronet007, option:router,192.168.1.1
+dhcp-option=tag:mockmicronet007, option:dns-server,1.2.3.4,1.2.3.5
+
+# DEVICES FOR MICRONET: mockmicronet007
+
+# Device: mydevice01
+dhcp-host=00:23:12:0f:b0:26,mydevice01,set:mydevice01,192.168.1.42,2m
+
+# Device: mydevice02
+dhcp-host=00:23:12:0f:b0:27,mydevice02,set:mydevice02,192.168.1.43,2m
+
+# DEVICES FOR MICRONET: mockmicronet008
+

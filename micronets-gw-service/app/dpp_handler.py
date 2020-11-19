@@ -23,13 +23,13 @@ class DPPHandler(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         WSMessageHandler.__init__(self, "DPP")
         HostapdAdapter.HostapdCLIEventHandler.__init__(self, ("DPP","AP-STA"))
         self.config = config
-        self.simulate_response_events = config ['SIMULATE_ONBOARD_RESPONSE_EVENTS']
+        self.simulate_response_events = config['DPP_HANDLER_SIMULATE_ONBOARD_RESPONSE_EVENTS']
         self.simulated_event_wait_s = 6
         self.hostapd_adapter = hostapd_adapter
         self.pending_onboard = None
-        self.dpp_config_key_file = Path (config ['DPP_CONFIG_KEY_FILE'])
+        self.dpp_config_key_file = Path (config['DPP_CONFIG_KEY_FILE'])
         self.dpp_configurator_id = None
-        self.dpp_ap_connector_file = Path (config ['DPP_AP_CONNECTOR_FILE'])
+        self.dpp_ap_connector_file = Path (config['DPP_AP_CONNECTOR_FILE'])
         self.dpp_ap_connector = None
         self.ssid = None
         self.freq = None
