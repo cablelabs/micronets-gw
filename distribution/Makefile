@@ -39,7 +39,7 @@ $(DEBPATH):
 	$(foreach var,$(SDIRS),(cd $(var); tar cf - .) | (cd $(VDIR); tar xf -);)
 
 	# Copy the micronets-gw-service under $(VDIR)/opt/$(FBASE) to the package construction directory.
-	(cd ../micronets-gw-service; tar cf - .) | (cd $(VDIR)/opt/$(FBASE); tar xf -);)
+	(cd ../micronets-gw-service; tar cf - .) | (cd $(VDIR)/opt/$(FBASE); tar xf -);
 	rm -rf $(VDIR)/opt/$(FBASE)/.idea
 
 	# Create the build metadata files.
@@ -64,8 +64,8 @@ $(DEBPATH):
 
   # DEBUG: Dump out the contents of the data and control archives in the resultant package file $(DEBPATH).
 	(cd $(ARDIR); ar x ../$(DEBFILE))
-	tar tf $(ARDIR)/data.tar.xz    | sort > $(TARGETDIR)/data.lst
-	tar tf $(ARDIR)/control.tar.gz | sort > $(TARGETDIR)/control.lst
+	tar tf $(ARDIR)/data.tar.?z    | sort > $(TARGETDIR)/data.lst
+	tar tf $(ARDIR)/control.tar.?z | sort > $(TARGETDIR)/control.lst
 	echo "The $(ARDIR) directory is for debugging purposes: Do not distribute.\n\nContains un-archived contents of $(DEBFILE)." > $(ARDIR)/README
 
 scp: $(DEBPATH)
