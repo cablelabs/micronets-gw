@@ -36,7 +36,7 @@ class ReferenceGatewaySettings (BaseConfigSettings):
     DNSMASQ_ADAPTER_RESTART_COMMAND = ['sudo', '/etc/init.d/dnsmasq', 'restart']
     FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces.d/micronets"
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {flow_file}'
-    HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
+    HOSTAPD_CTRL_DIR_PATH = '/var/run/hostapd'
     HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
 
 #

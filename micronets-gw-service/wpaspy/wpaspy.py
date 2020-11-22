@@ -80,7 +80,7 @@ class Ctrl:
                 os.unlink(self.local)
             self.started = False
 
-    def request(self, cmd, timeout=10):
+    def send_cmd(self, cmd):
         if type(cmd) == str:
             try:
                 cmd2 = cmd.encode()
@@ -91,6 +91,9 @@ class Ctrl:
             self.s.sendto(self.cookie + cmd, self.sockaddr)
         else:
             self.s.send(cmd)
+
+    def send_cmd_wait(self, cmd, timeout=10):
+        self.send_cmd(cmd)
         [r, w, e] = select.select([self.s], [], [], timeout)
         if r:
             res = self.s.recv(4096).decode()
@@ -104,7 +107,7 @@ class Ctrl:
     def attach(self):
         if self.attached:
             return None
-        res = self.request("ATTACH")
+        res = self.send_cmd_wait("ATTACH")
         if "OK" in res:
             self.attached = True
             return None
@@ -118,7 +121,7 @@ class Ctrl:
             return None
         while self.pending():
             ev = self.recv()
-        res = self.request("DETACH")
+        res = self.send_cmd_wait("DETACH")
         if "FAIL" not in res:
             self.attached = False
             return None
@@ -131,7 +134,7 @@ class Ctrl:
             except Exception as e:
                 # Need to ignore this to allow the socket to be closed
                 self.attached = False
-        self.request("TERMINATE")
+        self.send_cmd_wait("TERMINATE")
         self.close()
 
     def pending(self, timeout=0):

@@ -1,11 +1,12 @@
 import asyncio
 import logging
 import locale
-import subprocess
 import threading
 import traceback
 import re
 import netaddr
+import wpaspy
+import time
 from queue import Queue, Empty
 from subprocess import Popen, PIPE
 from ipaddress import IPv4Network, IPv4Address
@@ -18,17 +19,16 @@ class HostapdAdapter:
     cli_event_re = re.compile ('^.*<([0-9+])>(.+)$')
     cli_ready_re = re.compile ('Connection.*established|Interactive mode')
 
-    def __init__ (self, hostapd_psk_path, hostapd_cli_path, hostapd_cli_args=()):
+    def __init__ (self, hostapd_psk_path, hostapd_ctrl_dir_path, hostapd_cli_args=()):
         self.event_handler_table = []
         self.hostapd_psk_path = Path(hostapd_psk_path) if hostapd_psk_path else None
-        self.hostapd_cli_path = Path(hostapd_cli_path) if hostapd_cli_path else None
-        self.hostapd_cli_args = hostapd_cli_args
-        self.hostapd_cli_process = None
-        self.process_reader_thread = None
-        self.command_queue = None
+        self.hostapd_ctrl_dir_path = Path(hostapd_ctrl_dir_path) if hostapd_ctrl_dir_path else None
+        self.hostapd_ctrl = None
+        self.ctrl_retry_interval = 2
+        self.ctrl_reader_thread = None
+        self.command_queue = Queue()
         self.event_loop = None
-        self.cli_connected = False
-        self.cli_ready = False
+        self.hostapd_ctrl_connected = False
         self.status_vars = None
 
     class HostapdCLIEventHandler:
@@ -120,82 +120,87 @@ class HostapdAdapter:
         if self.cli_connected:
             logger.info(f"HostapdAdapter:connect: Already connected - returning")
             return
-        if not self.hostapd_cli_path:
-            logger.info(f"HostapdAdapter:connect: hostapd_cli_path not set - returning")
+        if not self.hostapd_ctrl_dir_path:
+            logger.info(f"HostapdAdapter:connect: hostapd_ctrl_dir_path not set - returning")
             return
         self.event_loop = asyncio.get_event_loop ()
         self.command_queue = Queue()  # https://docs.python.org/3.6/library/queue.html
-        logger.info(f"HostapdAdapter:connect: Running {self.hostapd_cli_path} {self.hostapd_cli_args}")
 
-        self.hostapd_cli_process = Popen([self.hostapd_cli_path, *self.hostapd_cli_args],
-                                         shell=False, bufsize=1,
-                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.cli_connected = True
-        self.process_reader_thread = threading.Thread(target=self.read_cli_output)
-        self.process_reader_thread.start()
-        logger.info(f"HostapdAdapter:connect: Reader thread started")
+        self.ctrl_reader_thread = threading.Thread(target=self.read_ctrl_output_loop)
+        self.ctrl_reader_thread.start()
+        logger.info(f"HostapdAdapter:connect: hostapd strl thread started")
 
     def is_cli_connected(self):
-        return self.cli_connected
+        return self.ctrl_connected
 
     def is_cli_ready(self):
-        return self.cli_ready
+        return self.ctrl_ready
 
-    def read_cli_output(self):
-        response_data = None
-        self.command_queue = Queue()
-        logger.info(f"HostapdAdapter:read_cli_output: Started")
-        command = None
+    def read_ctrl_output_loop(self):
+        logger.info(f"HostapdAdapter:read_ctrl_output: Started")
         while True:
-            try:
-                # https://docs.python.org/3/library/io.html
-
-                # logger.debug(f"HostapdAdapter:read_cli_output: Waiting on stdout.readline()...")
-                data = self.hostapd_cli_process.stdout.readline()
-                if not data:
-                    logger.info(f"HostapdAdapter:read_cli_output: Got EOF from hostapd_cli - exiting")
+            for iface_path in self.hostapd_ctrl_dir_path.iterdir():
+                iface_path_str = str(iface_path.absolute())
+                try:
+                    self.hostapd_ctrl = wpaspy.Ctrl(iface_path_str)
                     break
-                line = data.decode("utf-8")
-                if len(line) == 0:
-                    continue
-                logger.debug(f"HostapdAdapter:read_cli_output: \"{line[:-1]}\"")
-                if not self.cli_ready and self.cli_ready_re.match(line):
-                    logger.info(f"HostapdAdapter:read_cli_output: hostapd CLI is now READY")
-                    self.cli_ready = True
-                    asyncio.run_coroutine_threadsafe(self.process_hostapd_ready(), self.event_loop)
-                if not command:
-                    response_data = None
-                    try:
-                        command = self.command_queue.get(block=False)
-                    except Empty:
-                        command = None
+                except Exception as e:
+                    logger.warning(f"HostapdAdapter:read_ctrl_output: Could not open {iface_path_str}: {e}")
+                    pass
 
-                if command:
-                    if response_data is None:
-                        # Don't store the first line - which contains the command (start aggregating on the next line)
-                        response_data = ""
+            if not self.hostapd_ctrl:
+                logger.info(f"HostapdAdapter:read_ctrl_output: Retrying in {self.ctrl_retry_interval} seconds")
+                time.sleep(self.ctrl_retry_interval)
+                continue;
+
+            response_data = None
+            command = None
+            self.self.hostapd_ctrl_connected = True
+            asyncio.run_coroutine_threadsafe(self.process_hostapd_connected(), self.event_loop)
+
+            while True:
+                try:
+                    # https://docs.python.org/3/library/io.html
+
+                    # logger.debug(f"HostapdAdapter:read_cli_output: Waiting on stdout.readline()...")
+                    data = self.hostapd_ctrl.recv()
+
+                    if len(data) == 0:
                         continue
-                    response_data += line
-                    pos = response_data.find("> ")
-                    if pos >= 0:
-                        # logger.debug (f"HostapdAdapter:read_cli_output: aggregate response_data: {response_data}")
-                        command_type = type(command).__name__
-                        complete_response = response_data[:pos].rstrip()
-                        logger.debug (f"HostapdAdapter:read_cli_output: Found command response for {command}: {complete_response}")
-                        asyncio.run_coroutine_threadsafe(command.process_response_data(complete_response), 
-                                                         command.event_loop)
+                    logger.debug(f"HostapdAdapter:read_ctrl_output_loop: \"{data}\"")
+                    if not command:
                         response_data = None
-                        command = None
-                else:
-                    # This is assuming avents aren't delivered while a command response is being processed
-                    cli_event_match = HostapdAdapter.cli_event_re.match(line)
-                    if cli_event_match:
-                        event_data = cli_event_match.group(2).strip()
-                        asyncio.run_coroutine_threadsafe(self.process_event(event_data), self.event_loop)
-            except Exception as ex:
-                logger.warning(f"HostapdAdapter:read_cli_output: Error processing data: {ex}", exc_info=True)
-        self.cli_connected = False
-        self.cli_ready = False
+                        try:
+                            command = self.command_queue.get(block=False)
+                        except Empty:
+                            command = None
+
+                    if command:
+                        if response_data is None:
+                            # Don't store the first line - which contains the command (start aggregating on the next line)
+                            response_data = ""
+                            continue
+                        response_data += data
+                        pos = response_data.find("> ")
+                        if pos >= 0:
+                            # logger.debug (f"HostapdAdapter:read_cli_output: aggregate response_data: {response_data}")
+                            command_type = type(command).__name__
+                            complete_response = response_data[:pos].rstrip()
+                            logger.debug (f"HostapdAdapter:read_cli_output: Found command response for {command}: {complete_response}")
+                            asyncio.run_coroutine_threadsafe(command.process_response_data(complete_response),
+                                                             command.event_loop)
+                            response_data = None
+                            command = None
+                    else:
+                        # This is assuming avents aren't delivered while a command response is being processed
+                        cli_event_match = HostapdAdapter.cli_event_re.match(line)
+                        if cli_event_match:
+                            event_data = cli_event_match.group(2).strip()
+                            asyncio.run_coroutine_threadsafe(self.process_event(event_data), self.event_loop)
+                except Exception as ex:
+                    logger.warning(f"HostapdAdapter:read_cli_output: Error processing data: {ex}", exc_info=True)
+            self.cli_connected = False
+            self.cli_ready = False
 
     async def process_hostapd_ready(self):
         logger.info(f"HostapdAdapter:process_hostapd_ready()")
