@@ -256,7 +256,6 @@ class HostapdAdapter:
 
         return command
 
-
     class PingCLICommand(HostapdCLICommand):
         def __init__ (self, event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
@@ -471,6 +470,112 @@ class HostapdAdapter:
             if self.freq:
                 cmd += f" neg_freq={self.freq}"
 
+            return cmd
+
+        async def process_response_data(self, response):
+            try:
+                self.success = "OK" in response
+            finally:
+                await super().process_response_data(response)
+
+        async def was_successful(self):
+            await self.get_response()
+            return self.success
+
+    class DPPBootstrapSet(HostapdCLICommand):
+        def __init__ (self, configurator_id, qrcode_id, ssid, akms, psk=None, passphrase=None,
+                      event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.configurator_id = configurator_id
+            self.qrcode_id = qrcode_id
+            self.ssid = ssid
+            self.psk = psk
+            self.passphrase = passphrase
+            self.akms = akms
+            self.success = False
+            self.passphrase_asciihex = None
+
+        def get_command_string(self):
+            ssid_asciihex = self.ssid.encode("ascii").hex()
+
+            # dpp_bootstrap_set 1 conf=sta-psk ssid=<enc ssid> psk=<64 hex chars) configurator=1 conn_status=0 group_id=micronet-01
+            cmd = f"dpp_bootstrap_set {self.qrcode_id} ssid={ssid_asciihex} configurator={self.configurator_id}"
+
+            # Currently allowed configs: psk, sae, dpp, psk+sae, dpp+sae, dpp+psk+sae
+            # (see dpp_configuration_alloc in src/common/dpp.c of hostap sources)
+            akm_str = ""
+            if 'dpp' in self.akms:
+                akm_str += "+dpp"
+            if 'psk' in self.akms:
+                if not (self.psk or self.passphrase):
+                    raise Exception(f"'psk' included in AKMS but no PSK or passphrase provided")
+                akm_str += "+psk"
+            if 'sae' in self.akms:
+                if not self.passphrase:
+                    raise Exception(f"'sae' included in AKMS but no passphrase provided")
+                akm_str += "+sae"
+            if len(akm_str) == 0:
+                raise Exception(f"No valid akms elements found (akms: {self.akms})")
+            # Note: akm_str will have an extra "+" at the front
+            cmd += f" conf=sta-{akm_str[1:]}"
+
+            if self.psk:
+                cmd += f" psk={self.psk}"
+            if self.passphrase:
+                passphrase_asciihex = self.passphrase.encode("ascii").hex()
+                cmd += f" pass={passphrase_asciihex}"
+            return cmd
+
+        async def process_response_data(self, response):
+            try:
+                self.success = "OK" in response
+            finally:
+                await super().process_response_data(response)
+
+        async def was_successful(self):
+            await self.get_response()
+            return self.success
+
+    class DPPSetDPPConfigParamsCommand(HostapdCLICommand):
+        def __init__ (self, configurator_id, ssid, akms, psk=None, passphrase=None,
+                      event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.configurator_id = configurator_id
+            self.ssid = ssid
+            self.psk = psk
+            self.passphrase = passphrase
+            self.akms = akms
+            self.success = False
+
+        def get_command_string(self):
+            ssid_asciihex = self.ssid.encode("ascii").hex()
+            # set dpp_configurator_params "conf=sta-psk ssid=<encoded-ssid> pass=<hex-encoded pass> conn_status=0 group_id=micronet-01"
+            cmd = f"set dpp_configurator_params \"conn_status=0 ssid={ssid_asciihex}"
+
+            # Currently allowed configs: psk, sae, dpp, psk+sae, dpp+sae, dpp+psk+sae
+            # (see dpp_configuration_alloc in src/common/dpp.c of hostap sources)
+            akm_str = ""
+            if 'dpp' in self.akms:
+                akm_str += "+dpp"
+            if 'psk' in self.akms:
+                if not (self.psk or self.passphrase):
+                    raise Exception(f"'psk' included in AKMS but no PSK or passphrase provided")
+                akm_str += "+psk"
+            if 'sae' in self.akms:
+                if not self.passphrase:
+                    raise Exception(f"'sae' included in AKMS but no passphrase provided")
+                akm_str += "+sae"
+            if len(akm_str) == 0:
+                raise Exception(f"No valid akms elements found (akms: {self.akms})")
+            # Note: akm_str will have an extra "+" at the front
+            cmd += f" conf=sta-{akm_str[1:]}"
+
+            if self.psk:
+                cmd += f" psk={self.psk}"
+            if self.passphrase:
+                passphrase_asciihex = self.passphrase.encode("ascii").hex()
+                cmd += f" pass={passphrase_asciihex}"
+            cmd += '"'
             return cmd
 
         async def process_response_data(self, response):

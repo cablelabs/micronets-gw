@@ -380,14 +380,21 @@ async def onboard_device (micronet_id, device_id):
     check_micronet_id (micronet_id, request.path)
     check_device_id (device_id, request.path)
     top_level = await request.get_json ()
-    logger.info(f"onboad_device: top_level: {top_level}")
+    logger.info(f"onboard_device: top_level: {top_level}")
     check_for_unrecognized_entries (top_level, ['dpp'])
     dpp_obj = top_level['dpp']
-    logger.info(f"onboad_device: dpp_obj: {dpp_obj}")
     check_for_unrecognized_entries(dpp_obj, ['uri','akms'])
     uri = check_field (dpp_obj, 'uri', str, True)
     akms = check_akms (dpp_obj, 'akms', True)
     return await get_dpp_handler().onboard_device (micronet_id, device_id, top_level)
+
+@app.route (api_prefix + '/micronets/<micronet_id>/devices/<device_id>/reconfigure', methods=['PUT'])
+async def reconfig_device (micronet_id, device_id):
+    micronet_id = micronet_id.lower ()
+    device_id = device_id.lower ()
+    check_micronet_id (micronet_id, request.path)
+    check_device_id (device_id, request.path)
+    return await get_dpp_handler().reprovision_device (micronet_id, device_id)
 
 valid_akms = ("psk", "dpp", "sae")
 

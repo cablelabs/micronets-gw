@@ -130,6 +130,9 @@ class WirelessGatewayDebugConfig (WirelessGatewayConfig):
     LOGGING_LEVEL = logging.DEBUG
     LOGFILE_MODE = 'w'  # clears the log at startup
 
+class WirelessGatewayDebugConfigNoLogfile (WirelessGatewayDebugConfig):
+    LOGFILE_PATH = None
+
 class WirelessGatewayDebugConfigWithWebsocket (WirelessGatewayDebugConfig, WirelessGatewayConfigWithWebsocket):
     pass
 

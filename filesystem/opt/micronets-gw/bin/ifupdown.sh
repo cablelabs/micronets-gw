@@ -66,6 +66,23 @@ config_iptables_bridge_uplink() {
     /sbin/sysctl -w net.ipv4.ip_forward=1
 }
 
+# This is a temporary work-around to enable the forwarding of DPP Presence Announcements
+#  from the wifi driver into hostapd. The driver-level commands to enable the forwarding of
+#  these wifi broadcast packets (NL80211_EXT_FEATURE_MULTICAST_REGISTRATIONS) in the 
+#  ATH9K driver isn't currently included in a lot of kernel distros (for Rasp Pi, kernel 
+#  version 5.10+ is required)
+enable_wifi_monitor_mode() {
+    WIPHY_DEV=phy0
+    WIPHY_MON_DEV=wifimon0
+    if ifconfig $WIPHY_MON_DEV > /dev/null; then
+        debug_log "Monitor mode already enabled on $WIPHY_DEV (monitor device $WIPHY_MON_DEV)"
+    else
+        debug_log "Enabling monitor mode on $WIPHY_DEV (monitor device $WIPHY_MON_DEV)"
+        iw phy $WIPHY_DEV interface add $WIPHY_MON_DEV type monitor
+        ifconfig $WIPHY_MON_DEV up
+    fi
+}
+
 dump_iptables() {
     iptables -L -v
     iptables -L -v --table nat
@@ -92,6 +109,8 @@ else
     /etc/init.d/openvswitch-switch start
     debug_log "completed /etc/init.d/openvswitch-switch start."
 fi
+
+enable_wifi_monitor_mode
 
 if [ "${MODE}" = "start" ]; then
     eval OVS_EXTRA=\"${IF_OVS_EXTRA}\"
