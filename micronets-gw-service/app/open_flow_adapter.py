@@ -234,13 +234,6 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
             # TO-LOCALHOST boilerplate rules
             #
             # All packets that have been "approved" for local delivery go through here
-            priority=400
-            flow_file.write(f"add table={OpenFlowAdapter.to_localhost_table},priority={priority}, "
-                            f"tcp,udp,ct_state=-trk, "
-                            f"actions=ct(table={OpenFlowAdapter.to_localhost_table})\n")
-            flow_file.write(f"add table={OpenFlowAdapter.to_localhost_table},priority={priority}, "
-                            f"tcp,udp,ct_state=+trk+new, "
-                            f"actions=ct(commit),output:LOCAL\n")
             priority=0
             flow_file.write(f"add table={OpenFlowAdapter.to_localhost_table},priority={priority}, "
                             f"actions=output:LOCAL\n")
