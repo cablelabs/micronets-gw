@@ -58,13 +58,16 @@ class GatewayServiceConf:
         await self.update_conf()
 
     async def update_conf (self):
-        await self.db_adapter.update (self.micronet_list, self.device_lists)
-        if self.dhcp_adapter:
-            await self.dhcp_adapter.update (self.micronet_list, self.device_lists)
-        if self.flow_adapter:
-            await self.flow_adapter.update(self.micronet_list, self.device_lists)
-        if self.hostapd_adapter:
-            await self.hostapd_adapter.update(self.micronet_list, self.device_lists)
+        try:
+            await self.db_adapter.update (self.micronet_list, self.device_lists)
+            if self.dhcp_adapter:
+                await self.dhcp_adapter.update (self.micronet_list, self.device_lists)
+            if self.flow_adapter:
+                await self.flow_adapter.update(self.micronet_list, self.device_lists)
+            if self.hostapd_adapter:
+                await self.hostapd_adapter.update(self.micronet_list, self.device_lists)
+        except Exception as ex:
+            logger.warning(f"Caught exception performing update: {ex}")
 
     #
     # Interface Operations
