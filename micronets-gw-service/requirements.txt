@@ -27,7 +27,7 @@ netaddr==0.7.19
 netifaces==0.10.9
 pathlib==1.0.1
 pipdeptree==0.13.2
-  pip==19.0.3
+  pip==19.2
 python-socketio==4.3.1
   python-engineio==3.9.3
     six==1.12.0
