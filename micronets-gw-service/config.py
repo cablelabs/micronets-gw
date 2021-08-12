@@ -15,6 +15,9 @@ class BaseConfigSettings:
     FLOW_ADAPTER_ENABLED = False
     HOSTAPD_ADAPTER_ENABLED = False
     DPP_HANDLER_ENABLED = False
+    MICRONETS_OVS_BRIDGE = os.environ.get('MICRONETS_OVS_BRIDGE') or 'brmn001'
+    MICRONETS_OVS_BRIDGE_TRUNK_PORT = int(os.environ.get('MICRONETS_OVS_BRIDGE_TRUNK_PORT', '1'))
+    MICRONETS_OVS_BRIDGE_DROP_PORT = int(os.environ.get('MICRONETS_OVS_BRIDGE_DROP_PORT', '42'))
     DPP_CONFIG_KEY_FILE = SERVER_LIB_DIR.joinpath("hostapd-dpp-configurator.key")
     DPP_AP_CONNECTOR_FILE = SERVER_LIB_DIR.joinpath("hostapd-dpp-ap-connector.json")
     DPP_HANDLER_SIMULATE_ONBOARD_RESPONSE_EVENTS = False
@@ -34,7 +37,6 @@ class ReferenceGatewaySettings (BaseConfigSettings):
     LOGFILE_MODE = 'a'
     DNSMASQ_ADAPTER_CONF_FILE = '/etc/dnsmasq.d/micronets'
     DNSMASQ_ADAPTER_RESTART_COMMAND = ['sudo', '/etc/init.d/dnsmasq', 'restart']
-    FLOW_ADAPTER_NETWORK_INTERFACES_PATH = "/etc/network/interfaces.d/micronets"
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {flow_file}'
     HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
     HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
@@ -50,8 +52,6 @@ class LocalDevelopmentSettings (BaseConfigSettings):
     LISTEN_HOST = "127.0.0.1"
     DNSMASQ_ADAPTER_CONF_FILE = BaseConfigSettings.SERVER_LIB_DIR.joinpath("dnsmasq-config.sample")
     DNSMASQ_ADAPTER_RESTART_COMMAND = []
-    FLOW_ADAPTER_NETWORK_INTERFACES_PATH = BaseConfigSettings.SERVER_BASE_DIR.parent\
-                                           .joinpath("filesystem/opt/micronets-gw/doc/interfaces.sample")
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/sort -t= -k 2n -k 3rn {flow_file}'
     HOSTAPD_CLI_PATH = None
     HOSTAPD_PSK_FILE_PATH = BaseConfigSettings.SERVER_LIB_DIR.joinpath("hostapd.wpa_psk")

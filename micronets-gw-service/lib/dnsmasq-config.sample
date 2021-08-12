@@ -6,8 +6,9 @@ dhcp-script=/Users/craig/projects/micronets/micronets-gw/micronets-gw-service/bi
 
 # Micronet: mockmicronet008, interface: wlp2s0, vlan: 102
 dhcp-range=set:mockmicronet008,192.168.2.0,static,255.255.255.0,2m
+dhcp-option=tag:mockmicronet008, option:router,192.168.2.1
 
-# Micronet: mockmicronet007, interface: wlp2s0
+# Micronet: mockmicronet007, interface: wlp2s0, vlan: 101
 dhcp-range=set:mockmicronet007,192.168.1.0,static,255.255.255.0,2m
 dhcp-option=tag:mockmicronet007, option:router,192.168.1.1
 dhcp-option=tag:mockmicronet007, option:dns-server,1.2.3.4,1.2.3.5

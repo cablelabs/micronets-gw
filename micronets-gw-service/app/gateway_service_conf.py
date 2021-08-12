@@ -67,7 +67,7 @@ class GatewayServiceConf:
             if self.hostapd_adapter:
                 await self.hostapd_adapter.update(self.micronet_list, self.device_lists)
         except Exception as ex:
-            logger.warning(f"Caught exception performing update: {ex}")
+            logger.warning(f"Caught exception performing update: {ex}", exc_info=True)
 
     #
     # Interface Operations
