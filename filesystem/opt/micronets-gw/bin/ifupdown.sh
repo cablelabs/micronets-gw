@@ -41,14 +41,6 @@ clear_iptables() {
     sysctl -w net.ipv4.ip_forward=0
 }
 
-reset_ovsdb() {
-  OVS_DB_CONF=/etc/openvswitch/conf.db
-  OVS_DB_SCHEMA=/usr/share/openvswitch/vswitch.ovsschema
-  debug_log "Deleting ovs db at ${OVS_DB_CONF}"
-  rm -fv "${OVS_DB_CONF}"
-  ovsdb-tool create "${OVS_DB_CONF}" "${OVS_DB_SCHEMA}"
-}
-
 config_iptables_bridge_uplink() {
     BRIDGE_INTERFACE=$1
     UPLINK_INTERFACE=$2
@@ -64,6 +56,14 @@ config_iptables_bridge_uplink() {
     iptables --table filter --append FORWARD --out-interface ${UPLINK_INTERFACE} \
 	-j ACCEPT
     /sbin/sysctl -w net.ipv4.ip_forward=1
+}
+
+reset_ovsdb() {
+  OVS_DB_CONF=/etc/openvswitch/conf.db
+  OVS_DB_SCHEMA=/usr/share/openvswitch/vswitch.ovsschema
+  debug_log "Deleting ovs db at ${OVS_DB_CONF}"
+  rm -fv "${OVS_DB_CONF}"
+  ovsdb-tool create "${OVS_DB_CONF}" "${OVS_DB_SCHEMA}"
 }
 
 # This is a temporary work-around to enable the forwarding of DPP Presence Announcements

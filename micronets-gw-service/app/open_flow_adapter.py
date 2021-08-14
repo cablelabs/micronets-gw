@@ -273,7 +273,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                             f"actions=ct(commit),output:{self.micronet_trunk_port}\n")
 
             # OUTPUT to the micronet/device trunk port
-            flow_file.write(f"add table={OpenFlowAdapter.to_device_table},priority=400, "
+            flow_file.write(f"add table={OpenFlowAdapter.to_device_table},priority=0, "
                             f"actions=output:{self.micronet_trunk_port}\n")
 
             flow_file.flush()

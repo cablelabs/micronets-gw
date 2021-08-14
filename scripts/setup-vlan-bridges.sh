@@ -20,6 +20,23 @@ clear_iptables() {
     sysctl -w net.ipv4.ip_forward=0
 }
 
+config_iptables_bridge_uplink() {
+    BRIDGE_INTERFACE=$1
+    UPLINK_INTERFACE=$2
+    debug_log "Configuring NAT with uplink interface ${UPLINK_INTERFACE}, bridge interface ${BRIDGE_INTERFACE}..."
+    iptables --table nat --append POSTROUTING --out-interface ${UPLINK_INTERFACE} \
+        -j MASQUERADE
+    iptables --table filter --append FORWARD --in-interface ${UPLINK_INTERFACE} --out-interface  ${BRIDGE_INTERFACE} \
+        -m state --state ESTABLISHED,RELATED -j ACCEPT
+    iptables --table filter --append FORWARD --in-interface ${UPLINK_INTERFACE} \
+        -m state --state NEW,INVALID -j LOG $LOG_OPTS --log-prefix 'FW-DROP (NEW/INVALID-FWD):'
+    iptables --table filter --append FORWARD --in-interface ${UPLINK_INTERFACE} \
+        -m state --state NEW,INVALID -j DROP
+    iptables --table filter --append FORWARD --out-interface ${UPLINK_INTERFACE} \
+        -j ACCEPT
+    sysctl -w net.ipv4.ip_forward=1
+}
+
 reset_ovsdb() {
   OVS_DB_CONF=/etc/openvswitch/conf.db
   OVS_DB_SCHEMA=/usr/share/openvswitch/vswitch.ovsschema
@@ -73,3 +90,6 @@ route add -net 10.135.2.0/24 gw 10.135.2.1 dev brmn001
 ip a add 10.135.3.1/24 dev brmn001
 route add -net 10.135.3.0/24 gw 10.135.3.1 dev brmn001
 
+# Enable firewall rules
+clear_iptables
+config_iptables_bridge_uplink brmn001 eth0
