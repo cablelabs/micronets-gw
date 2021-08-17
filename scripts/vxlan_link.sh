@@ -9,9 +9,11 @@ REMOTE_IP=""
 
 #Internal variables
 portnum=""
+ipInt=0
 
 #Executables used here
 OVSCMD=`which ovs-vsctl`
+OFCMD=`which ovs-ofctl`
 
 print_inputs() {
   echo "cmd=$CMD" >&2
@@ -47,6 +49,8 @@ function valid_ip() {
       && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
     stat=$?
     portnum="${ip[2]}${ip[3]}"
+    ipInt=$(( ${ip[3]} + ${ip[2]} * 256 + ${ip[1]} * 256 * 256 + ${ip[0]} * 256 * 256 *256 ))
+    echo "Int value of IP provided: $ipInt" >&2
   fi
   return $stat
 }
@@ -163,6 +167,9 @@ case "$CMD" in
     # Create the vxlan link and store command exit status
     $OVSCMD add-port $BRIDGE $PORT -- set interface $PORT type=vxlan options:remote_ip=$REMOTE_IP options:key=$VXLAN
     status=$?
+    $OFCMD add-flow $BRIDGE "table=0, priority=10, in_port=$PORT,udp,tp_src=67, actions=drop"
+    $OFCMD add-flow $BRIDGE "table=0, priority=10, in_port=$PORT,udp,tp_src=68, actions=drop"
+
     ;;
   remove) # for remove, verify either port or ip are provided
     # if port provided, check that it exists and attempt to remove the port
@@ -174,6 +181,8 @@ case "$CMD" in
       PORT="vxlan$portnum"
       if [ `$OVSCMD list-ports $BRIDGE | grep -c $PORT` -gt 0 ]; then
         echo "Removing vxlan to IP: $REMOTE_IP" >&2
+        $OFCMD del-flows $BRIDGE "table=0, in_port=$PORT,udp,tp_src=67"
+        $OFCMD del-flows $BRIDGE "table=0, in_port=$PORT,udp,tp_src=68"
         $OVSCMD del-port $BRIDGE $PORT
         status=$?
       else

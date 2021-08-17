@@ -52,8 +52,12 @@ reset_ovsdb
 
 # Setep veth pair for HostAPD to connect the VLAN tagged interface ("haport" -> "HostAPD port")
 #  This will create interfaces/ports haport and haport-sw
-ip link add dev haport type veth peer name haport-sw
-ip link set haport up
+if ! ip link show haport; then
+  debug_log "Creating veth haport/haport-sw pair"
+  ip link add dev haport type veth peer name haport-sw
+  ip link set haport up
+  ip link set haport-sw up
+fi
 
 # Creates the primary Micronets OVS routing bridge (where the Micronets OVS rules will be applied)
 ovs_vsctl --may-exist add-br brmn001 -- set bridge brmn001 protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13
@@ -72,12 +76,14 @@ ip link set brhapd up
 #  The traffic from this port will be VLAN tagged by HostAPD locally
 #  The trattic traffic going to this port will be VLAN tagged and can originate locally or from the mesh
 ovs_vsctl --may-exist add-port brhapd haport-sw -- set Interface haport-sw ofport_request=3
-ip link set haport-sw up
 
 # Add a patch port between the OVS HostAPD Layer-2 bridge and the Micronets OVS routing bridge
 #  This traffic going across this patch port should only be local (no inter-AP mesh traffic) 
-ovs_vsctl --may-exist add-port brhapd hapd-trunk-patch -- set interface hapd-trunk-patch type=patch options:peer=brmn-trunk-patch
-ovs_vsctl --may-exist add-port brmn001 brmn-trunk-patch -- set interface brmn-trunk-patch type=patch options:peer=hapd-trunk-patch
+ovs_vsctl --may-exist add-port brhapd hapd-tr-patch -- set interface hapd-tr-patch type=patch options:peer=brmn-tr-patch ofport_request=1
+ovs_vsctl --may-exist add-port brmn001 brmn-tr-patch -- set interface brmn-tr-patch type=patch options:peer=hapd-tr-patch ofport_request=1
+
+# Add some short-circuit flow rules for brhapd that sends all downward traffic directly to hostap tagged interface
+ovs-ofctl add-flow brhapd "table=0, priority=200, in_port=1, actions=output:haport-sw"
 
 # Add Micronet-ready subnet defintions
 #  TODO: Make the Micronets agent perform these steps dynamically

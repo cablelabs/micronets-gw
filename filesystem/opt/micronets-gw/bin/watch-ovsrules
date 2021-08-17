@@ -1,2 +1,6 @@
 #!/bin/sh
-watch -d "sudo ovs-ofctl dump-flows brmn001 --names | /opt/micronets-gw/bin/format-ofctl-dump"
+BRIDGE="brmn001"
+if [ -n "$1" ]; then
+  BRIDGE="$1"
+fi
+watch -d "sudo ovs-ofctl dump-flows $BRIDGE --names | /opt/micronets-gw/bin/format-ofctl-dump"

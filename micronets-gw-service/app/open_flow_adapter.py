@@ -18,6 +18,10 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
     from_localhost_egress = 210
     to_device_table = 220
 
+    to_micronets_ct_zone = 5150
+    from_micronets_ct_zone = 5151
+
+
     def __init__ (self, config):
         self.apply_openflow_command = config['FLOW_ADAPTER_APPLY_FLOWS_COMMAND']
         self.bridge_name = config['MICRONETS_OVS_BRIDGE']
@@ -82,17 +86,17 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
             # Allow already-tracked connections through
             #  UDP
             flow_file.write(f"add table={OpenFlowAdapter.from_micronets_ingress},priority=910, "
-                            f"udp,ct_state=+trk+est, "
+                            f"udp,ct_state=+trk+est,ct_zone={self.from_micronets_ct_zone}, "
                             f"actions=resubmit(,{OpenFlowAdapter.to_localhost_table})\n")
             flow_file.write(f"add table={OpenFlowAdapter.from_micronets_ingress},priority=910, "
-                            f"udp,ct_state=+trk+rel, "
+                            f"udp,ct_state=+trk+rel,ct_zone={self.from_micronets_ct_zone}, "
                             f"actions=resubmit(,{OpenFlowAdapter.to_localhost_table})\n")
             #  TCP
             flow_file.write(f"add table={OpenFlowAdapter.from_micronets_ingress},priority=905, "
-                            f"tcp,ct_state=+trk+est, "
+                            f"tcp,ct_state=+trk+est,ct_zone={self.from_micronets_ct_zone}, "
                             f"actions=resubmit(,{OpenFlowAdapter.to_localhost_table})\n")
             flow_file.write(f"add table={OpenFlowAdapter.from_micronets_ingress},priority=905, "
-                            f"tcp,ct_state=+trk+rel, "
+                            f"tcp,ct_state=+trk+rel,ct_zone={self.from_micronets_ct_zone}, "
                             f"actions=resubmit(,{OpenFlowAdapter.to_localhost_table})\n")
 
             # Create rules to allow unfiltered access to the device's subnet gateway
@@ -141,20 +145,15 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
             # All packets that have been "approved" for local delivery go through here
             # Track UDP
-            # flow_file.write(f"add table={OpenFlowAdapter.to_localhost_table},priority=410, "
-            #                 f"udp,ct_state=-trk, "
-            #                 f"actions=ct(table={OpenFlowAdapter.to_localhost_table})\n")
-            # flow_file.write(f"add table={OpenFlowAdapter.to_localhost_table},priority=410, "
-            #                 f"udp,ct_state=+trk+new, "
-            #                 f"actions=ct(commit),strip_vlan,output:LOCAL\n")
+            flow_file.write(f"add table={OpenFlowAdapter.to_localhost_table},priority=410, "
+                            f"udp,ct_state=-trk,ct_zone={self.to_micronets_ct_zone} "
+                            f"actions=ct(commit,table={OpenFlowAdapter.to_localhost_table},"
+                                        f"zone={self.to_micronets_ct_zone})\n")
             # Track TCP
-            # flow_file.write(f"add table={OpenFlowAdapter.to_localhost_table},priority=400, "
-            #                 f"tcp,ct_state=-trk, "
-            #                 f"actions=ct(table={OpenFlowAdapter.to_localhost_table})\n")
-            # flow_file.write(f"add table={OpenFlowAdapter.to_localhost_table},priority=400, "
-            #                 f"tcp,ct_state=+trk+new, "
-            #                 f"actions=ct(commit),strip_vlan,output:LOCAL\n")
-
+            flow_file.write(f"add table={OpenFlowAdapter.to_localhost_table},priority=400, "
+                            f"tcp,ct_state=-trk,ct_zone={self.to_micronets_ct_zone}, "
+                            f"actions=ct(commit,table={OpenFlowAdapter.to_localhost_table},"
+                                        f"zone={self.to_micronets_ct_zone})\n")
             # Deliver to the host
             flow_file.write(f"add table={OpenFlowAdapter.to_localhost_table},priority=0, "
                             f"actions=strip_vlan,output:LOCAL\n")
@@ -201,17 +200,17 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
             # Tracked connection passthrough
             #  UDP
             flow_file.write(f"add table={OpenFlowAdapter.from_localhost_egress},priority=950, "
-                            f"udp,ct_state=+trk+est, "
+                            f"udp,ct_state=+trk+est,ct_zone={self.to_micronets_ct_zone}, "
                             f"actions=output:{self.micronet_trunk_port}\n")
             flow_file.write(f"add table={OpenFlowAdapter.from_localhost_egress},priority=950, "
-                            f"udp,ct_state=+trk+rel, "
+                            f"udp,ct_state=+trk+rel,ct_zone={self.to_micronets_ct_zone}, "
                             f"actions=output:{self.micronet_trunk_port}\n")
             #  TCP
             flow_file.write(f"add table={OpenFlowAdapter.from_localhost_egress},priority=940, "
-                            f"tcp,ct_state=+trk+est, "
+                            f"tcp,ct_state=+trk+est,ct_zone={self.to_micronets_ct_zone}, "
                             f"actions=output:{self.micronet_trunk_port}\n")
             flow_file.write(f"add table={OpenFlowAdapter.from_localhost_egress},priority=940, "
-                            f"tcp,ct_state=+trk+rel, "
+                            f"tcp,ct_state=+trk+rel,ct_zone={self.to_micronets_ct_zone}, "
                             f"actions=output:{self.micronet_trunk_port}\n")
 
             # Allow certain low-level protocols through (ARP, ICMP, EAPoL, DNS, NTP...)
@@ -246,19 +245,15 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
             # All packets approved for delivery to a micronet device go through here
             #  (and are already VLAN-tagged)
             #  UDP
-            # flow_file.write(f"add table={OpenFlowAdapter.to_device_table},priority=400, "
-            #                 f"udp,ct_state=-trk, "
-            #                 f"actions=ct(table={OpenFlowAdapter.to_device_table})\n")
-            # flow_file.write(f"add table={OpenFlowAdapter.to_device_table},priority=400, "
-            #                 f"udp,ct_state=+trk+new, "
-            #                 f"actions=ct(commit),output:{self.micronet_trunk_port}\n")
+            flow_file.write(f"add table={OpenFlowAdapter.to_device_table},priority=400, "
+                            f"udp,ct_state=-trk,ct_zone={self.from_micronets_ct_zone}, "
+                            f"actions=ct(commit,table={OpenFlowAdapter.to_device_table},"
+                                       f"zone={self.to_micronets_ct_zone})\n")
             #  TCP
-            # flow_file.write(f"add table={OpenFlowAdapter.to_device_table},priority=400, "
-            #                 f"tcp,ct_state=-trk, "
-            #                 f"actions=ct(table={OpenFlowAdapter.to_device_table})\n")
-            # flow_file.write(f"add table={OpenFlowAdapter.to_device_table},priority=400, "
-            #                 f"tcp,ct_state=+trk+new, "
-            #                 f"actions=ct(commit),output:{self.micronet_trunk_port}\n")
+            flow_file.write(f"add table={OpenFlowAdapter.to_device_table},priority=400, "
+                            f"tcp,ct_state=-trk,ct_zone={self.from_micronets_ct_zone}, "
+                            f"actions=ct(commit,table={OpenFlowAdapter.to_device_table},"
+                                       f"zone={self.to_micronets_ct_zone})\n")
 
             # OUTPUT to the micronet/device trunk port
             flow_file.write(f"add table={OpenFlowAdapter.to_device_table},priority=0, "
