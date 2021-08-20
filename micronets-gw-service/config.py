@@ -41,6 +41,13 @@ class ReferenceGatewaySettings (BaseConfigSettings):
     HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
     HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
 
+class NetreachDefaultSettings():
+    libpath = BaseConfigSettings.SERVER_LIB_DIR
+    NETREACH_ADAPTER_ENABLED = True
+    NETREACH_ADAPTER_SERIAL_NUM_FILE = libpath.joinpath('netreach-serialnum.txt')
+    NETREACH_ADAPTER_PUBLIC_KEY_FILE = libpath.joinpath('netreach-pubkey.pem')
+    NETREACH_ADAPTER_PRIVATE_KEY_FILE = libpath.joinpath('netreach-privkey.pem')
+
 #
 # Configure settings for local/development testing
 #
@@ -108,7 +115,6 @@ class WiredGatewayDebugConfig (WiredGatewayConfig):
 class WiredGatewayConfigWithWebsocketLookup (WiredGatewayConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
 
-
 #
 # Wireless Configs
 #
@@ -135,6 +141,16 @@ class WirelessGatewayDebugConfigNoLogfile (WirelessGatewayDebugConfig):
 
 class WirelessGatewayDebugConfigWithWebsocket (WirelessGatewayDebugConfig, WirelessGatewayConfigWithWebsocket):
     pass
+
+class NetreachDevelopmentConfig (WirelessGatewayConfig, NetreachDefaultSettings):
+    DEBUG = True
+    LOGGING_LEVEL = logging.DEBUG
+    LOGFILE_MODE = 'w'  # clears the log at startup
+
+class NetreachDevelopmentConfig (LocalDevelopmentConfig, NetreachDefaultSettings):
+    DEBUG = True
+    LOGGING_LEVEL = logging.DEBUG
+    LOGFILE_MODE = 'w'  # clears the log at startup
 
 #
 # The default configuration (default for the /lib/systemd/system/micronets-gw.service file)

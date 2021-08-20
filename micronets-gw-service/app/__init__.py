@@ -110,6 +110,12 @@ elif adapter == "DNSMASQ":
 else:
     exit (f"Unrecognized DHCP_ADAPTER type ({adapter})")
 
+netreach_adapter = None
+netreach_adapter_enabled = app.config.get('NETREACH_ADAPTER_ENABLED')
+if netreach_adapter_enabled:
+    from .netreach_adapter import NetreachAdapter
+    netreach_adapter = NetreachAdapter(app.config)
+
 from .ws_connector import WSConnector
 
 ws_connector = None

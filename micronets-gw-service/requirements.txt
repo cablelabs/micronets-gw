@@ -5,7 +5,7 @@
 #
 #  python3 -m venv ./venv
 #  source venv/bin/activate
-#  pip install -r requirements.txt
+#  pip3 install -r requirements.txt
 #
 
 aiohttp==3.6.2
@@ -20,7 +20,6 @@ cryptography==3.4.7
   cffi==1.14.6
     pycparser==2.20
 ecdsa==0.13.3
-getkey==0.6.5
 httpx==0.18.2
   certifi==2021.5.30
   httpcore==0.13.6
