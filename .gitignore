@@ -54,3 +54,8 @@ dkms.conf
 *.deb
 *.swp
 
+# Log files
+*.log*
+
+# IDE files
+.idea/*
