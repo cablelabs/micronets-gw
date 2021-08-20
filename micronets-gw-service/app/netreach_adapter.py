@@ -18,6 +18,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.pub_key_file = config['NETREACH_ADAPTER_PUBLIC_KEY_FILE']
         self.priv_key_file = config['NETREACH_ADAPTER_PRIVATE_KEY_FILE']
         self.base_url = config['NETREACH_ADAPTER_CONTROLLER_BASE_URL']
+        self.api_token_file = config['NETREACH_ADAPTER_API_KEY_FILE']
         self.token_request_time = 500
         self.api_token = None
         with open(self.serial_number_file, 'rt') as f:
@@ -53,6 +54,9 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             raise ValueError(res_json)
         logger.info(f"AP SUCCESSFULLY logged into NetReach Controller ({result})")
         self.api_token = result.json()['token']
+        with open(self.api_token_file, 'wt') as f:
+            self.priv_key = f.write(self.api_token)
+        logger.info(f"Saved NetReach Controller API token to {self.api_token_file}")
 
     async def handle_hostapd_ready(self):
         logger.info(f"NetreachAdapter.handle_hostapd_ready()")

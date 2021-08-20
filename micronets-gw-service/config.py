@@ -48,6 +48,7 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_PUBLIC_KEY_FILE = libpath.joinpath('netreach-pubkey.pem')
     NETREACH_ADAPTER_PRIVATE_KEY_FILE = libpath.joinpath('netreach-privkey.pem')
     NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://staging.api.controller.netreach.in"
+    NETREACH_ADAPTER_API_KEY_FILE = libpath.joinpath('netreach-api-token.txt')
 
 #
 # Configure settings for local/development testing
