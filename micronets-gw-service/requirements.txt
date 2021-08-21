@@ -8,66 +8,54 @@
 #  pip3 install -r requirements.txt
 #
 
-aiohttp==3.6.2
-  async-timeout==3.0.1
-  attrs==19.2.0
-  chardet==3.0.4
-  multidict==4.5.2
-  yarl==1.3.0
-    idna==3.2
-    multidict==4.5.2
+aiohttp==3.7.4.post0
+  - async-timeout [required: >=3.0,<4.0, installed: 3.0.1]
+  - attrs [required: >=17.3.0, installed: 21.2.0]
+  - chardet [required: >=2.0,<5.0, installed: 4.0.0]
+  - multidict [required: >=4.5,<7.0, installed: 5.1.0]
+  - typing-extensions [required: >=3.6.5, installed: 3.10.0.0]
+  - yarl [required: >=1.0,<2.0, installed: 1.6.3]
+    - idna [required: >=2.0, installed: 3.2]
+    - multidict [required: >=4.0, installed: 5.1.0]
 cryptography==3.4.7
-  cffi==1.14.6
-    pycparser==2.20
-ecdsa==0.13.3
-httpx==0.18.2
-  certifi==2021.5.30
-  httpcore==0.13.6
-    anyio==3.3.0
-      idna==3.2
-      sniffio==1.2.0
-      typing-extensions==3.7.2
-    h11==0.12.0
-    sniffio==1.2.0
-  rfc3986==1.5.0
-  sniffio==1.2.0
-idna-ssl==1.1.0
-  idna==3.2
-netaddr==0.7.19
-netifaces==0.10.9
-paho-mqtt==1.5.1
-pathlib==1.0.1
-pipdeptree==0.13.2
-  pip==19.0.3
-pkg-resources==0.0.0
-pycryptodome==3.10.1
-python-socketio==4.3.1
-  python-engineio==3.9.3
-    six==1.16.0
-  six==1.16.0
-Quart==0.6.6
-  aiofiles==0.4.0
-  blinker==1.4
-  Click==7.0
-  Hypercorn==0.5.4
-    h11==0.12.0
-    h2==3.1.0
-      hpack==3.0.0
-      hyperframe==5.2.0
-    pytoml==0.1.20
-    typing-extensions==3.7.2
-    wsproto==0.14.0
-      h11==0.12.0
-  itsdangerous==1.1.0
-  Jinja2==2.10.1
-    MarkupSafe==1.1.1
-  multidict==4.5.2
-  sortedcontainers==2.1.0
-requests==2.26.0
-  certifi==2021.5.30
-  charset-normalizer==2.0.3
-  idna==3.2
-  urllib3==1.26.6
-setuptools==40.6.3
-websockets==5.0.1
-wheel==0.32.3
+  - cffi [required: >=1.12, installed: 1.14.6]
+    - pycparser [required: Any, installed: 2.20]
+ecdsa==0.17.0
+  - six [required: >=1.9.0, installed: 1.16.0]
+httpx==0.19.0
+  - certifi [required: Any, installed: 2021.5.30]
+  - charset-normalizer [required: Any, installed: 2.0.4]
+  - httpcore [required: >=0.13.3,<0.14.0, installed: 0.13.6]
+    - anyio [required: ==3.*, installed: 3.3.0]
+      - idna [required: >=2.8, installed: 3.2]
+      - sniffio [required: >=1.1, installed: 1.2.0]
+    - h11 [required: >=0.11,<0.13, installed: 0.12.0]
+    - sniffio [required: ==1.*, installed: 1.2.0]
+  - rfc3986 [required: >=1.3,<2, installed: 1.5.0]
+  - sniffio [required: Any, installed: 1.2.0]
+netaddr==0.8.0
+netifaces==0.11.0
+pip-autoremove==0.9.1
+pipdeptree==2.1.0
+  - pip [required: >=6.0.0, installed: 21.2.4]
+Quart==0.15.1
+  - aiofiles [required: Any, installed: 0.7.0]
+  - blinker [required: Any, installed: 1.4]
+  - click [required: Any, installed: 8.0.1]
+  - hypercorn [required: >=0.11.2, installed: 0.11.2]
+    - h11 [required: Any, installed: 0.12.0]
+    - h2 [required: >=3.1.0, installed: 4.0.0]
+      - hpack [required: >=4.0,<5, installed: 4.0.0]
+      - hyperframe [required: >=6.0,<7, installed: 6.0.1]
+    - priority [required: Any, installed: 2.0.0]
+    - toml [required: Any, installed: 0.10.2]
+    - wsproto [required: >=0.14.0, installed: 1.0.0]
+      - h11 [required: >=0.9.0,<1, installed: 0.12.0]
+  - itsdangerous [required: Any, installed: 2.0.1]
+  - jinja2 [required: Any, installed: 3.0.1]
+    - MarkupSafe [required: >=2.0, installed: 2.0.1]
+  - toml [required: Any, installed: 0.10.2]
+  - werkzeug [required: >=2.0.0, installed: 2.0.1]
+setuptools==54.2.0
+websockets==9.1
+wheel==0.36.2
