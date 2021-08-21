@@ -49,6 +49,8 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_PRIVATE_KEY_FILE = libpath.joinpath('netreach-privkey.pem')
     NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://staging.api.controller.netreach.in"
     NETREACH_ADAPTER_API_KEY_FILE = libpath.joinpath('netreach-api-token.txt')
+    NETREACH_ADAPTER_API_KEY_REFRESH_DAYS = 500
+    # NETREACH_ADAPTER_MQTT_BROKER_URL = "mqtts://staging.broker.controller.netreach.in:8885" # for overriding
 
 #
 # Configure settings for local/development testing
@@ -143,11 +145,6 @@ class WirelessGatewayDebugConfigNoLogfile (WirelessGatewayDebugConfig):
 
 class WirelessGatewayDebugConfigWithWebsocket (WirelessGatewayDebugConfig, WirelessGatewayConfigWithWebsocket):
     pass
-
-class NetreachDevelopmentConfig (WirelessGatewayConfig, NetreachDefaultSettings):
-    DEBUG = True
-    LOGGING_LEVEL = logging.DEBUG
-    LOGFILE_MODE = 'w'  # clears the log at startup
 
 class NetreachDevelopmentConfig (LocalDevelopmentConfig, NetreachDefaultSettings):
     DEBUG = True

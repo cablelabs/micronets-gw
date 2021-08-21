@@ -57,6 +57,9 @@ else:
 
 logger.info (f"Running with config {config}")
 
+if logging_level <= logging.INFO:
+    logging.getLogger('asyncio').setLevel(logging.WARNING)  # Remove asyncio debug messages, but leave warnings.
+
 def get_logger():
     return logger
 
