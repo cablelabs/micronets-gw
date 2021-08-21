@@ -59,3 +59,8 @@ dkms.conf
 
 # IDE files
 .idea/*
+
+# Crypto files
+*.pem
+
+
