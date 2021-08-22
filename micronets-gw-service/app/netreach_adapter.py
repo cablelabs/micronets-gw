@@ -1,6 +1,6 @@
-import re, logging, base64, json, httpx, ssl
+import logging, base64, json, httpx, ssl
 
-from pathlib import Path
+from ipaddress import IPv4Network, IPv4Address, AddressValueError, NetmaskValueError
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes, serialization
 import paho.mqtt.client as mqtt
@@ -18,6 +18,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.serial_number_file = config['NETREACH_ADAPTER_SERIAL_NUM_FILE']
         self.pub_key_file = config['NETREACH_ADAPTER_PUBLIC_KEY_FILE']
         self.priv_key_file = config['NETREACH_ADAPTER_PRIVATE_KEY_FILE']
+        self.wifi_interface = config['NETREACH_ADAPTER_WIFI_INTERFACE'] # TODO: Think...
         self.base_url = config['NETREACH_ADAPTER_CONTROLLER_BASE_URL']
         self.api_token_file = config['NETREACH_ADAPTER_API_KEY_FILE']
         self.token_request_time = config['NETREACH_ADAPTER_API_KEY_REFRESH_DAYS']
@@ -32,7 +33,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.api_token_expiration = None
         self.ap_name = None
         self.ap_enabled = None
-        self.micronets_api_prefix = f"http//{config['LISTEN_HOST']}:{config['LISTEN_PORT']}"
+        self.micronets_api_prefix = f"http//{config['LISTEN_HOST']}:{config['LISTEN_PORT']}/gateway"
         with open(self.serial_number_file, 'rt') as f:
             self.serial_number = f.read().strip()
         with open(self.pub_key_file, 'rb') as f:
@@ -138,23 +139,65 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"NetreachAdapter: _setup_micronets_for_ap(apGroup={self.ap_group_uuid}/{self.ap_group_name})")
         result = httpx.get(f"{self.base_url}/v1/services/?apGroupUuid={self.ap_group_uuid}",
                            headers={"x-api-token": self.api_token})
+        # Clear out all the micronets
+        # result = httpx.delete(f"{self.micronets_api_prefix}/v1/gateway/micronets",
+        #                       headers={"x-api-token": self.api_token})
         service_list = result.json()['results']
         for service in service_list:
             service_uuid = service['uuid']
+            service_name = service['name']
             micronet_id = service['micronetId']
-            micronet_subnet = service['micronetSubnet']
+            micronet_subnet = IPv4Network(service['micronetSubnet']+"/24", strict=True)
             micronet_vlan = service['vlan']
-            logger.info(f"NetreachAdapter: _setup_micronets_for_ap: Found service {service_uuid} ({service['name']})")
-            logger.info(f"NetreachAdapter: _setup_micronets_for_ap: micronet id {micronet_id} subnet {micronet_subnet} vlan {micronet_vlan}")
+            # TODO: Replace this with gateway reference from Service object
+            micronet_gateway = str(next(micronet_subnet.hosts()))
+            logger.info(f"NetreachAdapter: _setup_micronets_for_ap: Found service {service_uuid} ({service_name})")
+            logger.info(f"NetreachAdapter: _setup_micronets_for_ap: micronet id {micronet_id} vlan {micronet_vlan}")
+            if not (micronet_subnet and micronet_vlan):
+                logger.info(f"NetreachAdapter: _setup_micronets_for_ap: netreach Service {service_name} ({service_uuid}) does not have a micronet ID/vlan - SKIPPING")
+                pass
+            micronet_subnet_addr = micronet_subnet.network_address
+            micronet_subnet_netmask = micronet_subnet.netmask
+            logger.info(f"NetreachAdapter: _setup_micronets_for_ap: micronet subnet {micronet_subnet} ({micronet_subnet_addr}/{micronet_subnet_netmask})")
+            logger.info(f"NetreachAdapter: _setup_micronets_for_ap: micronet gateway {micronet_gateway}")
+
+            micronet_to_add = {
+                "micronet": {
+                    "micronetId": micronet_id,
+                    "ipv4Network": {"network": str(micronet_subnet_addr), "mask": str(micronet_subnet_netmask),
+                                    "gateway": micronet_gateway},
+                    "interface": self.wifi_interface,
+                    "vlan": micronet_vlan,
+                    "nameservers": [micronet_gateway]
+                }
+            }
+            logger.info(f"NetreachAdapter: _setup_micronets_for_ap: Adding micronet: {json.dumps(micronet_to_add, indent=4)}")
+
             result = httpx.get(f"{self.base_url}/v1/services/{service_uuid}/devices",
-                               headers={"x-api-token": self.api_token})
-            device_list = result.json()['results']
-            for device in device_list:
+                                   headers={"x-api-token": self.api_token})
+            nr_device_list = result.json()['results']
+            micronet_devices = []
+            for device in nr_device_list:
                 logger.info(f"NetreachAdapter: _setup_micronets_for_ap:   Found device {device['uuid']} ({device['name']})")
                 device_name = device['name']
                 device_mac = device['macAddress']
                 device_ip = device['ipAddress']
+                device_psks = device['psks']
                 logger.info(f"NetreachAdapter: _setup_micronets_for_ap:   device name {device_name} mac {device_mac} ip {device_ip}")
+                # if not device_mac:
+                #     continue
+                # if not device_psks:
+                #     logger.info(f"NetreachAdapter: _setup_micronets_for_ap:   Device {device['name']} does not have a PSK ({device['uuid']})")
+                device_to_add = {
+                        "deviceId": device_name,
+                        "macAddress": {"eui48": device_mac},
+                        "networkAddress": {"ipv4": device_ip},
+                        "psk": device_psks[0]
+                }
+                micronet_devices.append(device_to_add)
+            micronet_device_list = {"devices": micronet_devices}
+            logger.info(f"NetreachAdapter: _setup_micronets_for_ap: Micronet devices for service {service_name}: \n"
+                        f"{json.dumps(micronet_device_list, indent=4)}")
 
     def _on_mqtt_connect(self, client, userdata, flags, rc):
         # handles the connecting event of the mqtt broker
