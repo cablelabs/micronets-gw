@@ -5,6 +5,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes, serialization
 import paho.mqtt.client as mqtt
 from urllib import parse as urllib_dot_parse
+from uuid import UUID
 
 from .hostapd_adapter import HostapdAdapter
 
@@ -25,6 +26,9 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.api_token = None
         self.api_token_refresh = None
         self.ap_uuid = None
+        self.ap_name = None
+        self.ap_group_uuid = None
+        self.ap_group_name = None
         self.api_token_expiration = None
         self.ap_name = None
         self.ap_enabled = None
@@ -40,14 +44,23 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"NetreachAdapter: public key: \n{self.pub_key}")
         logger.info(f"NetreachAdapter: private key: \n{self.priv_key}")
         logger.info(f"NetreachAdapter: using micronets API prefix: \n{self.micronets_api_prefix}")
+        self.mqtt_client = None
+        self.mqtt_connection_state = "DISCONNECTED"
         self._login_to_controller()
         self._get_ap_info()
+        self._setup_micronets_for_ap()
         self._register_controller_listener()
 
         # Retrieve info on myself
         result = httpx.get(f"{self.base_url}/v1/access-points/{self.ap_uuid}",
                            headers={"x-api-token": self.api_token})
 
+    async def handle_hostapd_ready(self):
+        logger.info(f"NetreachAdapter.handle_hostapd_ready()")
+
+    async def update (self, micronet_list, device_lists):
+        logger.info (f"NetreachAdapter.update ()")
+        logger.info (f"NetreachAdapter.update: device_lists: {device_lists}")
 
     def _login_to_controller(self):
         logger.info(f"NetreachAdapter: Logging into controller at {self.base_url}")
@@ -82,6 +95,33 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             self.priv_key = f.write(self.api_token)
         logger.info(f"Saved NetReach Controller API token to {self.api_token_file}")
 
+    def _register_controller_listener(self):
+        logger.debug(f"NetreachAdapter: register_controller_listener()")
+        logger.info(f"NetreachAdapter: Connecting with MQTT broker at {self.mqtt_broker_url}")
+
+        # Instantiate mqtt broker.  This is a sync implementation.  Async implementations are available
+        mqtt_client = mqtt.Client(self.ap_uuid)
+        mqtt_client.username_pw_set(self.ap_uuid, self.api_token)
+
+        mqtt_client.on_connect = self._on_mqtt_connect
+        mqtt_client.on_message = self._on_mqtt_message
+        mqtt_client.on_disconnect = self._on_mqtt_disconnect
+        mqtt_client.on_log = self._on_mqtt_log
+
+        url_parts = urllib_dot_parse.urlparse(self.mqtt_broker_url)
+        if url_parts.scheme == "mqtt" or url_parts.scheme == "mqtts":
+            if url_parts.scheme == "mqtts":
+                mqtt_client.tls_set(ca_certs=self.mqtt_ca_certs)
+                # mqtt_client.tls_insecure_set(True)
+            mqtt_client.connect(url_parts.hostname, url_parts.port, keepalive=60)
+            self.mqtt_connection_state = "CONNECTING"
+            logger.info(f"NetreachAdapter: Connected to MQTT broker at {url_parts.hostname}:{url_parts.port}")
+        else:
+            raise Exception(f"Unrecognized mqtt url scheme {self.mqtt_broker_url}")
+
+        self.mqtt_client = mqtt_client
+        self.mqtt_client.loop_start()
+
     def _get_ap_info(self):
         # Retrieve info on myself
         result = httpx.get(f"{self.base_url}/v1/access-points/{self.ap_uuid}",
@@ -90,92 +130,88 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"AP Info: {json.dumps(ap_info, indent=4)}")
         self.ap_name = ap_info['name']
         self.ap_enabled = ap_info['enabled']
+        # TODO: Replace these with a call to get the ap_group for an AP guid
+        self.ap_group_uuid = '9e8d3420-49bd-44f0-a86b-38a0a44de010'
+        self.ap_group_name = "PLACEHOLDER"
 
-    def on_connect(self, client, userdata, flags, rc):
+    def _setup_micronets_for_ap(self):
+        logger.info(f"NetreachAdapter: _setup_micronets_for_ap(apGroup={self.ap_group_uuid}/{self.ap_group_name})")
+        result = httpx.get(f"{self.base_url}/v1/services/?apGroupUuid={self.ap_group_uuid}",
+                           headers={"x-api-token": self.api_token})
+        service_list = result.json()['results']
+        for service in service_list:
+            service_uuid = service['uuid']
+            micronet_id = service['micronetId']
+            micronet_subnet = service['micronetSubnet']
+            micronet_vlan = service['vlan']
+            logger.info(f"NetreachAdapter: _setup_micronets_for_ap: Found service {service_uuid} ({service['name']})")
+            logger.info(f"NetreachAdapter: _setup_micronets_for_ap: micronet id {micronet_id} subnet {micronet_subnet} vlan {micronet_vlan}")
+            result = httpx.get(f"{self.base_url}/v1/services/{service_uuid}/devices",
+                               headers={"x-api-token": self.api_token})
+            device_list = result.json()['results']
+            for device in device_list:
+                logger.info(f"NetreachAdapter: _setup_micronets_for_ap:   Found device {device['uuid']} ({device['name']})")
+                device_name = device['name']
+                device_mac = device['macAddress']
+                device_ip = device['ipAddress']
+                logger.info(f"NetreachAdapter: _setup_micronets_for_ap:   device name {device_name} mac {device_mac} ip {device_ip}")
+
+    def _on_mqtt_connect(self, client, userdata, flags, rc):
         # handles the connecting event of the mqtt broker
-        logger.info(f"NetreachAdapter: on_connect(client:{client},userdata:{userdata},flags:{flags},rc:{rc})")
+        logger.info(f"NetreachAdapter: _on_mqtt_connect(client:{client},userdata:{userdata},flags:{flags},rc:{rc})")
+        # subscribe to the event topic
+        ap_topic = f'access-points/{self.ap_uuid}/events'
+        client.subscribe(f'access-points/{self.ap_uuid}/events', qos=1)
+        client.subscribe(f'access-points/{self.ap_uuid}/data', qos=1)
+        self.mqtt_connection_state = "CONNECTED"
 
-    def on_disconnect(self, client, userdata, rc):
+    def _on_mqtt_disconnect(self, client, userdata, rc):
         # Notifies the controller of broker disconnection
         logger.info(f"NetreachAdapter: on_disconnect(client:{client},userdata:{userdata},rc:{rc})")
+        self.mqtt_connection_state = "DISCONNECTED"
 
-    def on_message(self, client, userdata, message):
+    def _on_mqtt_message(self, client, userdata, message):
         # handles all incoming mqtt messages
-        logger.info(f"NetreachAdapter: on_message(client:{client},userdata:{userdata},message:{message})")
+        logger.info(f"NetreachAdapter: _on_mqtt_message(client:{client},userdata:{userdata},message:{message})")
 
-    def _register_controller_listener(self):
-        logger.debug(f"NetreachAdapter: register_controller_listener()")
-        logger.info(f"NetreachAdapter: Connecting with MQTT broker at {self.mqtt_broker_url}")
+    def _on_mqtt_log(self, client, userdata, message):
+        # handles all incoming mqtt messages
+        logger.info(f"NetreachAdapter: _on_mqtt_log(client:{client},userdata:{userdata},message:{message})")
 
-        # Instantiate mqtt broker.  This is a sync implementation.  Async implementations are available
-        client = mqtt.Client(self.ap_uuid)
-        client.username_pw_set(self.ap_uuid, self.api_token)
+    def _report_event_success(self, data):
+        logger.info(f"NetreachAdapter: _report_event_success: data={data}, uuid={data['uuid']})")
 
-        client.on_connect = self.on_connect
-        client.on_message = self.on_message
+    def _report_event_failure(self, data, payload):
+        logger.info(f"NetreachAdapter: _report_event_failure: data={data}, uuid={data['uuid']}, payload={payload})")
 
-        # client.tls_set(ca_certs=None, certfile=None, keyfile=None, cert_reqs=ssl.CERT_REQUIRED,
-        #     tls_version=ssl.PROTOCOL_TLS, ciphers=None)
-        url_parts = urllib_dot_parse.urlparse(self.mqtt_broker_url)
-        if url_parts.scheme == "mqtt" or url_parts.scheme == "mqtts":
-            if url_parts.scheme == "mqtts":
-                client.tls_set(ca_certs=self.mqtt_ca_certs)
-                # client.tls_insecure_set(True)
-            client.connect(url_parts.hostname, url_parts.port, keepalive=60)
-            logger.info(f"NetreachAdapter: Connected to MQTT broker at {url_parts.hostname}:{url_parts.port}")
-        else:
-            raise Exception(f"Unrecognized mqtt url scheme {self.mqtt_broker_url}")
+    def _parse_mqtt_topic(self, topic):
+        out = {}
+        topic_split = topic.split("/")
 
-        client.loop_start()
+        for idx, part in enumerate(topic_split):
+            # handle uuid case
 
+            if self._validate_uuid(part):
+                out[topic_split[idx-1]] = part
 
-    async def handle_hostapd_ready(self):
-        logger.info(f"NetreachAdapter.handle_hostapd_ready()")
+            # handle event special case
+            if part == "events" and idx+1 < len(topic_split):
+                out[part] = topic_split[idx+1]
 
-    async def update (self, micronet_list, device_lists):
-        logger.info (f"NetreachAdapter.update ()")
-        logger.info (f"NetreachAdapter.update: device_lists: {device_lists}")
+            # handle last topic part
+            if idx == len(topic_split)-1:
+                out[part] = None
 
-    # def on_connect(client, userdata, flags, rc):
-    #     # handles the connecting event of the mqtt broker
-    #     print("MQTT Connected")
-    #
-    #     # subscribe to the event topic
-    #     ap_topic = f'access-points/{ap["uuid"]}/events'
-    #     client.subscribe(ap_topic, qos=1)
-    #     access_point.subscriptions[ap_topic] = None
-    #
-    #     # subscribe to the data topic
-    #     ap_topic = f'access-points/{ap["uuid"]}/data'
-    #     client.subscribe(ap_topic, qos=1)
-    #     access_point.subscriptions[ap_topic] = None
-    #
-    #     send_status('CONNECTED')
-    #
-    #
-    # def on_disconnect(client, userdata, rc):
-    #     # Notifies the controller of broker disconnection
-    #     print("Broker disconnected with code " + str(rc))
-    #     send_status("DISCONNECTED")
-    #
-    #
-    # def on_message(client, userdata, message):
-    #     # handles all incoming mqtt messages
-    #
-    #     try:
-    #         msg = json.loads(message.payload.decode("utf-8"))
-    #
-    #         if not type(msg) is dict:
-    #             print(f"Got message that was not JSON: `{msg}`")
-    #             return
-    #
-    #         # parse out topic uuids
-    #         topic_parts = parse_mqtt_topic(message.topic)
-    #
-    #         if "events" in topic_parts:
-    #             handle_event_topic(client, userdata, msg)
-    #
-    #     except Exception as e:
-    #         print(message.topic)
-    #         print(e)
-    #         raise e
+        return out
+
+    def _send_status(self, status):
+        pass
+        # http.patch(f'/access-points/{access_point.get_attribute("uuid")}', data={
+        #     "status": status
+        # })
+
+    def _validate_uuid(self, uuid):
+        try:
+            return int(UUID(uuid).version) > 0
+        except ValueError:
+            return False
