@@ -1,4 +1,4 @@
-import logging, base64, json, httpx, ssl
+import logging, base64, json, httpx, ssl, asyncio
 
 from ipaddress import IPv4Network, IPv4Address, AddressValueError, NetmaskValueError
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -24,6 +24,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.token_request_time = config['NETREACH_ADAPTER_API_KEY_REFRESH_DAYS']
         self.mqtt_broker_url = config.get('NETREACH_ADAPTER_MQTT_BROKER_URL') # Optional
         self.mqtt_ca_certs = config.get('NETREACH_ADAPTER_MQTT_CA_CERTS')
+        self.connection_startup_delay_s = config.get('NETREACH_ADAPTER_CONN_START_DELAY_S')
         self.api_token = None
         self.api_token_refresh = None
         self.ap_uuid = None
@@ -33,7 +34,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.api_token_expiration = None
         self.ap_name = None
         self.ap_enabled = None
-        self.micronets_api_prefix = f"http//{config['LISTEN_HOST']}:{config['LISTEN_PORT']}/gateway"
+        self.micronets_api_prefix = f"http://{config['LISTEN_HOST']}:{config['LISTEN_PORT']}/gateway"
         with open(self.serial_number_file, 'rt') as f:
             self.serial_number = f.read().strip()
         with open(self.pub_key_file, 'rb') as f:
@@ -47,14 +48,6 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"NetreachAdapter: using micronets API prefix: \n{self.micronets_api_prefix}")
         self.mqtt_client = None
         self.mqtt_connection_state = "DISCONNECTED"
-        self._login_to_controller()
-        self._get_ap_info()
-        self._setup_micronets_for_ap()
-        self._register_controller_listener()
-
-        # Retrieve info on myself
-        result = httpx.get(f"{self.base_url}/v1/access-points/{self.ap_uuid}",
-                           headers={"x-api-token": self.api_token})
 
     async def handle_hostapd_ready(self):
         logger.info(f"NetreachAdapter.handle_hostapd_ready()")
@@ -62,6 +55,16 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     async def update (self, micronet_list, device_lists):
         logger.info (f"NetreachAdapter.update ()")
         logger.info (f"NetreachAdapter.update: device_lists: {device_lists}")
+
+    async def connect(self):
+        logger.info(f"NetreachAdapter:connect()")
+        if self.connection_startup_delay_s:
+            await asyncio.sleep(self.connection_startup_delay_s)
+
+        self._login_to_controller()
+        self._get_ap_info()
+        self._setup_micronets_for_ap()
+        self._register_controller_listener()
 
     def _login_to_controller(self):
         logger.info(f"NetreachAdapter: Logging into controller at {self.base_url}")
