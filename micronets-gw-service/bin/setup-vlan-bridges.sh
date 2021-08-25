@@ -87,14 +87,29 @@ ovs-ofctl add-flow brhapd "table=0, priority=200, in_port=1, actions=output:hapo
 
 # Add Micronet-ready subnet defintions
 #  TODO: Make the Micronets agent perform these steps dynamically
-ip a add 10.135.1.1/24 dev brmn001
-route add -net 10.135.1.0/24 gw 10.135.1.1 dev brmn001
+ip a add 10.0.5.1/24 dev brmn001
+route add -net 10.0.5.0/24 gw 10.0.5.1 dev brmn001
 
-ip a add 10.135.2.1/24 dev brmn001
-route add -net 10.135.2.0/24 gw 10.135.2.1 dev brmn001
+ip a add 10.0.6.1/24 dev brmn001
+route add -net 10.0.6.0/24 gw 10.0.6.1 dev brmn001
 
-ip a add 10.135.3.1/24 dev brmn001
-route add -net 10.135.3.0/24 gw 10.135.3.1 dev brmn001
+ip a add 10.0.7.1/24 dev brmn001
+route add -net 10.0.7.0/24 gw 10.0.7.1 dev brmn001
+
+ip a add 10.0.8.1/24 dev brmn001
+route add -net 10.0.8.0/24 gw 10.0.8.1 dev brmn001
+
+ip a add 10.0.9.1/24 dev brmn001
+route add -net 10.0.9.0/24 gw 10.0.9.1 dev brmn001
+
+ip a add 10.0.10.1/24 dev brmn001
+route add -net 10.0.10.0/24 gw 10.0.10.1 dev brmn001
+
+ip a add 10.0.11.1/24 dev brmn001
+route add -net 10.0.11.0/24 gw 10.0.11.1 dev brmn001
+
+ip a add 10.0.12.1/24 dev brmn001
+route add -net 10.0.12.0/24 gw 10.0.12.1 dev brmn001
 
 # Enable firewall rules
 clear_iptables

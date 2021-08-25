@@ -2,24 +2,29 @@
 
 # MODIFICATIONS TO THIS FILE WILL BE OVER-WRITTEN
 
-dhcp-script=/Users/craig/projects/micronets/micronets-gw/micronets-gw-service/bin/dnsmasq_lease_notify.py
+dhcp-script=/home/micronets/projects/micronets-gw/micronets-gw-service/bin/dnsmasq_lease_notify.py
 
-# Micronet: mockmicronet008, interface: wlp2s0, vlan: 102
-dhcp-range=set:mockmicronet008,192.168.2.0,static,255.255.255.0,2m
-dhcp-option=tag:mockmicronet008, option:router,192.168.2.1
+# Micronet: micronet-1, interface: wlan0, vlan: 101
+dhcp-range=set:micronet-1,10.135.1.0,static,255.255.255.0,2m
+dhcp-option=tag:micronet-1, option:router,10.135.1.1
 
-# Micronet: mockmicronet007, interface: wlp2s0, vlan: 101
-dhcp-range=set:mockmicronet007,192.168.1.0,static,255.255.255.0,2m
-dhcp-option=tag:mockmicronet007, option:router,192.168.1.1
-dhcp-option=tag:mockmicronet007, option:dns-server,1.2.3.4,1.2.3.5
+# Micronet: micronet-2, interface: wlan0, vlan: 102
+dhcp-range=set:micronet-2,10.135.2.0,static,255.255.255.0,2m
+dhcp-option=tag:micronet-2, option:router,10.135.2.1
 
-# DEVICES FOR MICRONET: mockmicronet007
+# DEVICES FOR MICRONET: micronet-1
 
-# Device: mydevice01
-dhcp-host=00:23:12:0f:b0:26,mydevice01,set:mydevice01,192.168.1.42,2m
+# Device: pi1
+dhcp-host=00:c0:ca:97:d9:b1,pi1,set:pi1,10.135.1.103,2m
 
-# Device: mydevice02
-dhcp-host=00:23:12:0f:b0:27,mydevice02,set:mydevice02,192.168.1.43,2m
+# Device: pi4
+dhcp-host=00:c0:ca:97:d9:ba,pi4,set:pi4,10.135.1.101,2m
 
-# DEVICES FOR MICRONET: mockmicronet008
+# Device: pi5
+dhcp-host=b8:27:eb:20:f1:df,pi5,set:pi5,10.135.1.102,2m
+
+# DEVICES FOR MICRONET: micronet-2
+
+# Device: dummy1
+dhcp-host=11:22:33:44:55:66,dummy1,set:dummy1,10.135.2.142,2m
 

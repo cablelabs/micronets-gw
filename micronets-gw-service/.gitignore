@@ -1,2 +1,6 @@
 .idea/workspace.xml
 __pycache__
+lib/*api-token.txt
+lib/*serialnum.txt
+*/force-fake-delegate.txt
+

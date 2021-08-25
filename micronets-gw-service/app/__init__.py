@@ -57,6 +57,9 @@ else:
 
 logger.info (f"Running with config {config}")
 
+if logging_level <= logging.INFO:
+    logging.getLogger('asyncio').setLevel(logging.WARNING)  # Remove asyncio debug messages, but leave warnings.
+
 def get_logger():
     return logger
 
@@ -109,6 +112,13 @@ elif adapter == "DNSMASQ":
     dhcp_adapter = DnsMasqAdapter (app.config)
 else:
     exit (f"Unrecognized DHCP_ADAPTER type ({adapter})")
+
+netreach_adapter = None
+netreach_adapter_enabled = app.config.get('NETREACH_ADAPTER_ENABLED')
+if netreach_adapter_enabled:
+    from .netreach_adapter import NetreachAdapter
+    netreach_adapter = NetreachAdapter(app.config)
+    asyncio.ensure_future(netreach_adapter.connect())
 
 from .ws_connector import WSConnector
 

@@ -54,3 +54,13 @@ dkms.conf
 *.deb
 *.swp
 
+# Log files
+*.log*
+
+# IDE files
+.idea/*
+
+# Crypto files
+*.pem
+
+

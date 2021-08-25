@@ -3,7 +3,7 @@ import os, pathlib, logging
 class BaseConfigSettings:
     SECRET_KEY = os.environ.get ('SECRET_KEY') or 'A SECRET KEY'
     LISTEN_PORT = 5000
-    SERVER_BASE_DIR = pathlib.Path (__file__).parent
+    SERVER_BASE_DIR = pathlib.Path (__file__).parent.resolve()
     SERVER_BIN_DIR = SERVER_BASE_DIR.joinpath ("bin")
     SERVER_LIB_DIR = SERVER_BASE_DIR.joinpath ("lib")
     DB_ADAPTER = "JsonDBFileAdapter"
@@ -40,6 +40,20 @@ class ReferenceGatewaySettings (BaseConfigSettings):
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {flow_file}'
     HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
     HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
+
+class NetreachDefaultSettings():
+    libpath = BaseConfigSettings.SERVER_LIB_DIR
+    NETREACH_ADAPTER_ENABLED = True
+    NETREACH_ADAPTER_SERIAL_NUM_FILE = libpath.joinpath('netreach-serialnum.txt')
+    NETREACH_ADAPTER_PUBLIC_KEY_FILE = libpath.joinpath('netreach-pubkey.pem')
+    NETREACH_ADAPTER_PRIVATE_KEY_FILE = libpath.joinpath('netreach-privkey.pem')
+    NETREACH_ADAPTER_WIFI_INTERFACE = "wlan0"
+    NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://staging.api.controller.netreach.in"
+    NETREACH_ADAPTER_API_KEY_FILE = libpath.joinpath('netreach-api-token.txt')
+    NETREACH_ADAPTER_API_KEY_REFRESH_DAYS = 500
+    # NETREACH_ADAPTER_MQTT_BROKER_URL = "mqtts://staging.broker.controller.netreach.in:8885" # for overriding
+    NETREACH_ADAPTER_MQTT_CA_CERTS = libpath.joinpath('netreach-mqtt-ca.crt')
+    NETREACH_ADAPTER_CONN_START_DELAY_S = 2
 
 #
 # Configure settings for local/development testing
@@ -108,7 +122,6 @@ class WiredGatewayDebugConfig (WiredGatewayConfig):
 class WiredGatewayConfigWithWebsocketLookup (WiredGatewayConfig):
     WEBSOCKET_CONNECTION_ENABLED = True
 
-
 #
 # Wireless Configs
 #
@@ -136,9 +149,20 @@ class WirelessGatewayDebugConfigNoLogfile (WirelessGatewayDebugConfig):
 class WirelessGatewayDebugConfigWithWebsocket (WirelessGatewayDebugConfig, WirelessGatewayConfigWithWebsocket):
     pass
 
+class NetreachDevelopmentConfig (LocalDevelopmentConfig, NetreachDefaultSettings):
+    DEBUG = True
+    LOGGING_LEVEL = logging.DEBUG
+    LOGFILE_MODE = 'w'  # clears the log at startup
+
+class NetreachDebugConfig (WirelessGatewayDebugConfig, NetreachDefaultSettings):
+    pass
+
+class NetreachDebugConfigNoLogFile (WirelessGatewayDebugConfig, NetreachDefaultSettings):
+    LOGFILE_PATH = None
+
 #
 # The default configuration (default for the /lib/systemd/system/micronets-gw.service file)
 #
-class DefaultConfig (WirelessGatewayDebugConfig):
+class DefaultConfig (NetreachDebugConfig):
     pass
 

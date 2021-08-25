@@ -1,6 +1,6 @@
 .PHONY: all clean distclean deb scp
 
-VERSION=1.1.0
+VERSION=1.1.1
 DIST=U18.04+
 FBASE=micronets-gw
 SDIRS=../filesystem
@@ -41,6 +41,7 @@ $(DEBPATH):
 	# Copy the micronets-gw-service under $(VDIR)/opt/$(FBASE) to the package construction directory.
 	(cd ../micronets-gw-service; tar cf - .) | (cd $(VDIR)/opt/$(FBASE); tar xf -);
 	rm -rf $(VDIR)/opt/$(FBASE)/.idea
+	rm -fv $(VDIR)/opt/$(FBASE)/lib/{netreach-api-token.txt,netreach-privkey.pem,netreach-pubkey.pem,netreach-serialnum.txt,micronets.json,micronets-devices.json}
 
 	# Create the build metadata files.
 	date -Iseconds > $(IDIR)/BUILDTIME

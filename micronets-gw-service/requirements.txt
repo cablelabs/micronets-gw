@@ -3,9 +3,10 @@
 #
 # Example setup using python3 venv:
 #
+#  cd ..
 #  python3 -m venv ./venv
 #  source venv/bin/activate
-#  pip install -r requirements.txt
+#  pip3 install -r micronets-gw-service/requirements.txt
 #
 
 aiohttp==3.6.2
@@ -14,18 +15,18 @@ aiohttp==3.6.2
   chardet==3.0.4
   multidict==4.5.2
   yarl==1.3.0
-    idna==3.2
+    idna==2.8
     multidict==4.5.2
 cryptography==3.4.7
   cffi==1.14.6
     pycparser==2.20
 ecdsa==0.13.3
-getkey==0.6.5
-httpx==0.18.2
+httpx==0.19.0
   certifi==2021.5.30
+  charset-normalizer==2.0.4
   httpcore==0.13.6
     anyio==3.3.0
-      idna==3.2
+      idna==2.8
       sniffio==1.2.0
       typing-extensions==3.7.2
     h11==0.12.0
@@ -33,19 +34,17 @@ httpx==0.18.2
   rfc3986==1.5.0
   sniffio==1.2.0
 idna-ssl==1.1.0
-  idna==3.2
+  idna==2.8
 netaddr==0.7.19
 netifaces==0.10.9
 paho-mqtt==1.5.1
 pathlib==1.0.1
 pipdeptree==0.13.2
   pip==19.0.3
-pkg-resources==0.0.0
-pycryptodome==3.10.1
 python-socketio==4.3.1
   python-engineio==3.9.3
-    six==1.16.0
-  six==1.16.0
+    six==1.12.0
+  six==1.12.0
 Quart==0.6.6
   aiofiles==0.4.0
   blinker==1.4
@@ -64,11 +63,6 @@ Quart==0.6.6
     MarkupSafe==1.1.1
   multidict==4.5.2
   sortedcontainers==2.1.0
-requests==2.26.0
-  certifi==2021.5.30
-  charset-normalizer==2.0.3
-  idna==3.2
-  urllib3==1.26.6
 setuptools==40.6.3
 websockets==5.0.1
 wheel==0.32.3
