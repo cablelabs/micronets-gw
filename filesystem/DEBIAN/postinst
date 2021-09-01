@@ -21,6 +21,8 @@ function install-gw-service {
   rm -rf "${MICRONETS_GW_SERVICE_DIR}/${MICRONETS_GW_VIRTENV_NAME}"
   virtualenv --clear -p $(which python3) ${MICRONETS_GW_SERVICE_DIR}/${MICRONETS_GW_VIRTENV_NAME}
   source $MICRONETS_GW_VIRTENV_NAME/bin/activate
+  echo "Installing compatible pip version"
+  pip install pip==19.0.3
   echo "Running: pip install -r requirements.txt"
   pip install -r requirements.txt
   popd > /dev/null
