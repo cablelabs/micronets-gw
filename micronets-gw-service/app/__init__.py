@@ -118,7 +118,7 @@ netreach_adapter_enabled = app.config.get('NETREACH_ADAPTER_ENABLED')
 if netreach_adapter_enabled:
     from .netreach_adapter import NetreachAdapter
     netreach_adapter = NetreachAdapter(app.config)
-    asyncio.ensure_future(netreach_adapter.connect())
+    netreach_adapter.enqueue_connect()
 
 from .ws_connector import WSConnector
 
