@@ -131,7 +131,7 @@ async def get_interfaces ():
     return await get_conf_model().get_interfaces(medium=medium_param)
 
 def check_micronet (micronet, micronet_id=None, required=True):
-    check_for_unrecognized_entries (micronet, ['micronetId','ipv4Network','nameservers','interface','vlan'])
+    check_for_unrecognized_entries (micronet, ['micronetId','ipv4Network','nameservers','interface','vlan','name'])
     body_micronet_id = check_field (micronet, 'micronetId', str, required)
     if micronet_id and body_micronet_id:
         if micronet_id != body_micronet_id:
@@ -145,6 +145,7 @@ def check_micronet (micronet, micronet_id=None, required=True):
     check_nameservers (micronet, 'nameservers', False)
     check_field (micronet, 'interface', str, required)
     check_vlan (micronet, 'vlan', False) # Optional
+    check_field (micronet, 'name', str, False)
 
 def check_micronets (micronets, required):
     for micronet in micronets:
@@ -284,7 +285,7 @@ def check_portspec (container, field_name, required):
 
 async def check_device (device, required):
     check_for_unrecognized_entries (device, ['deviceId', 'macAddress', 'networkAddress', 'psk', 'outRules', 'inRules',
-                                             'allowHosts','denyHosts'])
+                                             'allowHosts','denyHosts','name'])
     device_id = check_field (device, 'deviceId', str, required)
     if device_id:
         device_id = device_id.lower ()
@@ -312,6 +313,7 @@ async def check_device (device, required):
     await check_rules (device, 'inRules', False)
     await check_hostspecs (device, 'allowHosts', False)
     await check_hostspecs (device, 'denyHosts', False)
+    check_field (device, 'name', str, False)
 
 async def check_devices (devices, required):
     for device in devices:

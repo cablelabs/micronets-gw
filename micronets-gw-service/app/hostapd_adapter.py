@@ -66,29 +66,31 @@ class HostapdAdapter:
                 micronet = micronet_list.get(micronet_id)
                 vlan_id = micronet.get('vlan')
                 interface_id = micronet.get('interface')
+                micronet_name = micronet.get('name')
 
                 if interface_id not in bss_list:
-                    logger.info(f"HostapdAdapter.update: micronet {micronet_id} interface {interface_id} "
+                    logger.info(f"HostapdAdapter.update: micronet {micronet_id}/\"{micronet_name}\" interface {interface_id} "
                                 f"not in BSS list {bss_list} - skipping")
                     continue
 
                 if not vlan_id:
-                    logger.info(f"HostapdAdapter.update: no VLAN for micronet {micronet_id} - skipping")
+                    logger.info(f"HostapdAdapter.update: no VLAN for micronet {micronet_id}/\"{micronet_name}\" - skipping")
                     outfile.write(f"# No VLAN for device {micronet_id}\n\n")
                     continue
 
-                outfile.write (f"# DEVICES FOR MICRONET {micronet_id} (interface {interface_id}, vlan {vlan_id})\n")
+                outfile.write (f"# DEVICES FOR MICRONET {micronet_id}/\"{micronet_name}\" (interface {interface_id}, vlan {vlan_id})\n")
                 outfile.write ("###############################################################\n\n")
                 for device_id, device in devices.items ():
                     psk = device.get('psk')
+                    device_name = device.get('name')
                     mac_addr = netaddr.EUI(device ['macAddress']['eui48'])
                     mac_addr.dialect = netaddr.mac_unix_expanded
                     ip_addr = IPv4Address (device ['networkAddress']['ipv4'])
                     if not psk:
-                        logger.info(f"HostapdAdapter.update: no psk for device {device_id} in micronet {micronet_id} - skipping")
-                        outfile.write(f"# No PSK for device {device_id} ({mac_addr})\n\n")
+                        logger.info(f"HostapdAdapter.update: no psk for device {device_id}/\"{device_name}\" in micronet {micronet_id} - skipping")
+                        outfile.write(f"# No PSK for device {device_id}/\"{device_name}\" ({mac_addr})\n\n")
                         continue
-                    outfile.write(f"# DEVICE {device_id} ({ip_addr})\n")
+                    outfile.write(f"# DEVICE {device_id}/\"{device_name}\" ({ip_addr})\n")
 
                     if vlan_id:
                         # vlanid=202 00:c0:ca:97:6d:16 00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF

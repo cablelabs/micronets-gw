@@ -4,27 +4,17 @@
 
 dhcp-script=/home/micronets/projects/micronets-gw/micronets-gw-service/bin/dnsmasq_lease_notify.py
 
-# Micronet: micronet-1, interface: wlan0, vlan: 101
-dhcp-range=set:micronet-1,10.135.1.0,static,255.255.255.0,2m
-dhcp-option=tag:micronet-1, option:router,10.135.1.1
+# Micronet: craig_user1_6b492459, interface: wlan0, vlan: 5
+dhcp-range=set:craig_user1_6b492459,10.0.5.0,static,255.255.255.0,2m
+dhcp-option=tag:craig_user1_6b492459, option:router,10.0.5.1
+dhcp-option=tag:craig_user1_6b492459, option:dns-server,10.0.5.1
 
-# Micronet: micronet-2, interface: wlan0, vlan: 102
-dhcp-range=set:micronet-2,10.135.2.0,static,255.255.255.0,2m
-dhcp-option=tag:micronet-2, option:router,10.135.2.1
+# Micronet: darshak_user1_22d0e189, interface: wlan0, vlan: 6
+dhcp-range=set:darshak_user1_22d0e189,10.0.6.0,static,255.255.255.0,2m
+dhcp-option=tag:darshak_user1_22d0e189, option:router,10.0.6.1
+dhcp-option=tag:darshak_user1_22d0e189, option:dns-server,10.0.6.1
 
-# DEVICES FOR MICRONET: micronet-1
+# DEVICES FOR MICRONET: craig_user1_6b492459
 
-# Device: pi1
-dhcp-host=00:c0:ca:97:d9:b1,pi1,set:pi1,10.135.1.103,2m
-
-# Device: pi4
-dhcp-host=00:c0:ca:97:d9:ba,pi4,set:pi4,10.135.1.101,2m
-
-# Device: pi5
-dhcp-host=b8:27:eb:20:f1:df,pi5,set:pi5,10.135.1.102,2m
-
-# DEVICES FOR MICRONET: micronet-2
-
-# Device: dummy1
-dhcp-host=11:22:33:44:55:66,dummy1,set:dummy1,10.135.2.142,2m
+# DEVICES FOR MICRONET: darshak_user1_22d0e189
 

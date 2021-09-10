@@ -104,13 +104,15 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
             for micronet_id, micronet in micronet_list.items():
                 micronet_gateway = micronet['ipv4Network']['gateway']
                 micronet_vlan = micronet.get('vlan', None)
+                micronet_name = micronet.get('name')
                 if not micronet_vlan:
                     raise Exception(f"Cannot find vlan for micronet {micronet_id}")
                 # Walk the devices in the micronet and create rules
                 for device_id, device in device_lists [micronet_id].items():
                     device_mac = device['macAddress']['eui48']
                     device_id = device['deviceId']
-                    flow_file.write(f"# MICRONET {micronet_id} DEVICE {device_id}\n")
+                    device_name = device.get('name')
+                    flow_file.write(f"# MICRONET {micronet_id}/\"{micronet_name}\" DEVICE {device_id}/\"{device_name}\"\n")
                     flow_file.write(f"add table={OpenFlowAdapter.from_micronets_ingress},priority=850, "
                                     f"dl_vlan={micronet_vlan},dl_src={device_mac}, "
                                     f"ip,ip_dst={micronet_gateway}, "
@@ -168,6 +170,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
             vlan_list = []
             for micronet_id, micronet in micronet_list.items():
                 micronet_vlan = micronet.get('vlan', None)
+                micronet_name = micronet.get('name')
                 vlan_list.append(micronet_vlan)
                 if not micronet_vlan:
                     raise Exception(f"Cannot find vlan for micronet {micronet_id}")
@@ -175,8 +178,9 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 for device_id, device in device_lists [micronet_id].items():
                     device_mac = device['macAddress']['eui48']
                     device_id = device['deviceId']
+                    device_name = device.get('name')
 
-                    flow_file.write(f"# LOCALHOST INGRESS FOR DEVICE {device_id} (micronet {micronet_id}\n")
+                    flow_file.write(f"# LOCALHOST INGRESS FOR DEVICE {device_id}/\"{device_name}\" (micronet {micronet_id}/\"{micronet_name}\")\n")
                     flow_file.write(f"add table={OpenFlowAdapter.from_localhost_ingress},priority=200, "
                                     f"dl_dst={device_mac}, "
                                     f"actions=mod_vlan_vid:{micronet_vlan},"
@@ -222,14 +226,16 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
             for micronet_id, micronet in micronet_list.items():
                 micronet_vlan = micronet.get('vlan', None)
+                micronet_name = micronet.get('name')
                 if not micronet_vlan:
                     raise Exception(f"Cannot find vlan for micronet {micronet_id}")
                 # Walk the devices in the micronet and create rules
                 for device_id, device in device_lists[micronet_id].items():
                     device_mac = device['macAddress']['eui48']
                     device_id = device['deviceId']
+                    device_name = device.get('name')
 
-                    flow_file.write(f"# TO-DEVICE EGRESS RULES FOR DEVICE {device_id} (micronet {micronet_id}\n")
+                    flow_file.write(f"# TO-DEVICE EGRESS RULES FOR DEVICE {device_id}/\"{device_name}\" (micronet {micronet_id}/\"{micronet_name}\")\n")
                     await self.create_in_rules_for_device(OpenFlowAdapter.from_localhost_egress,
                                                           800, device, flow_file)
 
@@ -386,9 +392,9 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
     async def create_in_rules_for_device(self, table, priority, device, outfile):
         device_id = device['deviceId']
         device_mac = device['macAddress']['eui48']
+        device_name = device.get('name')
 
-        outfile.write(f"  # table={table},priority={priority}: "
-                      f"In-Rules for Device {device['deviceId']} (mac {device_mac})\n")
+        outfile.write(f"  # table={table},priority={priority}: In-Rules for Device {device['deviceId']}/\"{device_name}\" mac {device_mac}\n")
 
         in_rules = device.get('inRules', None)
         if not in_rules:
@@ -402,7 +408,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
             priority -= 1
             for rule in in_rules:
                 try:
-                    logger.debug(f"OpenFlowAdapter.create_in_rules_for_device: processing {device_id} in-rule: {rule}")
+                    logger.debug(f"OpenFlowAdapter.create_in_rules_for_device: processing {device_id}/\"{device_name}\" in-rule: {rule}")
                     if 'dest' in rule:
                         raise Exception("'dest' is not supported in 'inRules' (rule {rule})")
                     rule_src = rule.get('sourceIp', None)
@@ -448,6 +454,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     async def create_allowdenyhosts_rules_for_device(self, table, priority, vlan, device, micronet, outfile):
         device_id = device['deviceId']
+        device_name = device.get('name')
         device_mac = device['']
         accept_action = f"resubmit(,{OpenFlowAdapter.to_localhost_table})"
         block_2_micronets = f"resubmit(,{OpenFlowAdapter.from_micronets_egress})"
@@ -481,7 +488,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
         if hostport_spec_list:
             outfile.write(f"  # table={table},priority={priority}: "
-                          f"hosts allowed/denied for device {device_id} (MAC {device_mac})\n")
+                          f"hosts allowed/denied for device {device_id}/\"{device_name}\" (MAC {device_mac})\n")
             outfile.write(f"add table={table},priority={priority}, "
                           f"dl_vlan={vlan},dl_src={device_mac},udp,tp_dst=67, actions={accept_action}\n")
             outfile.write(f"add table={table},priority={priority}, "
@@ -491,7 +498,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                           f"{device_mac}: hosts: {hosts}\n")
             for hostport_spec in hostport_spec_list:
                 logger.info(f"OpenFlowAdapter.create_allowdenyhosts_rules_for_device: "
-                            f"processing {device_id} allow/deny host: {hostport_spec}")
+                            f"processing {device_id}/\"{device_name}\" allow/deny host: {hostport_spec}")
                 # hostport_spec examples: 1.2.3.4, 3.4.5.6/32:22, 1.2.3.4/32:80/tcp,443/tcp,7,39/udp
                 hostport_split = hostport_spec.split(':')
                 mac_addr = None

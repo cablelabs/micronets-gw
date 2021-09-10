@@ -44,7 +44,8 @@ class DnsMasqAdapter:
                 vlan_elem = f", vlan: {micronet ['vlan']}"
             else:
                 vlan_elem = ""
-            outfile.write (f"# Micronet: {micronet_id}, interface: {interface}{vlan_elem}\n")
+            micronet_name = micronet.get('name')
+            outfile.write (f"# Micronet: {micronet_id}/\"{micronet_name}\", interface: {interface}{vlan_elem}\n")
             ipv4_params = micronet ['ipv4Network']
             network_addr = ipv4_params['network']
             netmask = ipv4_params ['mask']
@@ -67,7 +68,7 @@ class DnsMasqAdapter:
 
     def write_devices (self, outfile, devices):
         for micronet_id, devices in devices.items ():
-            outfile.write ("# DEVICES FOR MICRONET: {}\n".format (micronet_id))
+            outfile.write(f"# DEVICES FOR MICRONET {micronet_id}\n")
             for device_id, device in devices.items ():
                 mac_addr = EUI (device ['macAddress']['eui48'])
                 mac_addr.dialect = netaddr.mac_unix_expanded
@@ -80,7 +81,8 @@ class DnsMasqAdapter:
                     short_device_id = device_id
                 else:
                     short_device_id = device_id[0:8]+device_id[-4:]
-                outfile.write (f"\n# Device: {device_id}\n")
+                device_name = device.get('name')
+                outfile.write (f"\n# Device: {device_id}/(\"{device_name}\")\n")
                 outfile.write ("dhcp-host={},{},set:{},{},{}\n"
                                .format (mac_addr, short_device_id, device_id, ip_addr, lease_period))
             outfile.write ("\n")

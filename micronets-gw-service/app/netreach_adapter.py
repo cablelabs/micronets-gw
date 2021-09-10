@@ -193,6 +193,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             micronet_to_add = {
                 "micronet": {
                     "micronetId": micronet_id,
+                    "name": service_name,
                     "ipv4Network": {"network": str(micronet_subnet_addr), "mask": str(micronet_subnet_netmask),
                                     "gateway": micronet_gateway},
                     "interface": self.wifi_interface,
@@ -213,7 +214,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             micronet_devices = []
             for device in nr_device_list:
                 logger.info(f"NetreachAdapter: _setup_micronets_for_ap:   Found device {device['uuid']} ({device['name']})")
-                device_name = re.sub('\W', '_',device['name'])
+                device_id = device['uuid']
+                device_name = device['name']
                 device_mac = device['macAddress']
                 device_ip = device['ipAddress']
                 device_psk_or_pass = device['passphrase'] if self.use_device_pass else device['psks'][0]
@@ -223,12 +225,14 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 if not device_psk_or_pass:
                     logger.info(f"NetreachAdapter: _setup_micronets_for_ap:   Device {device_id} (\"{device_name}\") does not have a PSK ({device_id})")
                 device_to_add = {
-                        "deviceId": device_name,
+                        "deviceId": device_id,
+                        "name": device_name,
                         "macAddress": {"eui48": device_mac},
                         "networkAddress": {"ipv4": device_ip},
                         "psk": device_psk_or_pass
                 }
                 micronet_devices.append(device_to_add)
+
             micronet_device_list = {"devices": micronet_devices}
             logger.info(f"NetreachAdapter: _setup_micronets_for_ap: Micronet devices for service {service_name}: \n"
                         f"{json.dumps(micronet_device_list, indent=4)}")
