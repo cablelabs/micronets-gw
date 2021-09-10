@@ -25,6 +25,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.mqtt_broker_url = config.get('NETREACH_ADAPTER_MQTT_BROKER_URL') # Optional
         self.mqtt_ca_certs = config.get('NETREACH_ADAPTER_MQTT_CA_CERTS')
         self.connection_startup_delay_s = config.get('NETREACH_ADAPTER_CONN_START_DELAY_S')
+        self.use_device_pass = bool(config.get('NETREACH_ADAPTER_USE_DEVICE_PASS', "False"))
         self.api_token = None
         self.api_token_refresh = None
         self.ap_uuid = None
@@ -215,17 +216,17 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 device_name = re.sub('\W', '_',device['name'])
                 device_mac = device['macAddress']
                 device_ip = device['ipAddress']
-                device_psks = device['psks']
+                device_psk_or_pass = device['passphrase'] if self.use_device_pass else device['psks'][0]
                 logger.info(f"NetreachAdapter: _setup_micronets_for_ap:   device name {device_name} mac {device_mac} ip {device_ip}")
                 if not device_mac:
                     continue
-                if not device_psks:
-                    logger.info(f"NetreachAdapter: _setup_micronets_for_ap:   Device {device['name']} does not have a PSK ({device['uuid']})")
+                if not device_psk_or_pass:
+                    logger.info(f"NetreachAdapter: _setup_micronets_for_ap:   Device {device_id} (\"{device_name}\") does not have a PSK ({device_id})")
                 device_to_add = {
                         "deviceId": device_name,
                         "macAddress": {"eui48": device_mac},
                         "networkAddress": {"ipv4": device_ip},
-                        "psk": device_psks[0]
+                        "psk": device_psk_or_pass
                 }
                 micronet_devices.append(device_to_add)
             micronet_device_list = {"devices": micronet_devices}
