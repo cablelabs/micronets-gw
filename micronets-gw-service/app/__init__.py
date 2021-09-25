@@ -72,6 +72,9 @@ def get_ws_connector():
 def get_dpp_handler():
     return dpp_handler
 
+def get_netreach_adapter():
+    return netreach_adapter
+
 if not 'DHCP_ADAPTER' in app.config:
     exit (f"A DHCP_ADAPTER must be defined in the selected configuration ({app.config})")
 
@@ -113,12 +116,6 @@ elif adapter == "DNSMASQ":
 else:
     exit (f"Unrecognized DHCP_ADAPTER type ({adapter})")
 
-netreach_adapter = None
-netreach_adapter_enabled = app.config.get('NETREACH_ADAPTER_ENABLED')
-if netreach_adapter_enabled:
-    from .netreach_adapter import NetreachAdapter
-    netreach_adapter = NetreachAdapter(app.config)
-    netreach_adapter.enqueue_connect()
 
 from .ws_connector import WSConnector
 
@@ -191,12 +188,20 @@ except Exception as ex:
 
 from .gateway_service_conf import GatewayServiceConf
 
+netreach_adapter = None
+netreach_adapter_enabled = app.config.get('NETREACH_ADAPTER_ENABLED')
+if netreach_adapter_enabled:
+    from .netreach_adapter import NetreachAdapter
+    netreach_adapter = NetreachAdapter(app.config)
+    netreach_adapter.register_hostapd_event_handler(hostapd_adapter)
+    netreach_adapter.enqueue_connect()
+
 conf_model = None
 try:
     adapter_update_int_s = app.config ['ADAPTER_UPDATE_INTERVAL_S']
     logger.info (f"Adapter update interval (seconds): {adapter_update_int_s}")
     conf_model = GatewayServiceConf (ws_connector, db_adapter, dhcp_adapter, flow_adapter, hostapd_adapter,
-                                     adapter_update_int_s)
+                                     netreach_adapter, adapter_update_int_s)
 except Exception as ex:
     logger.info ("Error starting with adapter:", exc_info=True)
     exit (1)

@@ -12,13 +12,15 @@ import logging
 
 logger = logging.getLogger ('micronets-gw-service')
 
+
 class GatewayServiceConf:
-    def __init__ (self, ws_connection, db_adapter, dhcp_adapter, flow_adapter, hostapd_adapter, min_update_interval_s):
+    def __init__ (self, ws_connection, db_adapter, dhcp_adapter, flow_adapter, hostapd_adapter, netreach_adapter, min_update_interval_s):
         self.ws_connection = ws_connection
         self.db_adapter = db_adapter
         self.dhcp_adapter = dhcp_adapter
         self.flow_adapter = flow_adapter
         self.hostapd_adapter = hostapd_adapter
+        self.netreach_adapter = netreach_adapter
         self.min_update_interval_s = min_update_interval_s
         self.update_conf_task = None
         read_conf = db_adapter.read_from_conf()
@@ -287,12 +289,12 @@ class GatewayServiceConf:
             for device_id, device in device_list.items ():
                 dev_addr_field = device ['macAddress']['eui48']
                 dev_addr = EUI (dev_addr_field)
-                if (dev_addr == addr_to_check):
-                    return {'micronetId': micronet_id, 'deviceId': device_id}
-        return None
+                if dev_addr == addr_to_check:
+                    return micronet_id, device_id
+        return None, None
 
     async def dump_mock_lists (self):
-        logger.info ("mock_micronets:")
+        logger.info ("micronets:")
         logger.info (json.dumps (self.micronet_list, indent=4))
         logger.info ("device_lists:")
         logger.info (json.dumps (self.device_lists, indent=4))
@@ -383,32 +385,20 @@ class GatewayServiceConf:
     async def process_dhcp_lease_event (self, dhcp_lease_event):
         logger.info (f"GatewayServiceConf.process_lease_event ({dhcp_lease_event})")
 
-        if not self.ws_connection:
-            logger.info (f"GatewayServiceConf.process_dhcp_lease_event: Ignoring event (No websocket connection)")
-            return f"ignoring event (there's no websocket connection)", 500
-
         event_fields = dhcp_lease_event ['leaseChangeEvent']
         action = event_fields ['action']
 
-        if not self.ws_connection.is_ready ():
-            ws_uri = self.ws_connection.get_connect_uri ()
-            logger.info (f"GatewayServiceConf.process_dhcp_lease_event: Cannot send {action} event - the websocket to {ws_uri} is not connected/ready")
-            return f"The websocket connection to {ws_uri} is not connected/ready", 500
-
         mac_addr = event_fields ['macAddress']['eui48']
         net_addr = event_fields ['networkAddress']['ipv4']
-        ids = await self.get_micronetid_deviceid_for_mac (mac_addr)
-        if (not ids):
+        micronet_id, device_id = await self.get_micronetid_deviceid_for_mac (mac_addr)
+        if not (micronet_id and device_id):
             logger.info (f"GatewayServiceConf.process_lease_event: ERROR: Could not find device/micronet for mac {mac_addr}")
             raise InvalidUsage (404, message=f"No device found with mac address {mac_addr}")
-        logger.info (f"GatewayServiceConf.process_lease_event: found {ids} for mac {mac_addr}")
-        lease_change_event = { f"{action}Event": {
-                                 'micronetId': ids['micronetId'],
-                                 'deviceId': ids['deviceId'],
-                                 'macAddress': {"eui48": mac_addr},
-                                 'networkAddress': {"ipv4": net_addr} }
-                             }
-        logger.info (f"GatewayServiceConf.process_dhcp_lease_event: Sending: {action}")
-        logger.info (json.dumps (lease_change_event, indent=4))
-        await self.ws_connection.send_event_message ("GatewayService", action, lease_change_event)
+        logger.info (f"GatewayServiceConf.process_lease_event: found micronet/device {micronet_id}/{device_id} for mac {mac_addr}")
+
+        if self.ws_connection:
+            await self.ws_connection.process_dhcp_lease_event(micronet_id, device_id, action, mac_addr, net_addr)
+        if self.netreach_adapter:
+            await self.netreach_adapter.process_dhcp_lease_event(micronet_id, device_id, action, mac_addr, net_addr)
+
         return '', 200

@@ -1,5 +1,6 @@
 import logging, base64, json, httpx, re, asyncio
 
+from app import get_conf_model
 from ipaddress import IPv4Network, IPv4Address, AddressValueError, NetmaskValueError
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes, serialization
@@ -15,6 +16,7 @@ logger = logging.getLogger ('micronets-gw-service-netreach')
 class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     def __init__ (self, config):
+        HostapdAdapter.HostapdCLIEventHandler.__init__(self, ("AP-STA"))
         self.serial_number_file = config['NETREACH_ADAPTER_SERIAL_NUM_FILE']
         self.pub_key_file = config['NETREACH_ADAPTER_PUBLIC_KEY_FILE']
         self.priv_key_file = config['NETREACH_ADAPTER_PRIVATE_KEY_FILE']
@@ -175,13 +177,12 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         for service in service_list:
             service_uuid = service['uuid']
             service_name = service['name']
-            micronet_id = re.sub('\W', '_', service['micronetId'])
             micronet_subnet = IPv4Network(service['micronetSubnet'], strict=True)
             micronet_vlan = int(service['vlan'])
             # TODO: Replace this with gateway reference from Service object (see issue #15)
             micronet_gateway = str(next(micronet_subnet.hosts()))
             logger.info(f"NetreachAdapter: _setup_micronets_for_ap: Found service {service_name} ({service_uuid})")
-            logger.info(f"NetreachAdapter: _setup_micronets_for_ap: micronet id {micronet_id} vlan {micronet_vlan}")
+            logger.info(f"NetreachAdapter: _setup_micronets_for_ap: micronet id {service_uuid} vlan {micronet_vlan}")
             if not (micronet_subnet and micronet_vlan):
                 logger.info(f"NetreachAdapter: _setup_micronets_for_ap: netreach Service {service_name} ({service_uuid}) does not have a micronet ID/vlan - SKIPPING")
                 pass
@@ -192,7 +193,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
             micronet_to_add = {
                 "micronet": {
-                    "micronetId": micronet_id,
+                    "micronetId": service_uuid,
                     "name": service_name,
                     "ipv4Network": {"network": str(micronet_subnet_addr), "mask": str(micronet_subnet_netmask),
                                     "gateway": micronet_gateway},
@@ -205,7 +206,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             result = await micronets_api.post(f"{self.micronets_api_prefix}/v1/gateway/micronets",
                                               json=micronet_to_add)
             if result.is_error:
-                logger.warning(f"Could not add micronet {micronet_id} for service {service_name} ({service_uuid}) - Result was {result.reason_phrase}")
+                logger.warning(f"Could not add micronet for service {service_name} ({service_uuid}) - Result was {result.reason_phrase}")
                 continue
 
             result = httpx.get(f"{self.base_url}/v1/services/{service_uuid}/devices",
@@ -236,10 +237,10 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             micronet_device_list = {"devices": micronet_devices}
             logger.info(f"NetreachAdapter: _setup_micronets_for_ap: Micronet devices for service {service_name}: \n"
                         f"{json.dumps(micronet_device_list, indent=4)}")
-            result = await micronets_api.post(f"{self.micronets_api_prefix}/v1/gateway/micronets/{micronet_id}/devices",
+            result = await micronets_api.post(f"{self.micronets_api_prefix}/v1/gateway/micronets/{service_uuid}/devices",
                                               json=micronet_device_list)
             if result.is_error:
-                logger.warning(f"Could not add micronet {micronet_id} devices for service {service_name} ({service_uuid}) - Result was {result.reason_phrase}")
+                logger.warning(f"Could not add micronet devices for service {service_name} ({service_uuid}) - Result was {result.reason_phrase}")
                 continue
 
         await micronets_api.aclose()
@@ -451,3 +452,53 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 "uuidList": ["uuid_of_failed_link"],
                 "reasonList": [str(e)]
             })
+
+    async def process_dhcp_lease_event(self, micronet_id, device_id, action, mac_addr, ip_addr):
+        logger.info(f"NetreachAdapter.process_dhcp_lease_event({micronet_id}, {device_id}, {action}, {mac_addr}, {ip_addr})")
+        if not self.api_token:
+            logger.info (f"NetreachAdapter.process_dhcp_lease_event: Cannot process {action} event - the API key has not been established")
+            return f"The NetReach API key is not set", 500
+
+        if action == "leaseAcquired":
+            conf_model = get_conf_model()
+            micronet_id, device_id = await conf_model.get_micronetid_deviceid_for_mac(mac_addr)
+            device_patch = {"connected": True}
+
+            result = httpx.patch(f"{self.base_url}/v1/services/{micronet_id}/devices/{device_id}",
+                                 headers={"x-api-token": self.api_token},
+                                 json={"connected": True})
+            logger.info(f"NetreachAdapter.process_dhcp_lease_event: Setting status of device {device_id} of service {micronet_id}"
+                        f"to {device_patch}")
+        else:
+            logger.info(f"NetreachAdapter.process_dhcp_lease_event: Ignoring action '{action}' for MAC {mac_addr}")
+
+    def register_hostapd_event_handler(self, hostapd_adapter):
+        if hostapd_adapter:
+            hostapd_adapter.register_cli_event_handler(self)
+
+    async def handle_hostapd_ready(self):
+        logger.info(f"NetreachAdapter.handle_hostapd_ready()")
+
+    async def handle_hostapd_cli_event(self, event_msg):
+        logger.info(f"NetreachAdapter.handle_hostapd_cli_event({event_msg})")
+        if not self.api_token:
+            logger.info (f"NetreachAdapter.handle_hostapd_cli_event: Cannot process {event_msg} event - the API key has not been established")
+            return
+
+        event, mac = event_msg.split(' ')
+
+        if event == "AP-STA-CONNECTED":
+            device_patch = {"associated": True, "connected": False}
+        elif event == "AP-STA-DISCONNECTED":
+            device_patch = {"associated": False, "connected": False}
+        else:
+            logger.warning(f"NetreachAdapter.handle_hostapd_cli_event: Received unknown event '{event_msg}'")
+            return
+
+        conf_model = get_conf_model()
+        micronet_id, device_id = await conf_model.get_micronetid_deviceid_for_mac(mac)
+        result = httpx.patch(f"{self.base_url}/v1/services/{micronet_id}/devices/{device_id}",
+                             headers={"x-api-token": self.api_token},
+                             json=device_patch)
+        logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Setting status of device {device_id} of service {micronet_id}"
+                    f"to {device_patch}")

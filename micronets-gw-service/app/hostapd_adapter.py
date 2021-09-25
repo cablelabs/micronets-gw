@@ -627,8 +627,6 @@ class HostapdAdapter:
         async def process_response_data(self, response):
             try:
                 for line in response.splitlines():
-                    # TODO: REMOVE ME
-                    logger.info(f"DPPConfiguratorDPPSignCLICommand.process_response_data: Looking at line: {line}")
                     try:
                         if line == "OK":
                             self.success = self.c_sign_key and self.net_access_key and self.dpp_connector

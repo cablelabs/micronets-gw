@@ -1,5 +1,18 @@
 #!/bin/bash
 
+fqdir_for_file() {
+   fqd="$( cd "$( dirname "$1" )" >/dev/null 2>&1 && pwd )"
+   echo $fqd
+}
+
+script_dir="$(fqdir_for_file ${BASH_SOURCE[0]})"
+conf_file="$(fqdir_for_file $script_dir/../lib/blah)/gateway.conf"
+
+if [ -e $conf_file ]; then
+    echo "Reading settings from conf file: $conf_file"
+    source $conf_file
+fi
+
 debug_log() {
     logger -t "$0" -- "$@"
     echo "$@"
@@ -34,7 +47,6 @@ config_iptables_bridge_uplink() {
         -m state --state NEW,INVALID -j DROP
     iptables --table filter --append FORWARD --out-interface ${UPLINK_INTERFACE} \
         -j ACCEPT
-    sysctl -w net.ipv4.ip_forward=1
 }
 
 reset_ovsdb() {
@@ -50,7 +62,9 @@ reset_ovsdb() {
 
 reset_ovsdb
 
-# Setep veth pair for HostAPD to connect the VLAN tagged interface ("haport" -> "HostAPD port")
+# TODO: Make bridge names, etc config variables
+
+# Setup veth pair for HostAPD to connect the VLAN tagged interface ("haport" -> "HostAPD port")
 #  This will create interfaces/ports haport and haport-sw
 if ! ip link show haport; then
   debug_log "Creating veth haport/haport-sw pair"
@@ -113,4 +127,7 @@ route add -net 10.0.12.0/24 gw 10.0.12.1 dev brmn001
 
 # Enable firewall rules
 clear_iptables
-config_iptables_bridge_uplink brmn001 eth0
+config_iptables_bridge_uplink $MICRONETS_BRIDGE $UPLINK_INTERFACE
+
+# Enable packet routing/forwarding
+sysctl -w net.ipv4.ip_forward=1

@@ -305,3 +305,19 @@ class WSConnector:
     async def handle_event_message (self, message):
         logger.debug (f"WSConnector: handle EVENT message: {message}")
         # TODO: handle the event
+
+    async def process_dhcp_lease_event(self, micronet_id, device_id, action, mac_addr, ip_addr):
+        if not self.is_ready():
+            ws_uri = self.get_connect_uri()
+            logger.info (f"GatewayServiceConf.process_dhcp_lease_event: Cannot send {action} event - the websocket to {ws_uri} is not connected/ready")
+            return f"The websocket connection to {ws_uri} is not connected/ready", 500
+
+        lease_change_event = { f"{action}Event": {
+            'micronetId': micronet_id,
+            'deviceId': device_id,
+            'macAddress': {"eui48": mac_addr},
+            'networkAddress': {"ipv4": ip_addr} }
+        }
+        logger.info (f"WSConnector.process_dhcp_lease_event: Sending: {action}")
+        logger.info (json.dumps(lease_change_event, indent=4))
+        await self.send_event_message ("GatewayService", action, lease_change_event)
