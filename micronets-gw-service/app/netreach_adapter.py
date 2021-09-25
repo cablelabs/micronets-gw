@@ -27,6 +27,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.mqtt_broker_url = config.get('NETREACH_ADAPTER_MQTT_BROKER_URL') # Optional
         self.mqtt_ca_certs = config.get('NETREACH_ADAPTER_MQTT_CA_CERTS')
         self.connection_startup_delay_s = config.get('NETREACH_ADAPTER_CONN_START_DELAY_S')
+        self.connection_retry_s = config.get('NETREACH_ADAPTER_CONN_RETRY_S')
         self.use_device_pass = bool(config.get('NETREACH_ADAPTER_USE_DEVICE_PASS', "False"))
         self.api_token = None
         self.api_token_refresh = None
@@ -34,9 +35,11 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.ap_name = None
         self.ap_group_uuid = None
         self.ap_group_name = None
+        self.ssid_list = []
         self.api_token_expiration = None
         self.ap_name = None
         self.ap_enabled = None
+        self.logged_in = False
         self.micronets_api_prefix = f"http://{config['LISTEN_HOST']}:{config['LISTEN_PORT']}/micronets"
         with open(self.serial_number_file, 'rt') as f:
             self.serial_number = f.read().strip()
@@ -60,23 +63,56 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info (f"NetreachAdapter.update ()")
         logger.info (f"NetreachAdapter.update: device_lists: {device_lists}")
 
-    async def connect(self):
-        logger.info(f"NetreachAdapter:connect()")
-        if self.connection_startup_delay_s:
-            await asyncio.sleep(self.connection_startup_delay_s)
-
-        self._login_to_controller()
-        self._get_ap_info()
-        await self._setup_micronets_for_ap()
-        self._register_controller_listener()
-
     def enqueue_connect(self):
         logger.info(f"NetreachAdapter:enqueue_connect()")
-        asyncio.ensure_future(self.connect())
+        asyncio.ensure_future(self._initial_setup())
 
-    def enqueue_rebuild_micronets(self, client, message):
-        logger.info(f"NetreachAdapter:enqueue_rebuild_micronets()")
-        # asyncio.ensure_future(self._setup_micronets_for_ap())
+    def set_mqtt_connection_state(self, new_state):
+        logger.info(f"NetreachAdapter:set_mqtt_connection_state: Changing state from {self.mqtt_connection_state} to {new_state}")
+        self.mqtt_connection_state = new_state
+
+    async def _initial_setup(self):
+        logger.info(f"NetreachAdapter:_initial_setup()")
+        if self.connection_startup_delay_s:
+            logger.info(f"NetreachAdapter:_initial_setup: Waiting {self.connection_startup_delay_s} seconds to start...")
+            await asyncio.sleep(self.connection_startup_delay_s)
+        await self._login_and_setup()
+        await self._connect_mqtt_listener_loop()
+
+    async def _login_and_setup(self):
+        logger.info(f"NetreachAdapter:_login_and_setup()")
+
+        while not self.logged_in:
+            try:
+                self._login_to_controller()
+                self._get_ap_info()
+                await self._setup_micronets_for_ap()
+                self.logged_in = True
+            except Exception as ex:
+                logger.info(f"NetreachAdapter:_login_and_setup: Error while performing controller login/setup: {ex}")
+                logger.info(f"NetreachAdapter:_login_and_setup: Sleeping {self.connection_retry_s} seconds...")
+                await asyncio.sleep(self.connection_retry_s)
+                logger.info(f"NetreachAdapter:_login_and_setup: Retrying controller login/setup")
+
+    async def _connect_mqtt_listener_loop(self, wait_for_s=0):
+        logger.info(f"NetreachAdapter:_connect_mqtt_listener_loop(wait_for_s={wait_for_s})")
+        while self.mqtt_connection_state == "DISCONNECTED":
+            try:
+                if wait_for_s:
+                    logger.info(f"NetreachAdapter:_connect_mqtt_listener_loop: Waiting {wait_for_s} seconds to connect")
+                    await asyncio.sleep(wait_for_s)
+                self._connect_mqtt_listener()
+                # Note: A lot of errors can happen async. So getting through here doesn't guarantee connect.
+                #       But it should ensure we at least get CONNECT/DISCONNECT notifications that can drive
+                #       retry logic.
+            except Exception as ex:
+                logger.info(f"NetreachAdapter:_connect_mqtt_listener_loop: Error while connecting MQTT: {ex}")
+                logger.info(f"NetreachAdapter:_connect_mqtt_listener_loop: Sleeping {self.connection_retry_s}...")
+                await asyncio.sleep(self.connection_retry_s)
+                logger.info(f"NetreachAdapter:_connect_mqtt_listener_loop: Retrying MQTT connection establishment")
+
+    def _enqueue_rebuild_micronets(self, client, message):
+        logger.info(f"NetreachAdapter:_enqueue_rebuild_micronets()")
         asyncio.run_coroutine_threadsafe(self._setup_micronets_for_ap(), self.async_event_loop)
 
     def _login_to_controller(self):
@@ -98,23 +134,25 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         res_json = result.json()
         if result.status_code >= 400:
             raise ValueError(res_json)
-        logger.info(f"AP SUCCESSFULLY logged into NetReach Controller ({result})")
-        logger.info(f"Token registration response: {json.dumps(res_json, indent=4)}")
+        logger.info(f"NetreachAdapter:_login_to_controller: AP SUCCESSFULLY logged into NetReach Controller ({result})")
+        logger.info(f"NetreachAdapter:_login_to_controller: Token registration response: {json.dumps(res_json, indent=4)}")
+        # TODO: censor logging of tokens
         self.api_token = res_json['token']
         self.api_token_refresh = res_json['refresh_token']
+        # TODO: Implement logoff/login to refresh API token
         self.ap_uuid = res_json['uuid']
         self.api_token_expiration = res_json['expires']
-        logger.info(f"AP UUID: {self.ap_uuid}")
+        logger.info(f"NetreachAdapter:_login_to_controller: AP UUID: {self.ap_uuid}")
         if not self.mqtt_broker_url:
             self.mqtt_broker_url = res_json['mqttProxyUrl']
 
         with open(self.api_token_file, 'wt') as f:
             self.priv_key = f.write(self.api_token)
-        logger.info(f"Saved NetReach Controller API token to {self.api_token_file}")
+        logger.info(f"NetreachAdapter:_login_to_controller: Saved NetReach Controller API token to {self.api_token_file}")
 
-    def _register_controller_listener(self):
-        logger.debug(f"NetreachAdapter: register_controller_listener()")
-        logger.info(f"NetreachAdapter: Connecting with MQTT broker at {self.mqtt_broker_url}")
+    def _connect_mqtt_listener(self):
+        logger.debug(f"NetreachAdapter:_connect_mqtt_listener()")
+        logger.info(f"NetreachAdapter:_connect_mqtt_listener: Connecting with MQTT broker at {self.mqtt_broker_url}")
 
         # Instantiate mqtt broker.  This is a sync implementation.  Async implementations are available
         mqtt_client = mqtt.Client(self.ap_uuid)
@@ -130,12 +168,12 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             if url_parts.scheme == "mqtts":
                 mqtt_client.tls_set(ca_certs=self.mqtt_ca_certs)
                 # mqtt_client.tls_insecure_set(True)
+            logger.info(f"NetreachAdapter:_connect_mqtt_listener: Connecting to MQTT broker at {url_parts.hostname}:{url_parts.port}")
             mqtt_client.connect(url_parts.hostname, url_parts.port, keepalive=60)
-            self.mqtt_connection_state = "CONNECTING"
-            logger.info(f"NetreachAdapter: Connected to MQTT broker at {url_parts.hostname}:{url_parts.port}")
         else:
             raise Exception(f"Unrecognized mqtt url scheme {self.mqtt_broker_url}")
 
+        self.set_mqtt_connection_state("CONNECTING")
         self.mqtt_client = mqtt_client
         self.mqtt_client.loop_start()
 
@@ -144,7 +182,6 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         result = httpx.get(f"{self.base_url}/v1/access-points/{self.ap_uuid}",
                            headers={"x-api-token": self.api_token})
         ap_info = result.json()
-        logger.info(f"AP Info: {json.dumps(ap_info, indent=4)}")
         self.ap_name = ap_info['name']
         self.ap_enabled = ap_info['enabled']
 
@@ -168,8 +205,11 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
         self.ap_group_uuid = ap_group['uuid']
         self.ap_group_name = ap_group['name']
+        self.ssid_list = ap_group['ssid']
 
         logger.info(f"NetreachAdapter: _setup_micronets_for_ap: apGroup {self.ap_group_name} (apGroup {self.ap_group_uuid})")
+        logger.info(f"NetreachAdapter: _setup_micronets_for_ap: ssid(s) {self.ssid_list}")
+        # TODO: Configure hostapd with the given ssid(s)
         result = httpx.get(f"{self.base_url}/v1/services/?apGroupUuid={self.ap_group_uuid}",
                            headers={"x-api-token": self.api_token})
 
@@ -210,7 +250,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 continue
 
             result = httpx.get(f"{self.base_url}/v1/services/{service_uuid}/devices",
-                                   headers={"x-api-token": self.api_token})
+                               headers={"x-api-token": self.api_token})
             nr_device_list = result.json()['results']
             micronet_devices = []
             for device in nr_device_list:
@@ -253,12 +293,16 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         ap_topic = f'access-points/{self.ap_uuid}/events'
         client.subscribe(f'access-points/{self.ap_uuid}/events', qos=1)
         client.subscribe(f'access-points/{self.ap_uuid}/data', qos=1)
-        self.mqtt_connection_state = "CONNECTED"
+        self.set_mqtt_connection_state("CONNECTED")
 
     def _on_mqtt_disconnect(self, client, userdata, rc):
         # Notifies the controller of broker disconnection
         logger.info(f"NetreachAdapter: on_disconnect(client:{client},userdata:{userdata},rc:{rc})")
-        self.mqtt_connection_state = "DISCONNECTED"
+        self.set_mqtt_connection_state("DISCONNECTED")
+        # Note: The MQTT client is supposed to attempt reconnect on its own. So considering this
+        #       handler a no-op
+        # asyncio.ensure_future(self._connect_mqtt_listener_loop(wait_for_s=self.connection_retry_s),
+        #                       loop=self.async_event_loop)
 
     def _on_mqtt_message(self, client, userdata, message):
         # handles all incoming mqtt messages
@@ -352,7 +396,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     def _handle_ap_included_in_ap_group(self, client, message):
         logger.info(f"NetreachAdapter: handle_ap_included_in_ap_group()")
         try:
-            self.enqueue_rebuild_micronets(client, message)
+            self._enqueue_rebuild_micronets(client, message)
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -365,7 +409,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     def _handle_ap_excluded_from_ap_group(self, client, message):
         logger.info(f"NetreachAdapter: handle_ap_excluded_from_ap_group()")
         try:
-            self.enqueue_rebuild_micronets(client, message)
+            self._enqueue_rebuild_micronets(client, message)
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -378,7 +422,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     def _handle_ap_provision_service(self, client, message):
         logger.info(f"NetreachAdapter: _handle_ap_provision_service()")
         try:
-            self.enqueue_rebuild_micronets(client, message)
+            self._enqueue_rebuild_micronets(client, message)
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -391,7 +435,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     def _handle_ap_update_service(self, client, message):
         logger.info(f"NetreachAdapter: _handle_ap_update_service()")
         try:
-            self.enqueue_rebuild_micronets(client, message)
+            self._enqueue_rebuild_micronets(client, message)
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -404,7 +448,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     def _handle_ap_remove_service(self, client, message):
         logger.info(f"NetreachAdapter: _handle_ap_remove_service()")
         try:
-            self.enqueue_rebuild_micronets(client, message)
+            self._enqueue_rebuild_micronets(client, message)
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -417,7 +461,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     def _handle_ap_provision_device(self, client, message):
         logger.info(f"NetreachAdapter: _handle_ap_provision_device()")
         try:
-            # self.enqueue_rebuild_micronets(client, message)
+            # self._enqueue_rebuild_micronets(client, message)
             # Report Success
             self._report_event_success(message)
         except ValueError as e:
@@ -429,7 +473,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     def _handle_ap_update_device(self, client, message):
         logger.info(f"NetreachAdapter: _handle_ap_update_device()")
         try:
-            self.enqueue_rebuild_micronets(client, message)
+            self._enqueue_rebuild_micronets(client, message)
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -443,7 +487,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     def _handle_ap_remove_device(self, client, message):
         logger.info(f"NetreachAdapter: _handle_ap_update_device()")
         try:
-            self.enqueue_rebuild_micronets(client, message)
+            self._enqueue_rebuild_micronets(client, message)
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
