@@ -56,6 +56,8 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_CONN_START_DELAY_S = 2
     NETREACH_ADAPTER_CONN_RETRY_S = 10
     NETREACH_ADAPTER_USE_DEVICE_PASS = True
+    NETREACH_ADAPTER_PSK_CACHE_ENABLED = True
+    NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S = 300
 
 #
 # Configure settings for local/development testing
