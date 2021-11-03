@@ -460,7 +460,7 @@ async def check_lease_event (lease_event):
 
     hostname = check_field (event_fields, 'hostname', str, True)
 
-@app.route (api_prefix + '/leases', methods=['PUT'])
+@app.route (api_prefix + '/dhcp-leases', methods=['PUT'])
 async def process_lease ():
     check_for_json_payload (request)
     lease_event = await request.get_json ()

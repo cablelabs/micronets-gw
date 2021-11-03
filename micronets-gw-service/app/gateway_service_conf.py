@@ -400,11 +400,10 @@ class GatewayServiceConf:
             await self.ws_connection.process_dhcp_lease_event(micronet_id, device_id, action, mac_addr, net_addr)
         if self.netreach_adapter:
             await self.netreach_adapter.process_dhcp_lease_event(micronet_id, device_id, action, mac_addr, net_addr)
-
         return '', 200
 
     async def process_psk_lookup(self, psk_lookup_fields):
-        logger.info(f"GatewayServiceConf.process_psk_lookup({psk_lookup_fields})")
+        logger.info(f"GatewayServiceConf.process_psk_lookup()")
 
         if self.netreach_adapter:
             return await self.netreach_adapter.lookup_psk_for_device(psk_lookup_fields)
