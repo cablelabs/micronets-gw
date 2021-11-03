@@ -54,6 +54,7 @@ class NetreachDefaultSettings():
     # NETREACH_ADAPTER_MQTT_BROKER_URL = "mqtts://staging.broker.controller.netreach.in:8885" # for overriding
     NETREACH_ADAPTER_MQTT_CA_CERTS = libpath.joinpath('netreach-mqtt-ca.crt')
     NETREACH_ADAPTER_CONN_START_DELAY_S = 2
+    NETREACH_ADAPTER_CONN_RETRY_S = 10
     NETREACH_ADAPTER_USE_DEVICE_PASS = True
 
 #
