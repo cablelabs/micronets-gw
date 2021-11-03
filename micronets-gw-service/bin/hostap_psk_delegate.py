@@ -6,8 +6,8 @@ import aiohttp
 import json
 
 # PSK Lookup Server config
-LOOKUP_URL_BASE = "https://staging.api.controller.netreach.in"
-LOOKUP_URL_PATH = "/v1/psks/psk-lookup"
+LOOKUP_URL_BASE = "http://localhost:5000"
+LOOKUP_URL_PATH = "/gateway/v1/netreach/psk-lookup"
 LOOKUP_URL = LOOKUP_URL_BASE + LOOKUP_URL_PATH
 
 # Some basic config

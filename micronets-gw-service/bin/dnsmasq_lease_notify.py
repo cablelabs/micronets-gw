@@ -12,7 +12,7 @@ import pathlib
 
 lease_notifiction_host = "localhost:5000"
 lease_notification_method = "PUT"
-lease_notification_path = "/micronets/v1/gateway/leases"
+lease_notification_path = "/gateway/v1/dhcp-leases"
 
 bindir = os.path.dirname (os.path.abspath (sys.argv [0]))
 logging_filename = pathlib.Path(bindir).parent.joinpath("micronets-gw.log")

@@ -1,4 +1,4 @@
-import logging, base64, json, httpx, re, asyncio
+import logging, base64, json, httpx, re, asyncio, time, random
 
 from app import get_conf_model
 from ipaddress import IPv4Network, IPv4Address, AddressValueError, NetmaskValueError
@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 import paho.mqtt.client as mqtt
 from urllib import parse as urllib_dot_parse
 from uuid import UUID
+from quart import jsonify
 
 from .hostapd_adapter import HostapdAdapter
 
@@ -21,7 +22,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.pub_key_file = config['NETREACH_ADAPTER_PUBLIC_KEY_FILE']
         self.priv_key_file = config['NETREACH_ADAPTER_PRIVATE_KEY_FILE']
         self.wifi_interface = config['NETREACH_ADAPTER_WIFI_INTERFACE'] # TODO: Think...
-        self.base_url = config['NETREACH_ADAPTER_CONTROLLER_BASE_URL']
+        self.controller_base_url = config['NETREACH_ADAPTER_CONTROLLER_BASE_URL']
         self.api_token_file = config['NETREACH_ADAPTER_API_KEY_FILE']
         self.token_request_time = config['NETREACH_ADAPTER_API_KEY_REFRESH_DAYS']
         self.mqtt_broker_url = config.get('NETREACH_ADAPTER_MQTT_BROKER_URL') # Optional
@@ -29,6 +30,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.connection_startup_delay_s = config.get('NETREACH_ADAPTER_CONN_START_DELAY_S')
         self.connection_retry_s = config.get('NETREACH_ADAPTER_CONN_RETRY_S')
         self.use_device_pass = bool(config.get('NETREACH_ADAPTER_USE_DEVICE_PASS', "False"))
+        self.psk_cache_enabled = bool(config.get('NETREACH_ADAPTER_PSK_CACHE_ENABLED', "True"))
+        self.psk_cache_expire_s = config.get('NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S', 120)
         self.api_token = None
         self.api_token_refresh = None
         self.ap_uuid = None
@@ -40,14 +43,15 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.ap_name = None
         self.ap_enabled = None
         self.logged_in = False
-        self.micronets_api_prefix = f"http://{config['LISTEN_HOST']}:{config['LISTEN_PORT']}/micronets"
+        self.psk_lookup_cache = {}
+        self.micronets_api_prefix = f"http://{config['LISTEN_HOST']}:{config['LISTEN_PORT']}/gateway/v1"
         with open(self.serial_number_file, 'rt') as f:
             self.serial_number = f.read().strip()
         with open(self.pub_key_file, 'rb') as f:
             self.pub_key = f.read()
         with open(self.priv_key_file, 'rb') as f:
             self.priv_key = f.read()
-        logger.info(f"NetreachAdapter: Base url: {self.base_url}")
+        logger.info(f"NetreachAdapter: Base url: {self.controller_base_url}")
         logger.info(f"NetreachAdapter: Serial number: {self.serial_number}")
         logger.info(f"NetreachAdapter: public key: \n{self.pub_key}")
         logger.info(f"NetreachAdapter: private key: \n{self.priv_key}")
@@ -55,9 +59,6 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.mqtt_client = None
         self.mqtt_connection_state = "DISCONNECTED"
         self.async_event_loop = asyncio.get_event_loop()
-
-    async def handle_hostapd_ready(self):
-        logger.info(f"NetreachAdapter.handle_hostapd_ready()")
 
     async def update (self, micronet_list, device_lists):
         logger.info (f"NetreachAdapter.update ()")
@@ -111,12 +112,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 await asyncio.sleep(self.connection_retry_s)
                 logger.info(f"NetreachAdapter:_connect_mqtt_listener_loop: Retrying MQTT connection establishment")
 
-    def _enqueue_rebuild_micronets(self, client, message):
-        logger.info(f"NetreachAdapter:_enqueue_rebuild_micronets()")
-        asyncio.run_coroutine_threadsafe(self._setup_micronets_for_ap(), self.async_event_loop)
-
     def _login_to_controller(self):
-        logger.info(f"NetreachAdapter: Logging into controller at {self.base_url}")
+        logger.info(f"NetreachAdapter: Logging into controller at {self.controller_base_url}")
         data = {
             "serial": self.serial_number,
             "token_expiration_request": self.token_request_time
@@ -128,7 +125,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         key = serialization.load_pem_private_key(self.priv_key, password=None)
         signature = key.sign(data_json.encode(), signature_algorithm)
         enc_signature = base64.b64encode(signature).decode()
-        result = httpx.post(f"{self.base_url}/v1/access-points/token",
+        result = httpx.post(f"{self.controller_base_url}/v1/access-points/token",
                             headers={"x-ap-signature": enc_signature},
                             json=data)
         res_json = result.json()
@@ -179,7 +176,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     def _get_ap_info(self):
         # Retrieve info on myself
-        result = httpx.get(f"{self.base_url}/v1/access-points/{self.ap_uuid}",
+        result = httpx.get(f"{self.controller_base_url}/v1/access-points/{self.ap_uuid}",
                            headers={"x-api-token": self.api_token})
         ap_info = result.json()
         self.ap_name = ap_info['name']
@@ -190,9 +187,9 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
         micronets_api = httpx.AsyncClient()
         # Clear out all the micronets - we're going to rebuild them
-        result = await micronets_api.delete(f"{self.micronets_api_prefix}/v1/gateway/micronets")
+        result = await micronets_api.delete(f"{self.micronets_api_prefix}/micronets")
 
-        result = httpx.get(f"{self.base_url}/v1/ap-groups/?apUuid={self.ap_uuid}",
+        result = httpx.get(f"{self.controller_base_url}/v1/ap-groups/?apUuid={self.ap_uuid}",
                            headers={"x-api-token": self.api_token})
         if result.is_error:
             logger.info(f"NetreachAdapter: _setup_micronets_for_ap {self.ap_name} ({self.ap_uuid}) does not have an AP Group (returned {result.status_code}). Nothing to setup.")
@@ -210,11 +207,12 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"NetreachAdapter: _setup_micronets_for_ap: apGroup {self.ap_group_name} (apGroup {self.ap_group_uuid})")
         logger.info(f"NetreachAdapter: _setup_micronets_for_ap: ssid(s) {self.ssid_list}")
         # TODO: Configure hostapd with the given ssid(s)
-        result = httpx.get(f"{self.base_url}/v1/services/?apGroupUuid={self.ap_group_uuid}",
+        result = httpx.get(f"{self.controller_base_url}/v1/services/?apGroupUuid={self.ap_group_uuid}",
                            headers={"x-api-token": self.api_token})
 
         service_list = result.json()['results']
         for service in service_list:
+            service_enabled = service['enabled']
             service_uuid = service['uuid']
             service_name = service['name']
             micronet_subnet = IPv4Network(service['micronetSubnet'], strict=True)
@@ -243,18 +241,19 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 }
             }
             logger.info(f"NetreachAdapter: _setup_micronets_for_ap: Adding micronet: {json.dumps(micronet_to_add, indent=4)}")
-            result = await micronets_api.post(f"{self.micronets_api_prefix}/v1/gateway/micronets",
+            result = await micronets_api.post(f"{self.micronets_api_prefix}/micronets",
                                               json=micronet_to_add)
             if result.is_error:
                 logger.warning(f"Could not add micronet for service {service_name} ({service_uuid}) - Result was {result.reason_phrase}")
                 continue
 
-            result = httpx.get(f"{self.base_url}/v1/services/{service_uuid}/devices",
+            result = httpx.get(f"{self.controller_base_url}/v1/services/{service_uuid}/devices",
                                headers={"x-api-token": self.api_token})
             nr_device_list = result.json()['results']
             micronet_devices = []
             for device in nr_device_list:
                 logger.info(f"NetreachAdapter: _setup_micronets_for_ap:   Found device {device['uuid']} ({device['name']})")
+                device_enabled = device['enabled']
                 device_id = device['uuid']
                 device_name = device['name']
                 device_mac = device['macAddress']
@@ -265,6 +264,10 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     continue
                 if not device_psk_or_pass:
                     logger.info(f"NetreachAdapter: _setup_micronets_for_ap:   Device {device_id} (\"{device_name}\") does not have a PSK ({device_id})")
+                    continue
+                if not device_enabled or not service_enabled:
+                    # Poison the PSK
+                    device_psk_or_pass = "DISABLED-" + str(random.getrandbits(24)) + "-" + device_psk_or_pass
                 device_to_add = {
                         "deviceId": device_id,
                         "name": device_name,
@@ -277,7 +280,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             micronet_device_list = {"devices": micronet_devices}
             logger.info(f"NetreachAdapter: _setup_micronets_for_ap: Micronet devices for service {service_name}: \n"
                         f"{json.dumps(micronet_device_list, indent=4)}")
-            result = await micronets_api.post(f"{self.micronets_api_prefix}/v1/gateway/micronets/{service_uuid}/devices",
+            result = await micronets_api.post(f"{self.micronets_api_prefix}/micronets/{service_uuid}/devices",
                                               json=micronet_device_list)
             if result.is_error:
                 logger.warning(f"Could not add micronet devices for service {service_name} ({service_uuid}) - Result was {result.reason_phrase}")
@@ -374,8 +377,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         if not msg["event"] in event_dict:
             raise Exception(f"No Event: {msg['event']}")
 
-        # handle the event
-        event_dict[msg["event"]](client, msg)
+        # handle the event async
+        asyncio.run_coroutine_threadsafe(event_dict[msg["event"]](client, msg), self.async_event_loop)
 
     def _send_status(self, status):
         pass
@@ -389,14 +392,15 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         except ValueError:
             return False
 
-    def _handle_ap_update(self, client, message):
+    async def _handle_ap_update(self, client, message):
         logger.info(f"NetreachAdapter: _handle_ap_update()")
         self._report_event_success(message)
+        await self._setup_micronets_for_ap()
 
-    def _handle_ap_included_in_ap_group(self, client, message):
+    async def _handle_ap_included_in_ap_group(self, client, message):
         logger.info(f"NetreachAdapter: handle_ap_included_in_ap_group()")
         try:
-            self._enqueue_rebuild_micronets(client, message)
+            await self._setup_micronets_for_ap()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -406,10 +410,10 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 "reasonList": [str(e)]
             })
 
-    def _handle_ap_excluded_from_ap_group(self, client, message):
+    async def _handle_ap_excluded_from_ap_group(self, client, message):
         logger.info(f"NetreachAdapter: handle_ap_excluded_from_ap_group()")
         try:
-            self._enqueue_rebuild_micronets(client, message)
+            await self._setup_micronets_for_ap()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -419,10 +423,10 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 "reasonList": [str(e)]
             })
 
-    def _handle_ap_provision_service(self, client, message):
+    async def _handle_ap_provision_service(self, client, message):
         logger.info(f"NetreachAdapter: _handle_ap_provision_service()")
         try:
-            self._enqueue_rebuild_micronets(client, message)
+            await self._setup_micronets_for_ap()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -432,10 +436,10 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 "reasonList": [str(e)]
             })
 
-    def _handle_ap_update_service(self, client, message):
+    async def _handle_ap_update_service(self, client, message):
         logger.info(f"NetreachAdapter: _handle_ap_update_service()")
         try:
-            self._enqueue_rebuild_micronets(client, message)
+            await self._setup_micronets_for_ap()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -445,10 +449,10 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 "reasonList": [str(e)]
             })
 
-    def _handle_ap_remove_service(self, client, message):
+    async def _handle_ap_remove_service(self, client, message):
         logger.info(f"NetreachAdapter: _handle_ap_remove_service()")
         try:
-            self._enqueue_rebuild_micronets(client, message)
+            await self._setup_micronets_for_ap()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -458,11 +462,15 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 "reasonList": [str(e)]
             })
 
-    def _handle_ap_provision_device(self, client, message):
-        logger.info(f"NetreachAdapter: _handle_ap_provision_device()")
+    async def _handle_ap_provision_device(self, client, message):
+        logger.info(f"NetreachAdapter: _handle_ap_provision_device({message})")
         try:
-            # self._enqueue_rebuild_micronets(client, message)
+            await self._setup_micronets_for_ap()
             # Report Success
+            # Clear the PSK lookup cache (in case the device being added has a cache fail)
+            logger.info(f"NetreachAdapter: _handle_ap_provision_device: Clearing the PSK lookup cache")
+            self.psk_lookup_cache = {}
+            # TODO: Just clear failures?
             self._report_event_success(message)
         except ValueError as e:
             self._report_event_failure(message, {
@@ -470,10 +478,10 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 "reasonList": [str(e)]
             })
 
-    def _handle_ap_update_device(self, client, message):
-        logger.info(f"NetreachAdapter: _handle_ap_update_device()")
+    async def _handle_ap_update_device(self, client, message):
+        logger.info(f"NetreachAdapter: _handle_ap_update_device({client},{message})")
         try:
-            self._enqueue_rebuild_micronets(client, message)
+            await self._setup_micronets_for_ap()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -483,12 +491,22 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 "reasonList": [str(e)]
             })
 
-
-    def _handle_ap_remove_device(self, client, message):
-        logger.info(f"NetreachAdapter: _handle_ap_update_device()")
+    async def _handle_ap_remove_device(self, client, message):
+        logger.info(f"NetreachAdapter: _handle_ap_remove_device({message})")
         try:
-            self._enqueue_rebuild_micronets(client, message)
+            await self._setup_micronets_for_ap()
             # TODO: Move failure/success reporting
+            async with httpx.AsyncClient() as httpx_client:
+                logger.info(f"NetreachAdapter._handle_ap_remove_device: Looking up client object at {message['href']}")
+                result = await httpx_client.get(f"{self.controller_base_url}{message['href']}",
+                                                headers={"x-api-token": self.api_token})
+                response_json = await result.json()
+                mac_addr = response_json.get('macAddress')
+                if not mac_addr:
+                    logger.info(f"NetreachAdapter._handle_ap_remove_device: Could not find mac addr for device {message['href']}")
+                else:
+                    logger.info(f"NetreachAdapter._handle_ap_remove_device: Removing PSK result cache entry for MAC {mac_addr}")
+                    del self.psk_lookup_cache[mac_addr.lower()]
             # Report Success
             self._report_event_success(message)
         except ValueError as e:
@@ -508,13 +526,55 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             micronet_id, device_id = await conf_model.get_micronetid_deviceid_for_mac(mac_addr)
             device_patch = {"connected": True}
 
-            result = httpx.patch(f"{self.base_url}/v1/services/{micronet_id}/devices/{device_id}",
+            result = httpx.patch(f"{self.controller_base_url}/v1/services/{micronet_id}/devices/{device_id}",
                                  headers={"x-api-token": self.api_token},
                                  json={"connected": True})
             logger.info(f"NetreachAdapter.process_dhcp_lease_event: Setting status of device {device_id} of service {micronet_id}"
                         f"to {device_patch}")
         else:
             logger.info(f"NetreachAdapter.process_dhcp_lease_event: Ignoring action '{action}' for MAC {mac_addr}")
+
+    async def lookup_psk_for_device(self, psk_lookup_fields):
+        logger.info(f"NetreachAdapter.lookup_psk_for_device({psk_lookup_fields})")
+        # psk_lookup_fields: anonce, snonce, sta_mac, ap_mac, ssid, akmp, pairwise, sta_m2
+
+        sta_mac = psk_lookup_fields['sta_mac'].lower()
+        if not self.api_token:
+            logger.info(f"NetreachAdapter.lookup_psk_for_device: Cannot perform PSK lookup "
+                        f"for device with MAC {sta_mac}: the API key has not been established")
+            return f"The NetReach API key is not set", 500
+
+        if self.psk_cache_enabled:
+            psk_entry = self.psk_lookup_cache.get(sta_mac)
+            if psk_entry:
+                entry_age_s = int(time.time())- psk_entry['createTime']
+                logger.info(f"NetreachAdapter.lookup_psk_for_device: Found cached PSK lookup entry for MAC {sta_mac}: {psk_entry}")
+                logger.info(f"NetreachAdapter.lookup_psk_for_device: Cached PSK lookup entry for MAC {sta_mac} is {entry_age_s}s old")
+                if entry_age_s > self.psk_cache_expire_s:
+                    # Don't use the entry - it's too old - purge it
+                    logger.info(f"NetreachAdapter.lookup_psk_for_device: Removing PSK lookup cache entry due to old age ({self.psk_cache_expire_s}s)")
+                    del self.psk_lookup_cache[sta_mac]
+                    psk_entry = None
+                    # Drop into lookup logic
+                else:
+                    logger.info(f"NetreachAdapter.lookup_psk_for_device: Using cached PSK lookup entry for MAC {sta_mac}")
+                    psk_entry['count'] += 1
+                    return jsonify(psk_entry['lookupResult']), psk_entry['lookupResultCode']
+
+        # Perform the actual lookup of the PSK with the cloud
+        result = httpx.post(f"{self.controller_base_url}/v1/psks/psk-lookup",
+                            headers={"x-api-token": self.api_token},
+                            json=psk_lookup_fields)
+        logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup {'FAILED' if result.is_error else 'SUCCEEDED'}")
+        logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup response: {result.json()}")
+
+        if self.psk_cache_enabled:
+            # If result is 200, response will have "psk', "vlan", "deviceUuid", and "serviceUuid"
+            psk_entry = {"count": 1, "createTime": int(time.time()), "pskFound": not result.is_error,
+                         "lookupResultCode": result.status_code, "lookupResult": result.json()}
+            self.psk_lookup_cache[sta_mac] = psk_entry
+
+        return result.reason_phrase, result.status_code
 
     def register_hostapd_event_handler(self, hostapd_adapter):
         if hostapd_adapter:
@@ -524,6 +584,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"NetreachAdapter.handle_hostapd_ready()")
 
     async def handle_hostapd_cli_event(self, event_msg):
+        # Note: Handler is registered to receive "AP-STA" events only
         logger.info(f"NetreachAdapter.handle_hostapd_cli_event({event_msg})")
         if not self.api_token:
             logger.info (f"NetreachAdapter.handle_hostapd_cli_event: Cannot process {event_msg} event - the API key has not been established")
@@ -536,12 +597,29 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         elif event == "AP-STA-DISCONNECTED":
             device_patch = {"associated": False, "connected": False}
         else:
-            logger.warning(f"NetreachAdapter.handle_hostapd_cli_event: Received unknown event '{event_msg}'")
+            logger.warning(f"NetreachAdapter.handle_hostapd_cli_event: Received unexpected event '{event_msg}'")
+            # If we're getting here, check the pattern provided to the HostapdCLIEventHandler constructor
             return
 
         conf_model = get_conf_model()
         micronet_id, device_id = await conf_model.get_micronetid_deviceid_for_mac(mac)
-        result = httpx.patch(f"{self.base_url}/v1/services/{micronet_id}/devices/{device_id}",
+        if not micronet_id or device_id:
+            logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Did not find micronet/device for MAC {mac}"
+                        " - checking PSK lookup cache")
+            # Check the PSK lookup cache (we can get the hostapd indication before the controller update)
+            psk_lookup_entry = self.psk_lookup_cache.get(mac.lower())
+            if not psk_lookup_entry:
+                logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Cannot find device in PSK lookup cache for '{mac}'")
+                return
+            if not psk_lookup_entry['pskFound']:
+                logger.info(f"NetreachAdapter.handle_hostapd_cli_event: PSK lookup cache for '{mac}' contains lookup failure")
+                return
+            lookup_result = psk_lookup_entry['lookupResult']
+            micronet_id = lookup_result['serviceUuid']
+            device_id = lookup_result['deviceUuid']
+            logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Found service/device ID {micronet_id}/{device_id} for MAC {mac}")
+
+        result = httpx.patch(f"{self.controller_base_url}/v1/services/{micronet_id}/devices/{device_id}",
                              headers={"x-api-token": self.api_token},
                              json=device_patch)
         logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Setting status of device {device_id} of service {micronet_id}"

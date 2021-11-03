@@ -9,7 +9,7 @@ import logging
 
 logger = logging.getLogger ('micronets-gw-service')
 
-api_prefix = '/micronets/v1/gateway'
+api_prefix = '/gateway/v1'
 
 # This installs the handler to turn the InvalidUsage exception into a response
 # See: http://flask.pocoo.org/docs/1.0/patterns/apierrors/
@@ -227,6 +227,39 @@ def check_wpa_psk(container, field_name, required):
                 raise InvalidUsage(400, message=f"Supplied WPA passphrase '{psk}' is invalid (must be 8-63 ASCII characters)")
     return psk
 
+uuid_re = re.compile('^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$', re.ASCII)
+
+def check_uuid_field (json_obj, uuid_field, required):
+    uuid_field = check_field (json_obj, uuid_field, str, required)
+    if not uuid_field and not required:
+        return
+    if not uuid_re.match(uuid_field):
+        raise InvalidUsage (400, message=f"Supplied UUID '{uuid_field}' in '{json_obj}' is not valid")
+    return uuid_field
+
+hex_re = re.compile('^[0-9a-fA-F]+$', re.ASCII)
+
+def check_hex_field(json_obj, hex_field, required, length=0):
+    hex_field = check_field(json_obj, hex_field, str, required)
+    if not hex_field and not required:
+        return
+    if length and len(hex_field) != length:
+        raise InvalidUsage(400, message=f"Supplied length of hex field '{hex_field}' in '{json_obj}' is incorrect (expected {length} hex digits)")
+    if not hex_re.match(hex_field):
+        raise InvalidUsage(400, message=f"Supplied hex field '{hex_field}' in '{json_obj}' is not valid")
+    return hex_field
+
+def check_wpa_psk(container, field_name, required):
+    psk = check_field(container, field_name, str, required)
+    if psk:
+        if len(psk) == 64:
+            if not device_wpa_psk_re.match(psk):
+                raise InvalidUsage(400, message=f"Supplied WPA PSK '{psk}' is invalid (must be 64 hex digits)")
+        else:
+            if not device_wpa_passphrase_re.match(psk):
+                raise InvalidUsage(400, message=f"Supplied WPA passphrase '{psk}' is invalid (must be 8-63 ASCII characters)")
+    return psk
+
 async def check_rules (container, field_name, required):
     rules = check_field (container, field_name, (list), required)
     if rules:
@@ -426,9 +459,27 @@ async def check_lease_event (lease_event):
 
     hostname = check_field (event_fields, 'hostname', str, True)
 
-@app.route (api_prefix + '/leases', methods=['PUT'])
+@app.route (api_prefix + '/dhcp-leases', methods=['PUT'])
 async def process_lease ():
     check_for_json_payload (request)
     lease_event = await request.get_json ()
     await check_lease_event (lease_event)
     return await get_conf_model ().process_dhcp_lease_event (lease_event)
+
+def check_netreach_psk_lookup(psk_lookup):
+    check_for_unrecognized_entries(psk_lookup, ['anonce', 'snonce', 'sta_mac', 'ap_mac', 'ssid', 'akmp', 'pairwise', 'sta_m2'])
+    check_mac_address_field(psk_lookup, 'sta_mac', True)
+    check_mac_address_field(psk_lookup, 'ap_mac', True)
+    check_field(psk_lookup, 'anonce', str, True)
+    check_field(psk_lookup, 'snonce', str, True)
+    check_field(psk_lookup, 'ssid', str, True)
+    check_field(psk_lookup, 'akmp', str, True)
+    check_field(psk_lookup, 'pairwise', str, True)
+    check_field(psk_lookup, 'sta_m2', str, True)
+
+@app.route (api_prefix + '/netreach/psk-lookup', methods=['POST'])
+async def process_psk_entry_lookup():
+    check_for_json_payload(request)
+    psk_lookup_fields = await request.get_json()
+    check_netreach_psk_lookup(psk_lookup_fields)
+    return await get_conf_model().process_psk_lookup(psk_lookup_fields)

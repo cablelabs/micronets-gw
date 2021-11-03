@@ -23,7 +23,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "vlan": 101,
                 "nameservers": ["8.8.8.8","4.4.4.4"]
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets
+        }' http://localhost:5000/gateway/v1/micronets
     ```
 
     Expected output: (status code 201)
@@ -60,7 +60,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "interface": "wlp2s0",
                 "vlan": 102
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets
+        }' http://localhost:5000/gateway/v1/micronets
     ```
 
     Expected output: (status code 201)
@@ -109,7 +109,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "vlan": 109
             }
         ] }
-        ' http://localhost:5000/micronets/v1/gateway/micronets
+        ' http://localhost:5000/gateway/v1/micronets
     ```
 
     Expected output: (status code 201)
@@ -151,7 +151,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 * Retrieve all micronets:
 
     ```
-    curl http://localhost:5000/micronets/v1/gateway/micronets
+    curl http://localhost:5000/gateway/v1/micronets
     ```
 
     Expected output: (status code 200)
@@ -199,7 +199,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "gateway":"192.168.1.2"
                 }
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007
     ```
 
     Expected output: (status code 200)
@@ -228,7 +228,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
             "micronet": {
                 "nameservers": ["8.8.8.8", "4.4.4.4"]
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007
     ```
 
     Expected output: (status code 200)
@@ -259,7 +259,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "gateway": "192.168.1.3"
                 }
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007
     ```
 
     Expected output: (status code 200)
@@ -286,7 +286,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 * Deleting a micronet:
 
     ```
-    curl -X DELETE http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
+    curl -X DELETE http://localhost:5000/gateway/v1/micronets/mockmicronet007
     ```
 
     Expected output: (status code 204)
@@ -296,7 +296,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 * Deleting all micronets:
 
     ```
-    curl -X DELETE http://localhost:5000/micronets/v1/gateway/micronets
+    curl -X DELETE http://localhost:5000/gateway/v1/micronets
     ```
 
     Expected output: (status code 204)
@@ -320,7 +320,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "vlan": 101,
                 "nameservers": ["8.8.8.8","4.4.4.4"]
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets
+        }' http://localhost:5000/gateway/v1/micronets
     ```
 
     Expected output: (status code 409)
@@ -345,7 +345,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "vlan": 101,
                 "nameservers": ["8.8.8.8","4.4.4.4"]
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets
+        }' http://localhost:5000/gateway/v1/micronets
     ```
 
     Expected output: (status code 400)
@@ -368,7 +368,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "interface": "wlp2s0",
                 "nameservers": ["8.8.8.8","4.4.4.4"]
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets
+        }' http://localhost:5000/gateway/v1/micronets
     ```
 
     Expected output: (status code 400)
@@ -390,7 +390,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 },
                 "interface": "wlp2s0"
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets
+        }' http://localhost:5000/gateway/v1/micronets
     ```
 
     Expected output: (status code 400)
@@ -414,7 +414,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 },
                 "interface": "wlp2s0"
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets
+        }' http://localhost:5000/gateway/v1/micronets
     ```
 
     Expected output: (status code 400)
@@ -438,7 +438,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 },
                 "interface": "wlp2s0"
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets
+        }' http://localhost:5000/gateway/v1/micronets
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -451,7 +451,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 },
                 "interface": "wlp2s0"
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets
+        }' http://localhost:5000/gateway/v1/micronets
     ```
 
     Expected output: (status code 400)
@@ -476,7 +476,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 "interface": "wlp2s0",
                 "vlan": 101
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007
     ```
 
     Expected output: (status code 409)
@@ -496,7 +496,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "network": "192.168.1.1234"
                 }
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007
     ```
 
     Expected output: (status code 400)
@@ -516,7 +516,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "network": "127.0.0.1"
                 }
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007
     ```
 
     Expected output: (status code 400)
@@ -538,7 +538,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "mask": "255.255.255.0"
                 }
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets
+        }' http://localhost:5000/gateway/v1/micronets
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -551,7 +551,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.42"
                }
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -579,7 +579,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.42"
                }
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 201)
@@ -622,7 +622,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     }
                 }
             ]
-    }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+    }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 201)
@@ -655,7 +655,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 * Retrieving all devices defined for a micronet:
 
     ```
-    curl http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+    curl http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 200)
@@ -698,7 +698,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "ipv4": "192.168.42.43"
                 }
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 200)
@@ -731,7 +731,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                },
                "psk": "736b697070657220697320612076657279207665727920676f6f642063617421"
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 201)
@@ -759,7 +759,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "ipv4": "192.168.1.143"
                 }
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices/MyDevice01
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices/MyDevice01
     ```
 
     Expected output: (status code 200)
@@ -781,7 +781,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 * Deleting a device:
 
     ```
-    curl -X DELETE http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices/mydevice01
+    curl -X DELETE http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices/mydevice01
     ```
 
     Expected output: (status code 204)
@@ -808,7 +808,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                   {"action": "allow", "destMac": "00:23:12:0f:b0:26"},
                   {"action": "deny"} ]
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 201)
@@ -854,7 +854,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                   {"action": "deny", "destMac": "00:23:12:0f:b0:26"},
                   {"action": "allow"} ]
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 201)
@@ -894,7 +894,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                },
                "allowHosts": ["8.8.8.8", "12.34.56.0/24", "www.yahoo.com", "b8:27:eb:75:a4:8b"]
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 201)
@@ -924,7 +924,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                "akms": ["psk"],
                "uri": "DPP:C:81/1;M:2c:d0:5a:6e:ca:3c;I:KYZRQ;K:MDkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDIgAC/nFQKV1+CErzr6QCUT0jFIno3CaTRr3BW2n0ThU4mAw=;;"
            }
-       }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices/MyDevice03/onboard
+       }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices/MyDevice03/onboard
     ```
 
     Expected events: (when the onboard is initiated successfully/returns 200)
@@ -998,7 +998,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "ipv4": "192.168.1.4222"
                 }
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -1018,7 +1018,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 },
                 "networkAddress": "blah"
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -1040,7 +1040,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 },
                 "networkAddress": {}
             }
-          }'  http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+          }'  http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -1059,7 +1059,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                     "eui48": "00:23:12:0f:b0:26"
                 }
             }
-        }'  http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }'  http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -1083,7 +1083,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.42"
                }
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -1105,7 +1105,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.42"
                }
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -1126,7 +1126,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices/MyDevice01
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices/MyDevice01
     ```
 
     Expected output: (status code 400)
@@ -1150,7 +1150,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                 },
                 "nameservers": ["8.8.8.8","4.4.4.4"]
             }
-        }' http://localhost:5000/micronets/v1/gateway/micronets
+        }' http://localhost:5000/gateway/v1/micronets
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -1163,7 +1163,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.2.42"
                }
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -1187,7 +1187,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                },
                "nameservers": ["8.8.8.8","4.4.4.4"]
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets
+        }' http://localhost:5000/gateway/v1/micronets
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -1200,7 +1200,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.42"
                }
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
@@ -1213,7 +1213,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
                    "ipv4": "192.168.1.43"
                }
            }
-        }' http://localhost:5000/micronets/v1/gateway/micronets/mockmicronet007/devices
+        }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
 
     Expected output: (status code 400)
@@ -1226,7 +1226,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
 ### LEASE NOTIFICATION TEST CASES:
 
-Lease change notifications can be performed by posting to the `/micronets/v1/gateway/leases` endpoint.
+Lease change notifications can be performed by posting to the `/gateway/v1/leases` endpoint.
 
 ```json
 curl -X PUT -H "Content-Type: application/json" -d '{
@@ -1239,7 +1239,7 @@ curl -X PUT -H "Content-Type: application/json" -d '{
             "ipv4": "192.168.1.42"
         }, 
         "hostname": "myhost"}
-    }' http://localhost:5000/micronets/v1/gateway/leases
+    }' http://localhost:5000/gateway/v1/leases
 ```
 
 Expected output: (status code 200)

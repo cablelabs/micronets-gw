@@ -392,7 +392,7 @@ class GatewayServiceConf:
         net_addr = event_fields ['networkAddress']['ipv4']
         micronet_id, device_id = await self.get_micronetid_deviceid_for_mac (mac_addr)
         if not (micronet_id and device_id):
-            logger.info (f"GatewayServiceConf.process_lease_event: ERROR: Could not find device/micronet for mac {mac_addr}")
+            logger.info (f"GatewayServiceConf.process_lease_event: Could not find device with mac {mac_addr}")
             raise InvalidUsage (404, message=f"No device found with mac address {mac_addr}")
         logger.info (f"GatewayServiceConf.process_lease_event: found micronet/device {micronet_id}/{device_id} for mac {mac_addr}")
 
@@ -400,5 +400,13 @@ class GatewayServiceConf:
             await self.ws_connection.process_dhcp_lease_event(micronet_id, device_id, action, mac_addr, net_addr)
         if self.netreach_adapter:
             await self.netreach_adapter.process_dhcp_lease_event(micronet_id, device_id, action, mac_addr, net_addr)
-
         return '', 200
+
+    async def process_psk_lookup(self, psk_lookup_fields):
+        logger.info(f"GatewayServiceConf.process_psk_lookup()")
+
+        if self.netreach_adapter:
+            return await self.netreach_adapter.lookup_psk_for_device(psk_lookup_fields)
+        else:
+            return f"Could not lookup PSK {psk_lookup_fields['psk']} for MAC {psk_lookup_fields['mac']}: "\
+                    "The NetReach adapter is not enabled", 400
