@@ -190,13 +190,11 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             "token_expiration_request": self.token_request_time
         }
         data_json = json.dumps(data)
-
-        signature_algorithm = ec.ECDSA(hashes.SHA256())
-
         # TODO: REMOVE ME
-        logger.info(f"NetreachAdapter: _login_to_controller: Private key: {self.priv_key}")
-        key = serialization.load_pem_private_key(self.priv_key.encode(), password=None)
-        signature = key.sign(data_json.encode(), signature_algorithm)
+        logger.info(f"NetreachAdapter: _login_to_controller: data to sign: {data}")
+        logger.info(f"NetreachAdapter: _login_to_controller: data to sign (json): {data_json}")
+
+        signature = self._sign_data(data_json.encode())
         enc_signature = base64.b64encode(signature).decode()
         async with httpx.AsyncClient() as httpx_client:
             # TODO: REMOVE ME
@@ -225,6 +223,14 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             with open(self.api_token_file, 'wt') as f:
                 f.write(self.api_token)
             logger.info(f"NetreachAdapter:_login_to_controller: Saved NetReach Controller API token to {self.api_token_file}")
+
+    def _sign_data(self, data):
+        signature_algorithm = ec.ECDSA(hashes.SHA256())
+
+        # TODO: REMOVE ME
+        logger.info(f"NetreachAdapter: _sign_data: Signing with private key: {self.priv_key}")
+        key = serialization.load_pem_private_key(self.priv_key.encode(), password=None)
+        return key.sign(data, signature_algorithm)
 
     def _connect_mqtt_listener(self):
         logger.debug(f"NetreachAdapter:_connect_mqtt_listener()")
