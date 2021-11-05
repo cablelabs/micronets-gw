@@ -68,16 +68,16 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     def enqueue_connect(self):
         logger.info(f"NetreachAdapter:enqueue_connect()")
-        asyncio.ensure_future(self._initial_setup())
+        asyncio.ensure_future(self._kickoff_cloud_connection())
 
     def set_mqtt_connection_state(self, new_state):
         logger.info(f"NetreachAdapter:set_mqtt_connection_state: Changing state from {self.mqtt_connection_state} to {new_state}")
         self.mqtt_connection_state = new_state
 
-    async def _initial_setup(self):
+    async def _kickoff_cloud_connection(self):
         logger.info(f"NetreachAdapter:_initial_setup()")
         if not self.pub_key_file.exists() and not self.reg_token_file.exists():
-            logger.warning(f"NetreachAdapter:__initial_setup: Cannot register with controller - no keypair or registration token")
+            logger.warning(f"NetreachAdapter:_kickoff_cloud_connection: Cannot register with controller - no keypair or registration token")
             raise Exception("No keypair or registration token configured - cannot continue")
 
         if self.pub_key_file.exists():
@@ -88,14 +88,16 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
         if self.reg_token_file.exists():
             self.reg_token = self.reg_token_file.read_text().strip()
-            logger.info(f"NetreachAdapter: _initial_setup: Found registration token {self.reg_token[0:6]}...{self.reg_token[-6:]}")
+            logger.info(f"NetreachAdapter: _kickoff_cloud_connection: Found registration token "
+                        f"{self.reg_token[0:6]}...{self.reg_token[-6:]}")
             await self._register_ap()
             self.reg_token_file.unlink()
 
         if self.connection_startup_delay_s:
-            logger.info(f"NetreachAdapter:_initial_setup: Waiting {self.connection_startup_delay_s} seconds to start...")
+            logger.info(f"NetreachAdapter:_kickoff_cloud_connection: Waiting {self.connection_startup_delay_s} "
+                        "seconds to start...")
             await asyncio.sleep(self.connection_startup_delay_s)
-        await self._login_and_setup()
+        await self._cloud_login_and_setup()
         await self._connect_mqtt_listener_loop()
 
     def _generate_ecc_keypair(self):
@@ -148,8 +150,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"NetreachAdapter._register_ap: Successfully registered AP with pubkey "
                         f"{self.pub_key[0:8]}...{self.pub_key[-8:]}")
 
-    async def _login_and_setup(self):
-        logger.info(f"NetreachAdapter:_login_and_setup()")
+    async def _cloud_login_and_setup(self):
+        logger.info(f"NetreachAdapter:_cloud_login_and_setup()")
 
         while not self.logged_in:
             try:
@@ -158,11 +160,11 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 await self._setup_micronets_for_ap()
                 self.logged_in = True
             except Exception as ex:
-                logger.info(f"NetreachAdapter:_login_and_setup: Error while performing controller login/setup: {ex}",
+                logger.info(f"NetreachAdapter:_cloud_login_and_setup: Error performing controller login/setup: {ex}",
                             exc_info=True)
-                logger.info(f"NetreachAdapter:_login_and_setup: Sleeping {self.connection_retry_s} seconds...")
+                logger.info(f"NetreachAdapter:_cloud_login_and_setup: Sleeping {self.connection_retry_s} seconds...")
                 await asyncio.sleep(self.connection_retry_s)
-                logger.info(f"NetreachAdapter:_login_and_setup: Retrying controller login/setup")
+                logger.info(f"NetreachAdapter:_cloud_login_and_setup: Retrying controller login/setup")
 
     async def _connect_mqtt_listener_loop(self, wait_for_s=0):
         logger.info(f"NetreachAdapter:_connect_mqtt_listener_loop(wait_for_s={wait_for_s})")
@@ -201,7 +203,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 logger.warning(f"NetreachAdapter:_login_to_controller: FAILED login to NetReach Controller: "
                                f"{response.status_code}: {response.text}")
                 raise ValueError(res_json)
-            logger.info(f"NetreachAdapter:_login_to_controller: AP SUCCESSFULLY logged into NetReach Controller ({response})")
+            logger.info(f"NetreachAdapter:_login_to_controller: AP SUCCESSFULLY logged into NetReach Controller")
             self.ap_uuid = res_json['uuid']
             self.api_token = res_json['token']
             self.api_token_refresh = res_json['refresh_token']
