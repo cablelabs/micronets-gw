@@ -4,10 +4,12 @@ from app import get_conf_model
 from ipaddress import IPv4Network, IPv4Address, AddressValueError, NetmaskValueError
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.backends import default_backend
 import paho.mqtt.client as mqtt
 from urllib import parse as urllib_dot_parse
 from uuid import UUID
 from quart import jsonify
+from pathlib import Path
 
 from .hostapd_adapter import HostapdAdapter
 
@@ -19,9 +21,11 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     def __init__ (self, config):
         HostapdAdapter.HostapdCLIEventHandler.__init__(self, ("AP-STA"))
         self.serial_number_file = config['NETREACH_ADAPTER_SERIAL_NUM_FILE']
+        self.reg_token_file = config['NETREACH_ADAPTER_REG_TOKEN_FILE']
         self.pub_key_file = config['NETREACH_ADAPTER_PUBLIC_KEY_FILE']
         self.priv_key_file = config['NETREACH_ADAPTER_PRIVATE_KEY_FILE']
         self.wifi_interface = config['NETREACH_ADAPTER_WIFI_INTERFACE'] # TODO: Think...
+        self.management_interface = config['NETREACH_ADAPTER_MAN_INTERFACE']
         self.controller_base_url = config['NETREACH_ADAPTER_CONTROLLER_BASE_URL']
         self.api_token_file = config['NETREACH_ADAPTER_API_KEY_FILE']
         self.token_request_time = config['NETREACH_ADAPTER_API_KEY_REFRESH_DAYS']
@@ -47,10 +51,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.micronets_api_prefix = f"http://{config['LISTEN_HOST']}:{config['LISTEN_PORT']}/gateway/v1"
         with open(self.serial_number_file, 'rt') as f:
             self.serial_number = f.read().strip()
-        with open(self.pub_key_file, 'rb') as f:
-            self.pub_key = f.read()
-        with open(self.priv_key_file, 'rb') as f:
-            self.priv_key = f.read()
+        self.pub_key = None
+        self.priv_key = None
         logger.info(f"NetreachAdapter: Base url: {self.controller_base_url}")
         logger.info(f"NetreachAdapter: Serial number: {self.serial_number}")
         logger.info(f"NetreachAdapter: public key: \n{self.pub_key}")
@@ -74,23 +76,79 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     async def _initial_setup(self):
         logger.info(f"NetreachAdapter:_initial_setup()")
+        if not self.pub_key_file.exists() and not self.reg_token_file.exists():
+            logger.warning(f"NetreachAdapter:_initial_setup: Cannot register with controller - no keypair or registration token")
+            raise Exception("No keypair or registration token configured - cannot continue")
+
+        if self.reg_token_file.exists():
+            if not self.pub_key_file:
+                self._generate_ecc_keypair()
+            await self._register_ap()
+
+        with open(self.pub_key_file, 'rb') as f:
+            self.pub_key = f.read()
+        with open(self.priv_key_file, 'rb') as f:
+            self.priv_key = f.read()
+
         if self.connection_startup_delay_s:
             logger.info(f"NetreachAdapter:_initial_setup: Waiting {self.connection_startup_delay_s} seconds to start...")
             await asyncio.sleep(self.connection_startup_delay_s)
         await self._login_and_setup()
         await self._connect_mqtt_listener_loop()
 
+    def _generate_ecc_keypair(self):
+        curve = ec.SECP256R1()
+        private_value = int(random.random()*pow(10, 50))
+        priv_key = ec.derive_private_key(private_value, curve, default_backend())
+        pub_key = priv_key.public_key()
+
+        private_pem = priv_key.private_bytes(
+            serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption())
+        public_pem = pub_key.public_bytes(
+            serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
+
+        with open(self.priv_key_file, 'wt') as f:
+            f.write(private_pem.decode())
+
+        with open(self.pub_key_file, 'wt') as f:
+            f.write(public_pem.decode())
+
+        return public_pem, private_pem
+
+    async def _register_ap(self):
+        reg_token = self.reg_token_file.read_text()
+        pub_key = self.pub_key_file.read_text()
+        async with httpx.AsyncClient() as httpx_client:
+            logger.info(f"NetreachAdapter._register_ap: Attempting to register AP using registration token "
+                        f"{reg_token[0,8]}...{reg_token[-8,]}")
+            registration_request = {"geolocation": {"latitude": "0.0", "longitude": "0.0"},
+                                    "managementAddress": "10.10.10.10",
+                                    "publicKey": pub_key
+                                    }
+            # TODO: Provide real geolocation and management address
+            response = await httpx_client.post(f"{self.controller_base_url}/v1/access-points",
+                                               headers={"x-registration-token": self.reg_token,
+                                                        "content-type": "application/json"},
+                                               json=registration_request)
+            if response.status_code != 200:
+                raise Exception(f"Failed to register AP with reg token {reg_token[0,8]}...{reg_token[-8,]}")
+            res_json = response.json()
+
+        logger.info(f"NetreachAdapter._register_ap: Successfully registered AP with pubkey "
+                        f"{pub_key[0,8]}...{pub_key[-8,]}")
+
     async def _login_and_setup(self):
         logger.info(f"NetreachAdapter:_login_and_setup()")
 
         while not self.logged_in:
             try:
-                self._login_to_controller()
-                self._get_ap_info()
+                await self._login_to_controller()
+                await self._get_ap_info()
                 await self._setup_micronets_for_ap()
                 self.logged_in = True
             except Exception as ex:
-                logger.info(f"NetreachAdapter:_login_and_setup: Error while performing controller login/setup: {ex}")
+                logger.info(f"NetreachAdapter:_login_and_setup: Error while performing controller login/setup: {ex}",
+                            exc_info=True)
                 logger.info(f"NetreachAdapter:_login_and_setup: Sleeping {self.connection_retry_s} seconds...")
                 await asyncio.sleep(self.connection_retry_s)
                 logger.info(f"NetreachAdapter:_login_and_setup: Retrying controller login/setup")
@@ -112,7 +170,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 await asyncio.sleep(self.connection_retry_s)
                 logger.info(f"NetreachAdapter:_connect_mqtt_listener_loop: Retrying MQTT connection establishment")
 
-    def _login_to_controller(self):
+    async def _login_to_controller(self):
         logger.info(f"NetreachAdapter: Logging into controller at {self.controller_base_url}")
         data = {
             "serial": self.serial_number,
@@ -125,27 +183,28 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         key = serialization.load_pem_private_key(self.priv_key, password=None)
         signature = key.sign(data_json.encode(), signature_algorithm)
         enc_signature = base64.b64encode(signature).decode()
-        result = httpx.post(f"{self.controller_base_url}/v1/access-points/token",
-                            headers={"x-ap-signature": enc_signature},
-                            json=data)
-        res_json = result.json()
-        if result.status_code >= 400:
-            raise ValueError(res_json)
-        logger.info(f"NetreachAdapter:_login_to_controller: AP SUCCESSFULLY logged into NetReach Controller ({result})")
-        logger.info(f"NetreachAdapter:_login_to_controller: Token registration response: {json.dumps(res_json, indent=4)}")
-        # TODO: censor logging of tokens
-        self.api_token = res_json['token']
-        self.api_token_refresh = res_json['refresh_token']
-        # TODO: Implement logoff/login to refresh API token
-        self.ap_uuid = res_json['uuid']
-        self.api_token_expiration = res_json['expires']
-        logger.info(f"NetreachAdapter:_login_to_controller: AP UUID: {self.ap_uuid}")
-        if not self.mqtt_broker_url:
-            self.mqtt_broker_url = res_json['mqttProxyUrl']
+        async with httpx.AsyncClient() as httpx_client:
+            response = await httpx_client.post(f"{self.controller_base_url}/v1/access-points/token",
+                                               headers={"x-ap-signature": enc_signature,
+                                                        "content-type": "application/json"},
+                                               json=data)
+            res_json = response.json()
+            if response.status_code >= 400:
+                raise ValueError(res_json)
+            logger.info(f"NetreachAdapter:_login_to_controller: AP SUCCESSFULLY logged into NetReach Controller ({response})")
+            logger.info(f"NetreachAdapter:_login_to_controller: Token registration response: {json.dumps(res_json, indent=4)}")
+            # TODO: censor logging of tokens
+            self.ap_uuid = res_json['uuid']
+            self.api_token = res_json['token']
+            self.api_token_refresh = res_json['refresh_token']
+            # TODO: Implement logoff/login to refresh API token
+            self.api_token_expiration = res_json['expires']
+            if not self.mqtt_broker_url:
+                self.mqtt_broker_url = res_json['mqttProxyUrl']
 
-        with open(self.api_token_file, 'wt') as f:
-            self.priv_key = f.write(self.api_token)
-        logger.info(f"NetreachAdapter:_login_to_controller: Saved NetReach Controller API token to {self.api_token_file}")
+            with open(self.api_token_file, 'wt') as f:
+                self.priv_key = f.write(self.api_token)
+            logger.info(f"NetreachAdapter:_login_to_controller: Saved NetReach Controller API token to {self.api_token_file}")
 
     def _connect_mqtt_listener(self):
         logger.debug(f"NetreachAdapter:_connect_mqtt_listener()")
@@ -174,13 +233,16 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.mqtt_client = mqtt_client
         self.mqtt_client.loop_start()
 
-    def _get_ap_info(self):
+    async def _get_ap_info(self):
         # Retrieve info on myself
-        result = httpx.get(f"{self.controller_base_url}/v1/access-points/{self.ap_uuid}",
-                           headers={"x-api-token": self.api_token})
-        ap_info = result.json()
-        self.ap_name = ap_info['name']
-        self.ap_enabled = ap_info['enabled']
+        async with httpx.AsyncClient() as httpx_client:
+            response = await httpx_client.get(f"{self.controller_base_url}/v1/access-points/{self.ap_uuid}",
+                                              headers={"x-api-token": self.api_token})
+            ap_info = response.json()
+            logger.info(f"NetreachAdapter:_login_to_controller: Got AP Info: {ap_info}")
+            self.ap_name = ap_info['name']
+            self.ap_enabled = ap_info['enabled']
+            self.ap_serial = ap_info['serial']
 
     async def _setup_micronets_for_ap(self):
         logger.info(f"NetreachAdapter: _setup_micronets_for_ap {self.ap_name} ({self.ap_uuid})")
@@ -189,6 +251,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         # Clear out all the micronets - we're going to rebuild them
         result = await micronets_api.delete(f"{self.micronets_api_prefix}/micronets")
 
+        # TODO: Make async
         result = httpx.get(f"{self.controller_base_url}/v1/ap-groups/?apUuid={self.ap_uuid}",
                            headers={"x-api-token": self.api_token})
         if result.is_error:
