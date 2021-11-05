@@ -45,7 +45,7 @@ class NetreachDefaultSettings():
     libpath = BaseConfigSettings.SERVER_LIB_DIR
     NETREACH_ADAPTER_ENABLED = True
     NETREACH_ADAPTER_SERIAL_NUM_FILE = libpath.joinpath('netreach-serialnum.txt')
-    NETREACH_ADAPTER_REG_TOKEN_FILE = libpath.joinpath('netreach-regtoken.txt')
+    NETREACH_ADAPTER_REG_TOKEN_FILE = libpath.joinpath('netreach-reg-token.txt')
     NETREACH_ADAPTER_PUBLIC_KEY_FILE = libpath.joinpath('netreach-pubkey.pem')
     NETREACH_ADAPTER_PRIVATE_KEY_FILE = libpath.joinpath('netreach-privkey.pem')
     NETREACH_ADAPTER_WIFI_INTERFACE = "wlan0"
