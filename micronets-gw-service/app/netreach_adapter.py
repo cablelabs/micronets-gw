@@ -1,4 +1,4 @@
-import logging, base64, json, httpx, re, asyncio, time, random
+import logging, base64, json, httpx, re, asyncio, time, random, netifaces
 
 from app import get_conf_model
 from ipaddress import IPv4Network, IPv4Address, AddressValueError, NetmaskValueError
@@ -24,8 +24,10 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.reg_token_file = config['NETREACH_ADAPTER_REG_TOKEN_FILE']
         self.pub_key_file = config['NETREACH_ADAPTER_PUBLIC_KEY_FILE']
         self.priv_key_file = config['NETREACH_ADAPTER_PRIVATE_KEY_FILE']
-        self.wifi_interface = config['NETREACH_ADAPTER_WIFI_INTERFACE'] # TODO: Think...
-        self.management_interface = config['NETREACH_ADAPTER_MAN_INTERFACE']
+        self.wifi_interface = config['NETREACH_ADAPTER_WIFI_INTERFACE']
+        self.geolocation = config.get('NETREACH_ADAPTER_GEOLOCATION')
+        self.management_address = config.get('NETREACH_ADAPTER_MAN_ADDRESS')
+        self.management_interface = config.get('NETREACH_ADAPTER_MAN_INTERFACE')
         self.controller_base_url = config['NETREACH_ADAPTER_CONTROLLER_BASE_URL']
         self.api_token_file = config['NETREACH_ADAPTER_API_KEY_FILE']
         self.token_request_time = config['NETREACH_ADAPTER_API_KEY_REFRESH_DAYS']
@@ -51,14 +53,33 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.micronets_api_prefix = f"http://{config['LISTEN_HOST']}:{config['LISTEN_PORT']}/gateway/v1"
         with open(self.serial_number_file, 'rt') as f:
             self.serial_number = f.read().strip()
+        if not self.management_address and self.management_interface:
+            logger.info(f"NetreachAdapter: Setting management address to {self.management_interface} address")
+            self.management_address = self._ip_for_interface(self.management_interface)
+        if not self.geolocation:
+            self.geolocation = self._get_geolocation()
         self.pub_key = None
         self.priv_key = None
         logger.info(f"NetreachAdapter: Base url: {self.controller_base_url}")
         logger.info(f"NetreachAdapter: Serial number: {self.serial_number}")
+        logger.info(f"NetreachAdapter: Management interface: {self.management_interface}")
+        logger.info(f"NetreachAdapter: Management address: {self.management_address}")
         logger.info(f"NetreachAdapter: using micronets API prefix: \n{self.micronets_api_prefix}")
         self.mqtt_client = None
         self.mqtt_connection_state = "DISCONNECTED"
         self.async_event_loop = asyncio.get_event_loop()
+
+    def _ip_for_interface(self, int_name):
+        addrs = netifaces.ifaddresses(int_name)
+        if not addrs:
+            raise ValueError(f"No addresses for interface {int_name}")
+        inet_addrs = addrs.get(netifaces.AF_INET)
+        if not inet_addrs:
+            raise ValueError(f"No internet addresses for interface {int_name}")
+        return inet_addrs[0]['addr']
+
+    def _get_geolocation(self):
+        return {"latitude": "0.0", "longitude": "0.0"}
 
     async def update (self, micronet_list, device_lists):
         logger.info (f"NetreachAdapter.update ()")
@@ -128,15 +149,16 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         async with httpx.AsyncClient() as httpx_client:
             logger.info(f"NetreachAdapter._register_ap: Attempting to register AP using registration token "
                         f"{self.reg_token[0:6]}...{self.reg_token[-6:]}")
-            registration_request = {"geolocation": {"latitude": "0.0", "longitude": "0.0"},
-                                    "managementAddress": "10.10.10.10",
-                                    "publicKey": self.pub_key
+
+            registration_request = {
+                                    "publicKey": self.pub_key,
+                                    "managementAddress": self.management_address,
+                                    "geolocation": self.geolocation
                                     }
-            # TODO: Provide real geolocation and management address
+
+            logger.info(f"NetreachAdapter._register_ap: Registration request: {registration_request}")
             headers = {"x-registration-token": self.reg_token,
                        "content-type": "application/json"}
-            logger.info(f"NetreachAdapter._register_ap: Registration request: {registration_request}")
-            logger.info(f"NetreachAdapter._register_ap: Headers: {headers}")
             response = await httpx_client.post(f"{self.controller_base_url}/v1/access-points/register",
                                                headers=headers,
                                                json=registration_request)
