@@ -149,7 +149,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 logger.warning(f"NetreachAdapter._register_ap: Registration serial number mismatch: "
                                f"Found {resp_serial}, expecting {self.serial_number}")
 
-        logger.info(f"NetreachAdapter._register_ap: Successfully registered AP with pubkey \nself.pub_key}")
+        logger.info(f"NetreachAdapter._register_ap: Successfully registered AP with pubkey \n{self.pub_key}")
 
     async def _cloud_login_and_setup(self):
         logger.info(f"NetreachAdapter:_cloud_login_and_setup()")
