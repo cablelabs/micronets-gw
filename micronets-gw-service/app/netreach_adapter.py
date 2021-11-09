@@ -20,6 +20,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     def __init__ (self, config):
         HostapdAdapter.HostapdCLIEventHandler.__init__(self, ("AP-STA"))
+        self.debug = config.get('DEBUG')
         self.serial_number_file = config['NETREACH_ADAPTER_SERIAL_NUM_FILE']
         self.reg_token_file = config['NETREACH_ADAPTER_REG_TOKEN_FILE']
         self.pub_key_file = config['NETREACH_ADAPTER_PUBLIC_KEY_FILE']
@@ -51,8 +52,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.logged_in = False
         self.psk_lookup_cache = {}
         self.micronets_api_prefix = f"http://{config['LISTEN_HOST']}:{config['LISTEN_PORT']}/gateway/v1"
-        with open(self.serial_number_file, 'rt') as f:
-            self.serial_number = f.read().strip()
+        self.serial_number = self.serial_number_file.read_text().strip()
+        self.reg_token = self.reg_token_file.read_text().strip() if self.reg_token_file.exists() else None
         if not self.management_address and self.management_interface:
             logger.info(f"NetreachAdapter: Setting management address to {self.management_interface} address")
             self.management_address = self._ip_for_interface(self.management_interface)
@@ -103,17 +104,11 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         if self.pub_key_file.exists():
             self.pub_key = self.pub_key_file.read_text()
             self.priv_key = self.priv_key_file.read_text()
-            logger.info(f"NetreachAdapter: Found public key:\n{self.pub_key}")
+            logger.info(f"NetreachAdapter: Found public key file {self.pub_key_file}:\n{self.pub_key}")
         else:
             self.pub_key, self.priv_key = self._generate_ecc_keypair()
-            logger.info(f"NetreachAdapter: Generated public key:\n{self.pub_key}")
-
-        if self.reg_token_file.exists():
-            self.reg_token = self.reg_token_file.read_text().strip()
-            logger.info(f"NetreachAdapter: _kickoff_cloud_connection: Found registration token "
-                        f"{self.reg_token[0:6]}...{self.reg_token[-6:]}")
-            await self._register_ap()
-            self.reg_token_file.unlink()
+            logger.info(f"NetreachAdapter: Generated new key pair. Public key saved to {self.pub_key_file}:\n"
+                        f"{self.pub_key}")
 
         if self.connection_startup_delay_s:
             logger.info(f"NetreachAdapter:_kickoff_cloud_connection: Waiting {self.connection_startup_delay_s} "
@@ -178,13 +173,20 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
         while not self.logged_in:
             try:
+                if self.reg_token:
+                    logger.info(f"NetreachAdapter: _cloud_login_and_setup: Found registration token "
+                                f"{self.reg_token[0:6]}...{self.reg_token[-6:]}")
+                    await self._register_ap()
+                    self.reg_token = None
+                    self.reg_token_file.unlink()
+
                 await self._login_to_controller()
                 await self._get_ap_info()
                 await self._setup_micronets_for_ap()
                 self.logged_in = True
             except Exception as ex:
                 logger.info(f"NetreachAdapter:_cloud_login_and_setup: Error performing controller login/setup: {ex}",
-                            exc_info=True)
+                            exc_info=self.debug)
                 logger.info(f"NetreachAdapter:_cloud_login_and_setup: Sleeping {self.connection_retry_s} seconds...")
                 await asyncio.sleep(self.connection_retry_s)
                 logger.info(f"NetreachAdapter:_cloud_login_and_setup: Retrying controller login/setup")
@@ -208,6 +210,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     async def _login_to_controller(self):
         logger.info(f"NetreachAdapter: _login_to_controller: Logging into controller at {self.controller_base_url}")
+
         data = {
             "serial": self.serial_number,
             "token_expiration_request": self.token_request_time
@@ -310,6 +313,11 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         # TODO: Configure hostapd with the given ssid(s)
         result = httpx.get(f"{self.controller_base_url}/v1/services/?apGroupUuid={self.ap_group_uuid}",
                            headers={"x-api-token": self.api_token})
+        if result.is_error:
+            logger.warning(f"NetreachAdapter:_setup_micronets_for_ap {self.ap_name} ({self.ap_uuid}) could not get "
+                           f"services for apGroup {self.ap_group_name} (apGroup {self.ap_group_uuid}): "
+                           f"{result.text} ({result.status_code}).")
+            return
 
         service_list = result.json()['results']
         for service in service_list:
@@ -667,12 +675,12 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                             headers={"x-api-token": self.api_token},
                             json=psk_lookup_fields)
         logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup {'FAILED' if result.is_error else 'SUCCEEDED'}")
-        logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup response: {result.json()}")
+        logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup response: {result.text}")
 
         if self.psk_cache_enabled:
             # If result is 200, response will have "psk', "vlan", "deviceUuid", and "serviceUuid"
             psk_entry = {"count": 1, "createTime": int(time.time()), "pskFound": not result.is_error,
-                         "lookupResultCode": result.status_code, "lookupResult": result.json()}
+                         "lookupResultCode": result.status_code, "lookupResult": result.text}
             self.psk_lookup_cache[sta_mac] = psk_entry
 
         return result.reason_phrase, result.status_code
