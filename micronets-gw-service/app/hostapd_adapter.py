@@ -278,9 +278,10 @@ class HostapdAdapter:
         def get_command_string(self):
             return "help"
 
-
     class StatusCLICommand(HostapdCLICommand):
+
         index_re = re.compile("^([a-zA-Z0-9]+)\[([0-9]+)\]$")
+
         def __init__ (self, event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
             self.status_vars = {}
@@ -317,6 +318,41 @@ class HostapdAdapter:
         async def get_status_var(self, name):
             await self.get_response()
             return self.status_vars.get(name)
+
+    class TrackStationsCLICommand(HostapdCLICommand):
+
+        def __init__ (self, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            # Will be a dict indexed on MAC address with a duple (age(int), db(int))
+            self.sta_stats = {}
+
+        def get_command_string(self):
+            return "track_sta_list"
+
+        async def process_response_data(self, response):
+            # Example output:
+            # e4:f0:42:43:d8:5f 1 -88
+            # ac:d5:64:20:eb:76 7 -92
+            # 48:d6:d5:53:dc:3a 16 -44
+            # 00:c0:ca:97:d9:b1 18 -33
+            try:
+                self.sta_stats = {}
+                for line in response.splitlines():
+                    try:
+                        (mac,age,db) = line.split(" ")
+                        if not mac or not age or not db:
+                            continue
+                        self.sta_stats[mac] = (int(age), int(db))
+                        logger.debug(f"TrackStationsCLICommand.process_response_data: {mac} = \"{self.sta_stats[mac]}\"")
+                    except Exception as ex:
+                        logger.info(f"TrackStationsCLICommand.process_response_data: Error processing station stats line "
+                                    f"{line}: {ex}", exc_info=True)
+            finally:
+                await super().process_response_data(response)
+
+        async def get_sta_stats(self):
+            await self.get_response()
+            return self.sta_stats
 
     class ListStationsCLICommand(HostapdCLICommand):
         def __init__ (self, event_loop=asyncio.get_event_loop()):
