@@ -15,7 +15,7 @@ logger = logging.getLogger ('hostapd_adapter')
 
 class HostapdAdapter:
 
-    cli_event_re = re.compile ('^.*<([0-9+])>(.+)$')
+    cli_event_re = re.compile ('^.*<([0-9]+)>(.+)$')
     cli_ready_re = re.compile ('Connection.*established|Interactive mode')
 
     def __init__ (self, hostapd_psk_path, hostapd_cli_path, hostapd_cli_args=()):
@@ -158,13 +158,17 @@ class HostapdAdapter:
                     logger.info(f"HostapdAdapter:read_cli_output: hostapd CLI is now READY")
                     self.cli_ready = True
                     asyncio.run_coroutine_threadsafe(self.process_hostapd_ready(), self.event_loop)
+                cli_event_match = HostapdAdapter.cli_event_re.match(line)
+                if cli_event_match:
+                    event_data = cli_event_match.group(2).strip()
+                    asyncio.run_coroutine_threadsafe(self.process_event(event_data), self.event_loop)
+                    continue
                 if not command:
                     response_data = None
                     try:
                         command = self.command_queue.get(block=False)
                     except Empty:
                         command = None
-
                 if command:
                     if response_data is None:
                         # Don't store the first line - which contains the command (start aggregating on the next line)
@@ -181,12 +185,6 @@ class HostapdAdapter:
                                                          command.event_loop)
                         response_data = None
                         command = None
-                else:
-                    # This is assuming avents aren't delivered while a command response is being processed
-                    cli_event_match = HostapdAdapter.cli_event_re.match(line)
-                    if cli_event_match:
-                        event_data = cli_event_match.group(2).strip()
-                        asyncio.run_coroutine_threadsafe(self.process_event(event_data), self.event_loop)
             except Exception as ex:
                 logger.warning(f"HostapdAdapter:read_cli_output: Error processing data: {ex}", exc_info=True)
         self.cli_connected = False

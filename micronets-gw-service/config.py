@@ -45,9 +45,13 @@ class NetreachDefaultSettings():
     libpath = BaseConfigSettings.SERVER_LIB_DIR
     NETREACH_ADAPTER_ENABLED = True
     NETREACH_ADAPTER_SERIAL_NUM_FILE = libpath.joinpath('netreach-serialnum.txt')
+    NETREACH_ADAPTER_REG_TOKEN_FILE = libpath.joinpath('netreach-reg-token.txt')
     NETREACH_ADAPTER_PUBLIC_KEY_FILE = libpath.joinpath('netreach-pubkey.pem')
     NETREACH_ADAPTER_PRIVATE_KEY_FILE = libpath.joinpath('netreach-privkey.pem')
     NETREACH_ADAPTER_WIFI_INTERFACE = "wlan0"
+    NETREACH_ADAPTER_MAN_INTERFACE = "eth0"
+    # NETREACH_ADAPTER_MAN_ADDRESS = "1.2.3.4"
+    # NETREACH_ADAPTER_GEOLOCATION = {"latitude": "0.0", "longitude": "0.0"}
     NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://staging.api.controller.netreach.in"
     NETREACH_ADAPTER_API_KEY_FILE = libpath.joinpath('netreach-api-token.txt')
     NETREACH_ADAPTER_API_KEY_REFRESH_DAYS = 500
