@@ -30,10 +30,16 @@ function install-gw-service {
   mv ${MICRONETS_GW_SERVICE_DIR}/micronets-gw.service /lib/systemd/system > /dev/null 2>&1
   echo "Reloading service files."
   systemctl daemon-reload
-  echo "Enabling micronets-gw service."
-  systemctl enable micronets-gw.service
-  echo "Starting micronets-gw service."
-  systemctl start micronets-gw.service
+  echo "To start the micronets-gw service enter:"
+  echo ""
+  echo "  systemctl start micronets-gw.service"
+  echo ""
+  echo "To enable the micronets-gw service to autostart enter:"
+  echo ""
+  echo "  systemctl enable micronets-gw.service"
+  echo ""
+  echo "NOTE: The service no longer sets up network interfaces and bridges."
+  echo "      So Make sure dependent bridges/interfaces are setup before starting the service"
 }
 
 function main {
