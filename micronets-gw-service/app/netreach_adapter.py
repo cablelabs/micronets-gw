@@ -55,7 +55,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         # Caching device MACs to map hostapd notifications
         self.device_mac_cache = {}
         self.micronets_api_prefix = f"http://{config['LISTEN_HOST']}:{config['LISTEN_PORT']}/gateway/v1"
-        self.serial_number = self.serial_number_file.read_text().strip()
+        self.serial_number = self.serial_number_file.read_text().strip() if self.serial_number_file.exists() else None
         self.reg_token = self.reg_token_file.read_text().strip() if self.reg_token_file.exists() else None
         if not self.management_address and self.management_interface:
             logger.info(f"NetreachAdapter: Setting management address to {self.management_interface} address")
@@ -99,6 +99,12 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     async def _kickoff_cloud_connection(self):
         logger.info(f"NetreachAdapter:_kickoff_cloud_connection()")
+
+        if not self.serial_number:
+            logger.warning(f"NetreachAdapter:_kickoff_cloud_connection: Cannot register with controller - "
+                           f"no serial number defined ({self.serial_number_file} does not exist?)")
+            raise Exception("No serial number defined - cannot continue")
+
         if not self.pub_key_file.exists() and not self.reg_token_file.exists():
             logger.warning(f"NetreachAdapter:_kickoff_cloud_connection: Cannot register with controller - "
                            "no keypair or registration token")
