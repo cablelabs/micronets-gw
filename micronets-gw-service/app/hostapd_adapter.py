@@ -192,9 +192,7 @@ class HostapdAdapter:
 
     async def process_hostapd_ready(self):
         logger.info(f"HostapdAdapter:process_hostapd_ready()")
-        status_cmd = await self.send_command(HostapdAdapter.StatusCLICommand())
-        logger.info (f"HostapdAdapter:process_hostapd_ready: Retrieving status...")
-        self.status_vars = await status_cmd.get_status_dict()
+        await self.refresh_status_vars()
         for handler in self.event_handler_table:
             asyncio.ensure_future(handler.handle_hostapd_ready())
 
@@ -207,6 +205,11 @@ class HostapdAdapter:
             for handler in self.event_handler_table:
                 if handler.event_prefixes is None or event_data.startswith(handler.event_prefixes):
                     asyncio.ensure_future(handler.handle_hostapd_cli_event(event_data))
+
+    async def refresh_status_vars(self):
+        logger.info(f"HostapdAdapter:refresh_status_vars()")
+        status_cmd = await self.send_command(HostapdAdapter.StatusCLICommand())
+        self.status_vars = await status_cmd.get_status_dict()
 
     def get_status_var(self, var_name):
         if not self.status_vars:
@@ -606,6 +609,24 @@ class HostapdAdapter:
                 cmd += f" pass={passphrase_asciihex}"
             cmd += '"'
             return cmd
+
+        async def process_response_data(self, response):
+            try:
+                self.success = "OK" in response
+            finally:
+                await super().process_response_data(response)
+
+        async def was_successful(self):
+            await self.get_response()
+            return self.success
+
+    class ReloadCLICommand(HostapdCLICommand):
+        def __init__ (self, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.success = False
+
+        def get_command_string(self):
+            return "reload"
 
         async def process_response_data(self, response):
             try:
