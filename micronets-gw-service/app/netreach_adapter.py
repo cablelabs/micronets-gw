@@ -15,6 +15,35 @@ from .hostapd_adapter import HostapdAdapter
 
 logger = logging.getLogger ('netreach-adapter')
 
+class NetreachTunnelManager:
+    def __init__ (self, netreach_adapter):
+        logger.info (f"NetreachTunnelManager init({netreach_adapter})")
+        self.netreach_adapter = netreach_adapter
+        self.ap_group = None
+        self.aps = None
+
+    async def setup_apgroup(self, ap_group):
+        logger.info (f"NetreachTunnelManager.setup_apgroup()")
+        self.ap_group = ap_group
+        apgroup_uuid = ap_group['uuid']
+        async with httpx.AsyncClient() as httpx_client:
+            response = await httpx_client.get(f"{self.netreach_adapter.controller_base_url}"
+                                              f"/v1/ap-groups/{apgroup_uuid}/access-points",
+                                              headers={"x-api-token": self.netreach_adapter.api_token})
+            if response.status_code != 200:
+                logger.warning(f"NetreachTunnelManager.setup_apgroup: FAILED retrieving AP list for "
+                               f"AP group {apgroup_uuid} ({response.status_code}): {response.text}")
+                raise ValueError(response.status_code)
+            ap_list = response.json()
+            self.aps = {}
+            for ap in ap_list['results']:
+                self.aps[ap['uuid']] = ap
+            logger.info(f"NetreachAdapter:setup_apgroup: Got AP list for AP Group {apgroup_uuid}: "
+                        f"{json.dumps(self.aps, indent=4)}")
+
+    async def setup_service(self, service, device):
+        logger.info (f"NetreachTunnelManager.setup_service({service})")
+        # TODO
 
 class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
@@ -41,6 +70,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.use_device_pass = bool(config.get('NETREACH_ADAPTER_USE_DEVICE_PASS', "False"))
         self.psk_cache_enabled = bool(config.get('NETREACH_ADAPTER_PSK_CACHE_ENABLED', "True"))
         self.psk_cache_expire_s = config.get('NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S', 120)
+        self.tunnel_man = NetreachTunnelManager(self)
         self.api_token = None
         self.api_token_refresh = None
         self.ap_uuid = None
@@ -409,13 +439,22 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                                                   json=micronet_to_add)
                 if result.is_error:
                     logger.warning(f"Could not add micronet for service {service_name} ({service_uuid}) - "
-                                   f"Result was {result.reason_phrase}")
+                                   f"Result was {result.status_code} ({result.reason_phrase})")
                     continue
 
+                # TODO: Make async
                 result = httpx.get(f"{self.controller_base_url}/v1/services/{service_uuid}/devices",
                                    headers={"x-api-token": self.api_token})
+                if result.is_error:
+                    logger.warning(f"Could not retrieve devices for service {service_name} ({service_uuid}) - "
+                                   f"Result was {result.status_code} ({result.reason_phrase})")
+                    continue
                 nr_device_list = result.json()['results']
                 micronet_devices = []
+
+                if self.tunnel_man:
+                    await self.tunnel_man.setup_service(service, nr_device_list)
+
                 for device in nr_device_list:
                     logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   device {device['uuid']} ({device['name']})")
                     device_enabled = device['enabled']
