@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Setting this will cause the script to terminate whenever a subprocess
+#  returns an error
+# set -e
+
+# Uncomment this on to debug the script
+# set -x
 fqdir_for_file() {
    fqd="$( cd "$( dirname "$1" )" >/dev/null 2>&1 && pwd )"
    echo $fqd
@@ -17,6 +23,7 @@ debug_log() {
     logger -t "$0" -- "$@"
     echo "$@"
 }
+
 ovs_vsctl() {
     debug_log "running: ovs-vsctl $@"
     ovs-vsctl "$@"
