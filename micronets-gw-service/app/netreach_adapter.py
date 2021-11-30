@@ -193,7 +193,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     self.reg_token_file.unlink()
 
                 await self._login_to_controller()
-                await self._get_ap_info()
+                cur_ap_info = await self._get_ap_info()
+                await self._update_ap_info(cur_ap_info)
                 await self._setup_micronets_for_ap()
                 self.logged_in = True
             except Exception as ex:
@@ -296,6 +297,44 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             self.ap_name = ap_info['name']
             self.ap_enabled = ap_info['enabled']
             self.ap_serial = ap_info['serial']
+            return ap_info
+
+    async def _update_ap_info(self, cur_ap_info):
+        # Currently this will check/update the management address and geolocation
+        cur_man_address = cur_ap_info.get('managementAddress')
+        cur_geo_location = cur_ap_info.get('geolocation')
+
+        actual_geolocation = self._get_geolocation()
+
+        if cur_man_address == self.management_address and cur_geo_location == actual_geolocation:
+            return
+
+        async with httpx.AsyncClient() as httpx_client:
+            logger.info(f"NetreachAdapter._update_ap_info: Updating management address from "
+                        f"{cur_man_address} to {self.management_address}")
+            logger.info(f"NetreachAdapter._update_ap_info: Updating geolocation from "
+                        f"{cur_geo_location} to {actual_geolocation}")
+
+            update_request = {
+                "managementAddress": self.management_address,
+                "geolocation": self.geolocation
+            }
+            response = await httpx_client.patch(f"{self.controller_base_url}/v1/access-points/{self.ap_uuid}",
+                                                headers={"x-api-token": self.api_token},
+                                                json=update_request)
+            if response.status_code != 200:
+                raise Exception(f"Failed to update AP with {update_request}")
+
+            ap_info = response.json()
+            logger.info(f"NetreachAdapter:_update_ap_info: Got updated AP Info: {ap_info}")
+            self.ap_name = ap_info['name']
+            self.ap_enabled = ap_info['enabled']
+            resp_serial = ap_info['serial']
+            if resp_serial != self.serial_number:
+                logger.warning(f"NetreachAdapter._update_ap_info: Registration serial number mismatch: "
+                               f"Found {resp_serial}, expecting {self.serial_number}")
+
+        logger.info(f"NetreachAdapter._register_ap: Successfully updated AP management address/geolocation")
 
     async def _setup_micronets_for_ap(self):
         logger.info(f"NetreachAdapter:_setup_micronets_for_ap {self.ap_name} ({self.ap_uuid})")
