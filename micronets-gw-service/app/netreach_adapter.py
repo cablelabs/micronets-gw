@@ -351,19 +351,18 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 return
             ap_groups = result.json()['results']
             if len(ap_groups) == 0:
-                logger.info(f"NetreachAdapter:_setup_micronets_for_ap {self.ap_name} ({self.ap_uuid}) does not have an AP Group. Nothing to setup.")
-                await self._configure_ap_for_ssids([self.unassigned_ssid])
-                return
-            ap_group = ap_groups[0]
+                logger.info(f"NetreachAdapter:_setup_micronets_for_ap {self.ap_name} ({self.ap_uuid}) is not assigned to an AP Group. Nothing to setup.")
+                self.ssid_list = [self.unassigned_ssid]
+            else:
+                ap_group = ap_groups[0]
+                self.ap_group_uuid = ap_group['uuid']
+                self.ap_group_name = ap_group['name']
+                logger.info(f"NetreachAdapter:_setup_micronets_for_ap: apGroup {self.ap_group_name} "
+                            f"(apGroup {self.ap_group_uuid})")
+                self.ssid_list = ap_group['ssid'] if not self.ssid_override else [self.ssid_override]
 
-            self.ap_group_uuid = ap_group['uuid']
-            self.ap_group_name = ap_group['name']
-            self.ssid_list = ap_group['ssid']
-
-            logger.info(f"NetreachAdapter:_setup_micronets_for_ap: apGroup {self.ap_group_name} "
-                        f"(apGroup {self.ap_group_uuid})")
             logger.info(f"NetreachAdapter:_setup_micronets_for_ap: ssid(s) {self.ssid_list}")
-            await self._configure_ap_for_ssids(self.ssid_list if not self.ssid_override else [self.ssid_override])
+            await self._configure_hostapd()
 
             result = httpx.get(f"{self.controller_base_url}/v1/services/?apGroupUuid={self.ap_group_uuid}",
                                headers={"x-api-token": self.api_token})
@@ -458,28 +457,30 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                                    f"for service {service_name} ({service_uuid}) - Result was {result.reason_phrase}")
                     continue
 
-    async def _configure_ap_for_ssids(self, ssids):
-        # Note: This only deals with one SSID currently
-        logger.info(f"NetreachAdapter:_configure_ap_for_ssids({ssids})")
-        ssid = ssids[0]
+    async def _configure_hostapd(self):
+        logger.info(f"NetreachAdapter:_configure_hostapd()")
 
-        cur_ssids = self.hostapd_adapter.get_status_var("ssid")
-        if cur_ssids[0] == ssid:
-            logger.info(f"NetreachAdapter:_configure_ap_for_ssids({ssids}): AP SSID already set to \"{ssid}\" "
-                        f"- nothing to do")
-            return
+        if self.ssid_list:
+            # Note: This only deals with one SSID currently
+            ssid = self.ssid_list[0]
 
-        logger.info(f"NetreachAdapter:_configure_ap_for_ssids({ssids}): Changing AP SSID from \"{cur_ssids[0]}\" "
-                    f"to \"{ssid}\"")
-        set_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.SetCLICommand("ssid", ssid))
-        if not await set_cmd.was_successful():
-            response = await set_cmd.get_response()
-            raise Exception(f"Could not set ssid to {ssid}: {response}")
+            cur_ssids = self.hostapd_adapter.get_status_var("ssid")
+            if cur_ssids[0] == ssid:
+                logger.info(f"NetreachAdapter:_configure_hostapd: AP SSID already set to \"{ssid}\" "
+                            f"- nothing to do")
+                return
 
-        reload_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.ReloadCLICommand())
-        if not await reload_cmd.was_successful():
-            raise Exception(f"Error issuing hostapd reload after setting SSID to {ssid}")
-        await self.hostapd_adapter.refresh_status_vars()
+            logger.info(f"NetreachAdapter:_configure_hostapd): Changing AP SSID from \"{cur_ssids[0]}\" "
+                        f"to \"{ssid}\"")
+            set_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.SetCLICommand("ssid", ssid))
+            if not await set_cmd.was_successful():
+                response = await set_cmd.get_response()
+                raise Exception(f"Could not set ssid to {ssid}: {response}")
+
+            reload_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.ReloadCLICommand())
+            if not await reload_cmd.was_successful():
+                raise Exception(f"Error issuing hostapd reload after setting SSID to {ssid}")
+            await self.hostapd_adapter.refresh_status_vars()
 
     def _on_mqtt_connect(self, client, userdata, flags, rc):
         # handles the connecting event of the mqtt broker
@@ -775,6 +776,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     async def handle_hostapd_ready(self):
         logger.info(f"NetreachAdapter.handle_hostapd_ready()")
+        await self._configure_hostapd()
 
     async def handle_hostapd_cli_event(self, event_msg):
         # Note: Handler is registered to receive "AP-STA" events only

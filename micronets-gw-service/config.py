@@ -85,7 +85,6 @@ class LocalDevelopmentSettings (BaseConfigSettings):
 # General settings should NOT go here
 #
 
-
 #
 # Local Development Configs
 #
@@ -169,6 +168,7 @@ class NetreachDebugConfig (WirelessGatewayDebugConfig, NetreachDefaultSettings):
 
 class NetreachDebugConfigNoLogFile (WirelessGatewayDebugConfig, NetreachDefaultSettings):
     LOGFILE_PATH = None
+    DPP_HANDLER_ENABLED = False
 
 #
 # The default configuration (default for the /lib/systemd/system/micronets-gw.service file)
