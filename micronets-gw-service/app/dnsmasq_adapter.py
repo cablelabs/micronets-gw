@@ -29,6 +29,7 @@ class DnsMasqAdapter:
             outfile.write ("# THIS CONF FILE IS MANAGED BY THE MICRONETS GW SERVICE\n\n")
             outfile.write ("# MODIFICATIONS TO THIS FILE WILL BE OVER-WRITTEN\n\n")
             outfile.write ("dhcp-script={}\n\n".format (self.lease_script.absolute ()))
+            outfile.write ("script-arp\n\n")
             self.write_micronets (outfile, micronets)
             self.write_devices (outfile, devices)
 

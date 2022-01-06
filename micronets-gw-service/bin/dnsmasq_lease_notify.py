@@ -39,14 +39,14 @@ def post_lease_event (event_json):
     return conn.getresponse ()
 
 if __name__ == '__main__':
-    logger.info (f"{__file__} invoked with arguments: {sys.argv}")
+    argc = len(sys.argv)
+    logger.info (f"{__file__} invoked with {argc} arguments: {sys.argv}")
     program = sys.argv [0]
     action = sys.argv [1]
     mac_address = sys.argv [2]
     ip_address = sys.argv [3]
-    hostname = sys.argv [4]
     logger.debug ("{}: action: {}, mac_address: {}, ip_address {}, hostname {}"
-                       .format (program, action, mac_address, ip_address, hostname))
+                       .format (program, action, mac_address, ip_address))
     logger.debug ("PWD: {}".format (get_env ('PWD')))
     logger.debug ("DNSMASQ_LEASE_LENGTH: {}".format (get_env ('DNSMASQ_LEASE_LENGTH')))
     logger.debug ("DNSMASQ_LEASE_EXPIRES: {}".format (get_env ('DNSMASQ_LEASE_EXPIRES')))
@@ -54,18 +54,18 @@ if __name__ == '__main__':
     logger.debug ("DNSMASQ_SUPPLIED_HOSTNAME: {}".format (get_env ('DNSMASQ_SUPPLIED_HOSTNAME')))
     logger.debug ("DNSMASQ_INTERFACE: {}".format (get_env ('DNSMASQ_INTERFACE')))
     logger.debug ("DNSMASQ_TAGS: {}".format (get_env ('DNSMASQ_TAGS')))
-    if action == "old":
-        logger.debug(f"Ignoring action {action}")
-        exit (0)
     if action == "add":
         lease_change_type = 'leaseAcquired'
     elif action == "del":
         lease_change_type = "leaseExpired"
+    else:
+        logger.debug(f"Ignoring action {action}")
+        exit(0)
     lease_change_event = {"leaseChangeEvent": {
                               "action": lease_change_type,
                               "macAddress": {"eui48": mac_address},
                               "networkAddress": {"ipv4": ip_address},
-                              "hostname": hostname}
+                              "hostname": sys.argv[4]}
                          }
     lease_change_event_json = json.dumps (lease_change_event)
     logger.debug ("Sending event: {}".format (lease_change_event_json))
