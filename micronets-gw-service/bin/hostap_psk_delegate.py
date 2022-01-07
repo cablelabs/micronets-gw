@@ -80,14 +80,6 @@ def m2tojson(in_args):
             }
   return m2data
 
-def json2vlanpsk(body_json):
-  logger.debug(f"Formatting vlan and PSK for hostap consumption")
-  vlan_psk = body_json
-  vlan = '{:04x}'.format(vlan_psk["vlan"])
-  psk = vlan_psk["psk"]
-  retval = vlan + " " + psk
-  return retval
-
 def handle_failure():
   # IF fake mode active, use fake values
   if FORCE_FAKE_ACTIVE:
@@ -113,19 +105,20 @@ async def main():
     logger.debug(f"headers: {headers}")
     async with aiohttp.ClientSession(headers=headers) as session:
       async with session.post(LOOKUP_URL, json=psk_data) as resp:
-        json_body = await resp.json()
         logger.debug(f"Response code of psk lookup: {resp.status}")
-        logger.debug(f"Response body of psk lookup: {json.dumps(json_body,indent=4)}")
+        resp_body = await resp.read()
+        logger.debug(f"Response body of psk lookup: {resp_body}")
         if resp.status == 200:
           # Success, we got a match
-          logger.debug(f"PSK Matched for STA: {str(sys.argv[3])}")
+          logger.debug(f"PSK lookup MATCH for STA: {str(sys.argv[3])}")
           # Send the formatted output to stdout
-          print(json2vlanpsk(json_body))
+          json_resp = await resp.json()
+          print(f"{json_resp['vlan']:04x} {json_resp['psk']}")
         else:
+          logger.debug(f"PSK lookup NONMATCH for STA: {str(sys.argv[3])}")
           # send back auth failure or fake values
           handle_failure()
     sys.exit(0)
-  
   else:
     logger.error('Incorrect number of arguments....exiting')
     logger.debug(f'Arguments List: {str(sys.argv)}')

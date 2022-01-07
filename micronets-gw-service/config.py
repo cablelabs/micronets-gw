@@ -36,7 +36,7 @@ class ReferenceGatewaySettings (BaseConfigSettings):
     LOGFILE_PATH = BaseConfigSettings.SERVER_BASE_DIR.joinpath ("micronets-gw.log")
     LOGFILE_MODE = 'a'
     DNSMASQ_ADAPTER_CONF_FILE = '/etc/dnsmasq.d/micronets'
-    DNSMASQ_ADAPTER_RESTART_COMMAND = ['sudo', '/etc/init.d/dnsmasq', 'restart']
+    DNSMASQ_ADAPTER_RESTART_COMMAND = ['sudo', 'systemctl', 'restart', 'dnsmasq.service']
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {flow_file}'
     HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
     HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
@@ -55,6 +55,7 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_SSID_OVERRIDE_FILE = libpath.joinpath('netreach-ssid-override.txt')
     NETREACH_ADAPTER_UNASSIGNED_SSID = "netreach-inactive"
     NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://staging.api.controller.netreach.in"
+    # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://api.controller.netreach.in"
     NETREACH_ADAPTER_API_KEY_FILE = libpath.joinpath('netreach-api-token.txt')
     NETREACH_ADAPTER_API_KEY_REFRESH_DAYS = 500
     # NETREACH_ADAPTER_MQTT_BROKER_URL = "mqtts://staging.broker.controller.netreach.in:8885" # for overriding

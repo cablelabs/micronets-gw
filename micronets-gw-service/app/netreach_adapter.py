@@ -357,8 +357,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 ap_group = ap_groups[0]
                 self.ap_group_uuid = ap_group['uuid']
                 self.ap_group_name = ap_group['name']
-                logger.info(f"NetreachAdapter:_setup_micronets_for_ap: apGroup {self.ap_group_name} "
-                            f"(apGroup {self.ap_group_uuid})")
+                logger.info(f"NetreachAdapter:_setup_micronets_for_ap: AP Group {self.ap_group_name} "
+                            f"({self.ap_group_uuid})")
                 self.ssid_list = ap_group['ssid'] if not self.ssid_override else [self.ssid_override]
 
             logger.info(f"NetreachAdapter:_setup_micronets_for_ap: ssid(s) {self.ssid_list}")
@@ -373,6 +373,9 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 return
 
             service_list = result.json()['results']
+            logger.info(f"NetreachAdapter:_setup_micronets_for_ap:  Configuring {len(service_list)} services "
+                        f"for AP Group {self.ap_group_name} ({self.ap_group_uuid})")
+
             for service in service_list:
                 service_enabled = service['enabled']
                 service_uuid = service['uuid']
@@ -753,7 +756,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 else:
                     logger.info(f"NetreachAdapter.lookup_psk_for_device: Using cached PSK lookup entry for MAC {sta_mac}")
                     psk_entry['count'] += 1
-                    return jsonify(psk_entry['lookupResult']), psk_entry['lookupResultCode']
+                    return (psk_entry['lookupResult'], psk_entry['lookupResultCode'], psk_entry['headers'])
 
         # Perform the actual lookup of the PSK with the cloud
         result = httpx.post(f"{self.controller_base_url}/v1/psks/psk-lookup",
@@ -761,14 +764,17 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                             json=psk_lookup_fields)
         logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup {'FAILED' if result.is_error else 'SUCCEEDED'}")
         logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup response: {result.text}")
+        headers_to_pass = {k: result.headers[k] for k in result.headers.keys() & {"content-type"}}
 
         if self.psk_cache_enabled:
             # If result is 200, response will have "psk', "vlan", "deviceUuid", and "serviceUuid"
             psk_entry = {"count": 1, "createTime": int(time.time()), "pskFound": not result.is_error,
-                         "lookupResultCode": result.status_code, "lookupResult": result.text}
+                         "lookupResultCode": result.status_code, "lookupResult": result.text,
+                         "headers": headers_to_pass}
             self.psk_lookup_cache[sta_mac] = psk_entry
+        logger.info(f"NetreachAdapter.lookup_psk_for_device: Passing headers: {headers_to_pass}")
 
-        return result.reason_phrase, result.status_code
+        return (result.text, result.status_code, headers_to_pass)
 
     def register_hostapd_event_handler(self, hostapd_adapter):
         if hostapd_adapter:
