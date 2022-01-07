@@ -194,7 +194,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
                 await self._login_to_controller()
                 cur_ap_info = await self._get_ap_info()
-                await self._update_ap_info(cur_ap_info)
+                # await self._update_ap_info(cur_ap_info)
                 await self._setup_micronets_for_ap()
                 self.logged_in = True
             except Exception as ex:
@@ -382,8 +382,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 service_name = service['name']
                 micronet_subnet = IPv4Network(service['micronetSubnet'], strict=True)
                 micronet_vlan = int(service['vlan'])
-                # TODO: Replace this with gateway reference from Service object (see issue #15)
-                micronet_gateway = service['micronetGateway']
+                micronet_gateway = service.get('micronetGateway', str(next(micronet_subnet.hosts())))
                 logger.info(f"NetreachAdapter:_setup_micronets_for_ap: Found service {service_name} ({service_uuid})")
                 logger.info(f"NetreachAdapter:_setup_micronets_for_ap:  micronet id {service_uuid} vlan {micronet_vlan}")
                 if not (micronet_subnet and micronet_vlan):
