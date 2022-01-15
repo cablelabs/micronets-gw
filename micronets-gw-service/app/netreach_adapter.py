@@ -1,4 +1,4 @@
-import logging, base64, json, httpx, re, asyncio, time, random, netifaces
+import logging, base64, json, httpx, re, asyncio, time, random, netifaces, hashlib
 
 from app import get_conf_model
 from ipaddress import IPv4Network, IPv4Address, AddressValueError, NetmaskValueError
@@ -15,35 +15,6 @@ from .hostapd_adapter import HostapdAdapter
 
 logger = logging.getLogger ('netreach-adapter')
 
-class NetreachTunnelManager:
-    def __init__ (self, netreach_adapter):
-        logger.info (f"NetreachTunnelManager init({netreach_adapter})")
-        self.netreach_adapter = netreach_adapter
-        self.ap_group = None
-        self.aps = None
-
-    async def setup_apgroup(self, ap_group):
-        logger.info (f"NetreachTunnelManager.setup_apgroup()")
-        self.ap_group = ap_group
-        apgroup_uuid = ap_group['uuid']
-        async with httpx.AsyncClient() as httpx_client:
-            response = await httpx_client.get(f"{self.netreach_adapter.controller_base_url}"
-                                              f"/v1/ap-groups/{apgroup_uuid}/access-points",
-                                              headers={"x-api-token": self.netreach_adapter.api_token})
-            if response.status_code != 200:
-                logger.warning(f"NetreachTunnelManager.setup_apgroup: FAILED retrieving AP list for "
-                               f"AP group {apgroup_uuid} ({response.status_code}): {response.text}")
-                raise ValueError(response.status_code)
-            ap_list = response.json()
-            self.aps = {}
-            for ap in ap_list['results']:
-                self.aps[ap['uuid']] = ap
-            logger.info(f"NetreachAdapter:setup_apgroup: Got AP list for AP Group {apgroup_uuid}: "
-                        f"{json.dumps(self.aps, indent=4)}")
-
-    async def setup_service(self, service, device):
-        logger.info (f"NetreachTunnelManager.setup_service({service})")
-        # TODO
 
 class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
@@ -394,7 +365,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             logger.info(f"NetreachAdapter:_setup_micronets_for_ap: ssid(s) {self.ssid_list}")
             await self._configure_hostapd()
 
-            result = httpx.get(f"{self.controller_base_url}/v1/services/?apGroupUuid={self.ap_group_uuid}",
+            result = httpx.get(f"{self.controller_base_url}/v1/services?apGroupUuid={self.ap_group_uuid}",
                                headers={"x-api-token": self.api_token})
             if result.is_error:
                 logger.warning(f"NetreachAdapter:_setup_micronets_for_ap {self.ap_name} ({self.ap_uuid}) could not get "
@@ -766,7 +737,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                                  headers={"x-api-token": self.api_token},
                                  json={"connected": True})
             logger.info(f"NetreachAdapter.process_dhcp_lease_event: Setting status of device {device_id} of service {micronet_id}"
-                        f"to {device_patch}")
+                        f" to {device_patch}")
         else:
             logger.info(f"NetreachAdapter.process_dhcp_lease_event: Ignoring action '{action}' for MAC {mac_addr}")
 
@@ -834,7 +805,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         mac = mac.lower()
 
         if event == "AP-STA-CONNECTED":
-            device_patch = {"associated": True, "connected": False}
+            device_patch = {"associated": True, "connected": True}
         elif event == "AP-STA-DISCONNECTED":
             device_patch = {"associated": False, "connected": False}
         else:
@@ -867,5 +838,72 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         result = httpx.patch(f"{self.controller_base_url}/v1/services/{service_id}/devices/{device_id}",
                              headers={"x-api-token": self.api_token},
                              json=device_patch)
-        logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Setting status of device {device_id} of service {service_id}"
+        logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Setting status of device {device_id} of service {service_id} "
                     f"to {device_patch}")
+
+
+class NetreachTunnelManager:
+    def __init__(self, config, netreach_adapter):
+        logger.info (f"NetreachTunnelManager init({netreach_adapter})")
+        self.config = config
+        self.ap_net_bridge = config['NETREACH_ADAPTER_VXLAN_NET_BRIDGE']
+        self.vxlan_connect_cmd = config['NETREACH_ADAPTER_VXLAN_CONNECT_CMD']
+        self.vxlan_disconnect_cmd = config['NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD']
+        self.ovs_flow_apply_cmd = config['NETREACH_ADAPTER_APPLY_FLOWS_COMMAND']
+        self.netreach_adapter = netreach_adapter
+        self.ap_group = None
+        self.tunnel_int_list = []
+        self.vxlan_key_max = pow(2,24)
+
+    async def init_online(self):
+        self.tunnel_int_list = await self.get_tunnel_int_name_list()
+        await self.refresh_tunnel_network()
+
+    async def get_aps_for_group(self, apgroup_uuid) -> dict:
+        logger.info (f"NetreachTunnelManager.get_aps_for_group()")
+        async with httpx.AsyncClient() as httpx_client:
+            response = await httpx_client.get(f"{self.netreach_adapter.controller_base_url}"
+                                              f"/v1/ap-groups/{apgroup_uuid}/access-points",
+                                              headers={"x-api-token": self.netreach_adapter.api_token})
+            if response.status_code != 200:
+                logger.warning(f"NetreachTunnelManager.get_aps_for_group: FAILED retrieving AP list for "
+                               f"AP group {apgroup_uuid} ({response.status_code}): {response.text}")
+                raise ValueError(response.status_code)
+            ap_list = response.json()
+            aps = {}
+            for ap in ap_list['results']:
+                aps[ap['uuid']] = ap
+            logger.info(f"NetreachAdapter:get_aps_for_group: Got AP list for AP Group {apgroup_uuid}: "
+                        f"{json.dumps(self.aps, indent=4)}")
+
+    async def get_tunnel_int_name_list(self) -> [str]:
+        # Call OVS to get the list of interfaces
+        pass
+
+    async def setup_tunnel_to_ap_for_vlan(self, ap_addr, vxlan_port, vlan, key) -> str:
+        pass
+
+    async def close_tunnel_to_ap(self, vxlan_int_name) -> str:
+        pass
+
+    def vxlan_key_for_connection(self, uuid_1, uuid_2, vlan) -> int:
+        # vxlan keys are 24-bit values. This function should generate a key which is the same even if ap_uuid_1 and
+        # ap_uuid_2 are transposed. The key only needs to be unique between 2 hosts
+        if uuid_1 < uuid_2:
+            lid = uuid_1
+            hid = uuid_2
+        else:
+            lid = uuid_2
+            hid = uuid_1
+
+        m = hashlib.blake2b(digest_size=3)
+        m.update(lid.bytes)
+        m.update(hid.bytes)
+        m.update(vlan.to_bytes(2, byteorder='big'))
+
+        return int.from_bytes(m.digest(), 'big')
+
+    async def refresh_tunnel_network(self):
+        pass
+
+

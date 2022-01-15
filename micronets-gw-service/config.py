@@ -65,6 +65,13 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_USE_DEVICE_PASS = True
     NETREACH_ADAPTER_PSK_CACHE_ENABLED = True
     NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S = 60
+    NETREACH_ADAPTER_VXLAN_NET_BRIDGE = "brhapd"
+    NETREACH_ADAPTER_VXLAN_CONNECT_CMD = "/usr/bin/ovs-vsctl add-port {vxlan_net_bridge} {local_vxlan_name} -- " \
+                                       "set interface {local_vxlan_name} type=vxlan " \
+                                       "options:remote_ip={remote_vxlan_host}" \
+                                       "options:key={vxlan_conn_key}"
+    NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD = "/usr/bin/ovs-vsctl del-port {local_vxlan_name}"
+    NETREACH_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {vxlan_net_bridge} {flow_file}'
 
 #
 # Configure settings for local/development testing
