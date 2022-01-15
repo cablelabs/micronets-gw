@@ -21,7 +21,6 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
     to_micronets_ct_zone = 5150
     from_micronets_ct_zone = 5151
 
-
     def __init__ (self, config):
         self.apply_openflow_command = config['FLOW_ADAPTER_APPLY_FLOWS_COMMAND']
         self.bridge_name = config['MICRONETS_OVS_BRIDGE']

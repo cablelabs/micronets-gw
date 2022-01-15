@@ -65,9 +65,11 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_USE_DEVICE_PASS = True
     NETREACH_ADAPTER_PSK_CACHE_ENABLED = True
     NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S = 60
+    NETREACH_ADAPTER_VXLAN_PEER_INAME_PREFIX = "mn-ap-"
     NETREACH_ADAPTER_VXLAN_NET_BRIDGE = "brhapd"
-    NETREACH_ADAPTER_VXLAN_CONNECT_CMD = "/usr/bin/ovs-vsctl add-port {vxlan_net_bridge} {local_vxlan_name} -- " \
-                                       "set interface {local_vxlan_name} type=vxlan " \
+    NETREACH_ADAPTER_VXLAN_LIST_PORTS = "/usr/bin/ovs-vsctl list-ports {vxlan_net_bridge}"
+    NETREACH_ADAPTER_VXLAN_CONNECT_CMD = "/usr/bin/ovs-vsctl add-port {vxlan_net_bridge} {vxlan_port_name} -- " \
+                                       "set interface {vxlan_port_name} type=vxlan " \
                                        "options:remote_ip={remote_vxlan_host}" \
                                        "options:key={vxlan_conn_key}"
     NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD = "/usr/bin/ovs-vsctl del-port {local_vxlan_name}"

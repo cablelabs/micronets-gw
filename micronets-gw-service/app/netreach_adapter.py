@@ -1,4 +1,4 @@
-import logging, base64, json, httpx, re, asyncio, time, random, netifaces, hashlib
+import logging, base64, json, httpx, re, asyncio, time, random, netifaces, uuid
 
 from app import get_conf_model
 from ipaddress import IPv4Network, IPv4Address, AddressValueError, NetmaskValueError
@@ -7,9 +7,10 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
 import paho.mqtt.client as mqtt
 from urllib import parse as urllib_dot_parse
-from uuid import UUID
 from quart import jsonify
 from pathlib import Path
+
+from .netreach_tunnel_manager import NetreachTunnelManager
 
 from .hostapd_adapter import HostapdAdapter
 
@@ -41,7 +42,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.use_device_pass = bool(config.get('NETREACH_ADAPTER_USE_DEVICE_PASS', "False"))
         self.psk_cache_enabled = bool(config.get('NETREACH_ADAPTER_PSK_CACHE_ENABLED', "True"))
         self.psk_cache_expire_s = config.get('NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S', 120)
-        self.tunnel_man = NetreachTunnelManager(self)
+        self.tunnel_man = NetreachTunnelManager(config, self)
         self.api_token = None
         self.api_token_refresh = None
         self.ap_uuid = None
@@ -158,11 +159,9 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             logger.info(f"NetreachAdapter._register_ap: Attempting to register AP using registration token "
                         f"{self.reg_token[0:6]}...{self.reg_token[-6:]}")
 
-            registration_request = {
-                                    "publicKey": self.pub_key,
+            registration_request = {"publicKey": self.pub_key,
                                     "managementAddress": self.management_address,
-                                    "geolocation": self.geolocation
-                                    }
+                                    "geolocation": self.geolocation}
 
             logger.info(f"NetreachAdapter._register_ap: Registration request: {registration_request}")
             headers = {"x-registration-token": self.reg_token,
@@ -195,6 +194,9 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
                 await self._login_to_controller()
                 cur_ap_info = await self._get_ap_info()
+                if self.tunnel_man:
+                    await self.tunnel_man.init_ap_online(self.ap_uuid)
+
                 await self._update_ap_info(cur_ap_info)
                 await self._setup_micronets_for_ap()
                 self.logged_in = True
@@ -244,7 +246,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                                f"{response.status_code}: {response.text}")
                 raise ValueError(res_json)
             logger.info(f"NetreachAdapter:_login_to_controller: AP SUCCESSFULLY logged into NetReach Controller")
-            self.ap_uuid = res_json['uuid']
+            self.ap_uuid = uuid.UUID(res_json['uuid'])
             self.api_token = res_json['token']
             self.api_token_refresh = res_json['refresh_token']
             # TODO: Implement logoff/login to refresh API token
@@ -266,8 +268,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"NetreachAdapter:_connect_mqtt_listener: Connecting with MQTT broker at {self.mqtt_broker_url}")
 
         # Instantiate mqtt broker.  This is a sync implementation.  Async implementations are available
-        mqtt_client = mqtt.Client(self.ap_uuid)
-        mqtt_client.username_pw_set(self.ap_uuid, self.api_token)
+        mqtt_client = mqtt.Client(str(self.ap_uuid))
+        mqtt_client.username_pw_set(str(self.ap_uuid), self.api_token)
 
         mqtt_client.on_connect = self._on_mqtt_connect
         mqtt_client.on_message = self._on_mqtt_message
@@ -426,8 +428,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 nr_device_list = result.json()['results']
                 micronet_devices = []
 
-                if self.tunnel_man:
-                    await self.tunnel_man.setup_service(service, nr_device_list)
+                # if self.tunnel_man:
+                #     await self.tunnel_man.setup_service(service, nr_device_list)
 
                 for device in nr_device_list:
                     logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   device {device['uuid']} ({device['name']})")
@@ -840,70 +842,3 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                              json=device_patch)
         logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Setting status of device {device_id} of service {service_id} "
                     f"to {device_patch}")
-
-
-class NetreachTunnelManager:
-    def __init__(self, config, netreach_adapter):
-        logger.info (f"NetreachTunnelManager init({netreach_adapter})")
-        self.config = config
-        self.ap_net_bridge = config['NETREACH_ADAPTER_VXLAN_NET_BRIDGE']
-        self.vxlan_connect_cmd = config['NETREACH_ADAPTER_VXLAN_CONNECT_CMD']
-        self.vxlan_disconnect_cmd = config['NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD']
-        self.ovs_flow_apply_cmd = config['NETREACH_ADAPTER_APPLY_FLOWS_COMMAND']
-        self.netreach_adapter = netreach_adapter
-        self.ap_group = None
-        self.tunnel_int_list = []
-        self.vxlan_key_max = pow(2,24)
-
-    async def init_online(self):
-        self.tunnel_int_list = await self.get_tunnel_int_name_list()
-        await self.refresh_tunnel_network()
-
-    async def get_aps_for_group(self, apgroup_uuid) -> dict:
-        logger.info (f"NetreachTunnelManager.get_aps_for_group()")
-        async with httpx.AsyncClient() as httpx_client:
-            response = await httpx_client.get(f"{self.netreach_adapter.controller_base_url}"
-                                              f"/v1/ap-groups/{apgroup_uuid}/access-points",
-                                              headers={"x-api-token": self.netreach_adapter.api_token})
-            if response.status_code != 200:
-                logger.warning(f"NetreachTunnelManager.get_aps_for_group: FAILED retrieving AP list for "
-                               f"AP group {apgroup_uuid} ({response.status_code}): {response.text}")
-                raise ValueError(response.status_code)
-            ap_list = response.json()
-            aps = {}
-            for ap in ap_list['results']:
-                aps[ap['uuid']] = ap
-            logger.info(f"NetreachAdapter:get_aps_for_group: Got AP list for AP Group {apgroup_uuid}: "
-                        f"{json.dumps(self.aps, indent=4)}")
-
-    async def get_tunnel_int_name_list(self) -> [str]:
-        # Call OVS to get the list of interfaces
-        pass
-
-    async def setup_tunnel_to_ap_for_vlan(self, ap_addr, vxlan_port, vlan, key) -> str:
-        pass
-
-    async def close_tunnel_to_ap(self, vxlan_int_name) -> str:
-        pass
-
-    def vxlan_key_for_connection(self, uuid_1, uuid_2, vlan) -> int:
-        # vxlan keys are 24-bit values. This function should generate a key which is the same even if ap_uuid_1 and
-        # ap_uuid_2 are transposed. The key only needs to be unique between 2 hosts
-        if uuid_1 < uuid_2:
-            lid = uuid_1
-            hid = uuid_2
-        else:
-            lid = uuid_2
-            hid = uuid_1
-
-        m = hashlib.blake2b(digest_size=3)
-        m.update(lid.bytes)
-        m.update(hid.bytes)
-        m.update(vlan.to_bytes(2, byteorder='big'))
-
-        return int.from_bytes(m.digest(), 'big')
-
-    async def refresh_tunnel_network(self):
-        pass
-
-
