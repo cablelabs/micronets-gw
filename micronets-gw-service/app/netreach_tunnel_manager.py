@@ -11,7 +11,7 @@ class NetreachTunnelManager:
         self.vxlan_net_bridge_micronets_port = config['NETREACH_ADAPTER_VXLAN_NET_MICRONETS_PORT']
         self.vxlan_net_bridge_hostapd_port = config['NETREACH_ADAPTER_VXLAN_NET_HOSTAPD_PORT']
         self.vxlan_net_bridge_drop_port = config['MICRONETS_OVS_BRIDGE_DROP_PORT']
-        self.vxlan_net_bridge_drop_action = f"output:{self.drop_port}"
+        self.vxlan_net_bridge_drop_action = f"output:{self.vxlan_net_bridge_drop_port}"
         self.vxlan_list_ports_cmd = config['NETREACH_ADAPTER_VXLAN_LIST_PORTS']
         self.vxlan_connect_cmd = config['NETREACH_ADAPTER_VXLAN_CONNECT_CMD']
         self.vxlan_disconnect_cmd = config['NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD']
@@ -22,11 +22,11 @@ class NetreachTunnelManager:
         self.tunnel_int_list = []
         self.vxlan_key_max = pow(2,24)
 
-    async def init_ap_online(self, ap_uuid, ap_group_uuid):
+    async def init_ap_online(self, ap_uuid, ap_group_uuid, service_list, service_device_list):
         self.tunnel_int_list = await self._get_tunnel_int_name_list()
         self.ap_uuid = ap_uuid
         self.ap_group_uuid = ap_group_uuid
-        await self._setup_tunnel_network()
+        # await self._setup_tunnel_network()
 
     async def _get_aps_for_group(self, apgroup_uuid) -> dict:
         logger.info (f"NetreachTunnelManager.get_aps_for_group()")
@@ -76,9 +76,9 @@ class NetreachTunnelManager:
 
     async def _setup_tunnel_to_ap_for_vlan(self, ap_addr, vxlan_port_name, vlan, conn_key) -> str:
         run_cmd = self.vxlan_connect_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge,
-                                                     "vxlan_port_name": vxlan_port_name,
-                                                     "remote_vxlan_host": ap_addr,
-                                                     "vxlan_conn_key": conn_key})
+                                                    "vxlan_port_name": vxlan_port_name,
+                                                    "remote_vxlan_host": ap_addr,
+                                                    "vxlan_conn_key": conn_key})
         logger.info(f"NetreachAdapter:_setup_tunnel_to_ap_for_vlan: Running: {run_cmd}")
         proc = await asyncio.create_subprocess_shell(
             run_cmd,
