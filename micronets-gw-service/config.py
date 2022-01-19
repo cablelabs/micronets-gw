@@ -67,6 +67,8 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S = 60
     NETREACH_ADAPTER_VXLAN_PEER_INAME_PREFIX = "mn-ap-"
     NETREACH_ADAPTER_VXLAN_NET_BRIDGE = "brhapd"
+    NETREACH_ADAPTER_VXLAN_NET_MICRONETS_PORT = "hapd-tr-patch"
+    NETREACH_ADAPTER_VXLAN_NET_HOSTAPD_PORT = "haport-sw"
     NETREACH_ADAPTER_VXLAN_LIST_PORTS = "/usr/bin/ovs-vsctl list-ports {vxlan_net_bridge}"
     NETREACH_ADAPTER_VXLAN_CONNECT_CMD = "/usr/bin/ovs-vsctl add-port {vxlan_net_bridge} {vxlan_port_name} -- " \
                                        "set interface {vxlan_port_name} type=vxlan " \
