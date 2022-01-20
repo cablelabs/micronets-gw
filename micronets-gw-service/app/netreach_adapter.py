@@ -73,7 +73,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"NetreachAdapter: Serial number: {self.serial_number}")
         logger.info(f"NetreachAdapter: Management interface: {self.management_interface}")
         logger.info(f"NetreachAdapter: Management address: {self.management_address}")
-        logger.info(f"NetreachAdapter: using micronets API prefix: \n{self.micronets_api_prefix}")
+        logger.info(f"NetreachAdapter: using micronets API prefix: {self.micronets_api_prefix}")
         self.mqtt_client = None
         self.mqtt_connection_state = "DISCONNECTED"
         self.async_event_loop = asyncio.get_event_loop()
@@ -228,7 +228,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 logger.info(f"NetreachAdapter:_connect_mqtt_listener_loop: Retrying MQTT connection establishment")
 
     async def _login_to_controller(self):
-        logger.info(f"NetreachAdapter: _login_to_controller: Logging into controller at {self.controller_base_url}")
+        logger.info(f"NetreachAdapter:_login_to_controller: Logging into controller at {self.controller_base_url}")
 
         data = {
             "serial": self.serial_number,
@@ -314,7 +314,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             response = await httpx_client.get(f"{self.controller_base_url}/v1/ap-groups?apUuid={self.ap_uuid}",
                                               headers={"x-api-token": self.api_token})
             if response.status_code != 200:
-                logger.warning(f"NetreachTunnelManager.get_aps_for_group: FAILED retrieving AP list for "
+                logger.warning(f"NetreachAdapter._get_services_for_ap: FAILED retrieving AP list for "
                                f"AP {self.ap_uuid} ({response.status_code}): {response.text}")
                 raise ValueError(response.status_code)
             ap_groups = response.json()['results']
@@ -322,7 +322,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 logger.info(f"NetreachAdapter:_get_services_for_ap {self.ap_name} ({self.ap_uuid}) is not assigned to an AP Group. Nothing to setup.")
             else:
                 ap_group = ap_groups[0]
-            logger.info(f"NetreachAdapter:_get_services_for_ap: AP Group {ap_group['name']} ({ap_group['uuid']})")
+            logger.info(f"NetreachAdapter:_get_services_for_ap: AP Group \"{ap_group['name']}\" ({ap_group['uuid']})")
 
             # Get the Services for the AP Group
             ap_group_uuid = ap_group['uuid']
@@ -330,10 +330,12 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                                               headers={"x-api-token": self.api_token})
             if response.status_code != 200:
                 logger.warning(f"NetreachTunnelManager.get_aps_for_group: FAILED retrieving Service list for "
-                               f"AP Group {ap_group['name']} ({ap_group['uuid']}). "
+                               f"AP Group \"{ap_group['name']}\" ({ap_group['uuid']}). "
                                f"Returned status {response.status_code} ({response.text})")
                 raise ValueError(response.status_code)
             service_list = response.json()['results']
+            logger.info(f"NetreachAdapter:_get_services_for_ap: Found {len(service_list)} services in AP Group "
+                        f"\"{ap_group['name']}\" ({ap_group['uuid']})")
 
             # Get the Devices for each Service
             service_device_list = {}
@@ -346,7 +348,10 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     logger.warning(f"Could not retrieve devices for service {service_name} ({service_uuid}) - "
                                    f"Result was {response.status_code} ({response.reason_phrase})")
                     continue
-                service_device_list[service_uuid] = response.json()['results']
+                device_list = response.json()['results']
+                logger.info(f"NetreachAdapter:_get_services_for_ap: Found {len(device_list)} devices for service "
+                            f"\"{service_name}\" ({service_uuid})")
+                service_device_list[service_uuid] = device_list
 
         return ap_group, service_list, service_device_list
 
@@ -401,7 +406,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             result = await micronets_api.delete(f"{self.micronets_api_prefix}/micronets")
 
             logger.info(f"NetreachAdapter:_setup_micronets_for_ap:  Configuring {len(service_list)} services "
-                        f"for AP Group {self.ap_group['name']} ({self.ap_group['uuid']})")
+                        f"for AP Group \"{self.ap_group['name']}\" ({self.ap_group['uuid']})")
 
             for service in service_list:
                 service_enabled = service['enabled']
@@ -411,7 +416,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 micronet_vlan = int(service['vlan'])
                 # TODO: Replace this with gateway reference from Service object (see issue #15)
                 micronet_gateway = service['micronetGateway']
-                logger.info(f"NetreachAdapter:_setup_micronets_for_ap: Found service {service_name} ({service_uuid})")
+                logger.info(f"NetreachAdapter:_setup_micronets_for_ap: Service \"{service_name}\" ({service_uuid})")
                 logger.info(f"NetreachAdapter:_setup_micronets_for_ap:  micronet id {service_uuid} vlan {micronet_vlan}")
                 if not (micronet_subnet and micronet_vlan):
                     logger.info(f"NetreachAdapter:_setup_micronets_for_ap: netreach Service {service_name} "
@@ -419,9 +424,9 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     pass
                 micronet_subnet_addr = micronet_subnet.network_address
                 micronet_subnet_netmask = micronet_subnet.netmask
-                logger.info(f"NetreachAdapter:_setup_micronets_for_ap:  micronet subnet {micronet_subnet} "
+                logger.info(f"NetreachAdapter:_setup_micronets_for_ap:    subnet {micronet_subnet} "
                             f"({micronet_subnet_addr}/{micronet_subnet_netmask})")
-                logger.info(f"NetreachAdapter:_setup_micronets_for_ap:  micronet gateway {micronet_gateway}")
+                logger.info(f"NetreachAdapter:_setup_micronets_for_ap:    micronet gateway {micronet_gateway}")
 
                 micronet_to_add = {
                     "micronet": {
@@ -438,7 +443,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 result = await micronets_api.post(f"{self.micronets_api_prefix}/micronets",
                                                   json=micronet_to_add)
                 if result.is_error:
-                    logger.warning(f"Could not add micronet for service {service_name} ({service_uuid}) - "
+                    logger.warning(f"Could not add micronet for service \"{service_name}\" ({service_uuid}) - "
                                    f"Result was {result.status_code} ({result.reason_phrase})")
                     continue
 
@@ -446,14 +451,14 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 micronet_devices = []
 
                 for device in nr_device_list:
-                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   device {device['uuid']} ({device['name']})")
+                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   device \"{device['name']}\" ({device['uuid']})")
                     device_enabled = device['enabled']
                     device_id = device['uuid']
                     device_name = device['name']
                     device_mac = device['macAddress']
                     device_ip = device['ipAddress']
                     device_psk_or_pass = device['passphrase'] if self.use_device_pass else device['psks'][0]
-                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   device name {device_name} "
+                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   device \"{device_name}\" "
                                 f"mac {device_mac} ip {device_ip}")
                     if not device_mac:
                         continue
@@ -842,7 +847,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         # Note: Handler is registered to receive "AP-STA" events only
         logger.info(f"NetreachAdapter.handle_hostapd_cli_event({event_msg})")
         if not self.api_token:
-            logger.info (f"NetreachAdapter.handle_hostapd_cli_event: Cannot process {event_msg} event - the API key has not been established")
+            logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Cannot process {event_msg} "
+                        "event - the API key has not been established")
             return
 
         event, mac = event_msg.split(' ')
@@ -877,7 +883,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             lookup_result = psk_lookup_entry['lookupResult']
             service_id = lookup_result['serviceUuid']
             device_id = lookup_result['deviceUuid']
-            logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Found service/device ID {service_id}/{device_id} for MAC {mac}")
+            logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Configuring service/device ID "
+                        f"{service_id}/{device_id} for MAC {mac}")
 
         if event == "AP-STA-CONNECTED":
             self.connected_devices[mac] = {"deviceUuid": device_id, "serviceUuid": service_id,
