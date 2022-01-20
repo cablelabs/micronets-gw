@@ -451,10 +451,10 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 micronet_devices = []
 
                 for device in nr_device_list:
-                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   device \"{device['name']}\" ({device['uuid']})")
-                    device_enabled = device['enabled']
                     device_id = device['uuid']
                     device_name = device['name']
+                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   device \"{device_name}\" ({device_id})")
+                    device_enabled = device['enabled']
                     device_mac = device['macAddress']
                     device_ip = device['ipAddress']
                     device_psk_or_pass = device['passphrase'] if self.use_device_pass else device['psks'][0]
@@ -881,6 +881,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 logger.info(f"NetreachAdapter.handle_hostapd_cli_event: PSK lookup cache for '{mac}' is a failed lookup")
                 return
             lookup_result = psk_lookup_entry['lookupResult']
+            logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Found cached PSK lookup result for MAC {mac}: "
+                        + lookup_result)
             service_id = lookup_result['serviceUuid']
             device_id = lookup_result['deviceUuid']
             logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Configuring service/device ID "
