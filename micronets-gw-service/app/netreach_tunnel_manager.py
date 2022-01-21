@@ -28,6 +28,10 @@ class NetreachTunnelManager:
         self.ap_group_uuid = ap_group_uuid
         await self._setup_ap_network(service_list, service_device_list)
 
+    async def update_tunnels_for_device(self, device_id, service_id, connected, associated_ap_id):
+        logger.info(f"NetreachTunnelManager:update_tunnels_for_device(device {device_id}, service {service_id}, "
+                    f"connected {connected}, associated_ap_id {associated_ap_id})")
+
     async def _get_tunnel_int_name_list(self) -> [str]:
         run_cmd = self.vxlan_list_ports_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge})
         logger.info(f"NetreachTunnelManager:_get_tunnel_int_name_list: Running: {run_cmd}")
@@ -166,7 +170,7 @@ class NetreachTunnelManager:
             service_enabled = service['enabled']
             service_uuid = service['uuid']
             service_name = service['name']
-            num_devices_in_service = self._count_connected_device_in_service(service_uuid)
+            num_devices_in_service = self._count_connected_devices_in_service(service_uuid)
             if not service_enabled:
                 logger.info(f"NetreachTunnelManager:_determine_ap_network_connections: "
                             f"Service  \"{service_name}\" ({service_uuid}) is disabled - skipping")
@@ -204,8 +208,9 @@ class NetreachTunnelManager:
                 needed_connection_list[associated_ap_uuid] = ap_list[associated_ap_uuid]
         return needed_connection_list
 
-    def _count_connected_device_in_service(self, service_uuid):
-        return 0
+    def _count_connected_devices_in_service(self, service_uuid):
+        connected_device_list = self.netreach_adapter.get_connected_devices(service_uuid)
+        return len(connected_device_list)
 
     async def _determine_missing_connections(self, connections):
         pass

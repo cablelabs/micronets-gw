@@ -373,7 +373,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
             update_request = {
                 "managementAddress": self.management_address,
-                "geolocation": self.geolocation
+                "geolocation": self.geolocation,
+                "status": "ONLINE"
             }
             response = await httpx_client.patch(f"{self.controller_base_url}/v1/access-points/{self.ap_uuid}",
                                                 headers={"x-api-token": self.api_token},
@@ -395,8 +396,11 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     async def _refresh_micronets(self):
         (ap_group, ap_services, ap_service_devices) = await self._get_services_for_ap()
         self.ap_group = ap_group
-        await self._refresh_micronets(ap_services, ap_service_devices)
+        await self._setup_micronets_for_ap(ap_services, ap_service_devices)
         await self._configure_hostapd(ap_group)
+        if self.tunnel_man:
+            await self.tunnel_man.init_ap_online(self.ap_uuid, self.ap_group,
+                                                 ap_services, ap_service_devices)
 
     async def _setup_micronets_for_ap(self, service_list, service_device_list):
         logger.info(f"NetreachAdapter:_setup_micronets_for_ap {self.ap_name} ({self.ap_uuid})")
@@ -463,8 +467,11 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     if not device_mac:
                         continue
                     device_mac = device_mac.lower()
-                    self.device_mac_cache[device_mac] = {"updated": int(time.time()),
-                                                         "serviceUuid": service_uuid, "deviceUuid": device_id}
+                    mac_cache_entry = {"updated": int(time.time()), "serviceUuid": service_uuid,
+                                       "deviceUuid": device_id}
+                    self.device_mac_cache[device_mac] = mac_cache_entry
+                    logger.info(f"NetreachAdapter._setup_micronets_for_ap:   Adding mac cache entry for {device_mac}: "
+                                + str(mac_cache_entry))
                     if not device_psk_or_pass:
                         logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   Device {device_id} (\"{device_name}\") "
                                     f" does not have a PSK ({device_id})")
@@ -603,7 +610,6 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             "AP_REMOVE_SERVICE": self._handle_ap_remove_service,
             "AP_PROVISION_DEVICE": self._handle_ap_provision_device,
             "AP_UPDATE_DEVICE": self._handle_ap_update_device,
-            "AP_UPDATE_DEVICE_STATUS": self._handle_ap_update_device_status,
             "AP_REMOVE_DEVICE": self._handle_ap_remove_device,
         }
 
@@ -717,32 +723,24 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             href_components = message['href'].split('/')
             service_id = href_components[2]
             device_id = href_components[4]
-            connected = message.payload.get("connected")
-            associatedApUuid = message.payload.get("associatedApUuid")
+            payload = message['payload']
+            connected = payload.get("connected")
+            associated_ap_id = payload.get("associatedApUuid")
             if connected is not None:
-                await self.tunnel_man.update_tunnels_for_device(device_id, service_id, connected, associatedApUuid)
+                logger.info(f"NetreachAdapter:_handle_ap_update_device: Device status updated for Device {device_id} "
+                            f"(Service {service_id})")
+                await self.tunnel_man.update_tunnels_for_device(device_id, service_id, connected, associated_ap_id)
             else:
+                logger.info(f"NetreachAdapter:_handle_ap_update_device: Device record updated for Device {device_id} "
+                            f" (Service {service_id})")
                 await self._refresh_micronets()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
-        except ValueError as e:
+        except Exception as e:
+            logger.warning(f"NetreachAdapter:_handle_ap_update_device: Caught exception: {e}", exc_info=True)
             self._report_event_failure(message, {
-                "uuidList": ["uuid_of_failed_link"],
-                "reasonList": [str(e)]
-            })
-
-    async def _handle_ap_update_device_status(self, client, message):
-        logger.info(f"NetreachAdapter:_handle_ap_update_device_status({client},{message})")
-        try:
-            payload = message.payload
-            await self.tunnel_man.update_tunnels_for_device(payload["associatedApUuid"],
-                                                            payload["connected"])
-            # TODO: Move failure/success reporting
-            # Report Success
-            self._report_event_success(message)
-        except ValueError as e:
-            self._report_event_failure(message, {
+                # TODO
                 "uuidList": ["uuid_of_failed_link"],
                 "reasonList": [str(e)]
             })
@@ -803,7 +801,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         if self.psk_cache_enabled:
             psk_entry = self.psk_lookup_cache.get(sta_mac)
             if psk_entry:
-                entry_age_s = int(time.time())- psk_entry['createTime']
+                entry_age_s = int(time.time()) - psk_entry['createTime']
                 logger.info(f"NetreachAdapter.lookup_psk_for_device: Found cached PSK lookup entry for MAC {sta_mac}: {psk_entry}")
                 logger.info(f"NetreachAdapter.lookup_psk_for_device: Cached PSK lookup entry for MAC {sta_mac} is {entry_age_s}s old")
                 if entry_age_s > self.psk_cache_expire_s:
@@ -833,6 +831,14 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             self.psk_lookup_cache[sta_mac] = psk_entry
         logger.info(f"NetreachAdapter.lookup_psk_for_device: Passing headers: {headers_to_pass}")
 
+        if not result.is_error:
+            response_json = result.json()
+            cache_entry = {"updated": int(time.time()),
+                           "serviceUuid": response_json['serviceUuid'],
+                           "deviceUuid": response_json['deviceUuid']}
+            self.device_mac_cache[sta_mac] = cache_entry
+            logger.info(f"NetreachAdapter.lookup_psk_for_device: Adding mac cache entry for {sta_mac}: {cache_entry}")
+
         return (result.text, result.status_code, headers_to_pass)
 
     def register_hostapd_event_handler(self, hostapd_adapter):
@@ -842,6 +848,14 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     async def handle_hostapd_ready(self):
         logger.info(f"NetreachAdapter.handle_hostapd_ready()")
         await self._configure_hostapd(self.ap_group)
+        await self._add_connected_stas_to_device_mac_cache()
+
+    async def _add_connected_stas_to_device_mac_cache(self):
+        list_sta_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.ListStationsCLICommand())
+        sta_macs = await list_sta_cmd.get_sta_macs()
+        for sta_mac in sta_macs:
+            logger.info(f"NetreachAdapter:_add_connected_stas_to_device_mac_cache: Processing STA MAC {sta_mac}")
+            await self._update_device_status_and_cache(sta_mac, True, True)
 
     async def handle_hostapd_cli_event(self, event_msg):
         # Note: Handler is registered to receive "AP-STA" events only
@@ -855,52 +869,52 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         mac = mac.lower()
 
         if event == "AP-STA-CONNECTED":
-            device_patch = {"associated": True, "connected": True}
+            await self._update_device_status_and_cache(mac, True, True)
         elif event == "AP-STA-DISCONNECTED":
-            device_patch = {"associated": False, "connected": False}
+            await self._update_device_status_and_cache(mac, False, False)
         else:
-            logger.warning(f"NetreachAdapter.handle_hostapd_cli_event: Received unexpected event '{event_msg}'")
+            logger.warning(f"NetreachAdapter.handle_hostapd_cli_event: Received unknown event '{event_msg}'")
             # If we're getting here, check the pattern provided to the HostapdCLIEventHandler constructor
             return
 
+    async def _update_device_status_and_cache(self, mac, associated, connected) -> None:
+        # Note: This method must only be called on authoritative changes in local station state
+        #       i.e. This should only be called when a device is known to transition from CONNECTED to DISCONNECTED
+        #            or vice-versa
         mac_cache_entry = self.device_mac_cache.get(mac)
         if mac_cache_entry:
             service_id = mac_cache_entry['serviceUuid']
             device_id = mac_cache_entry['deviceUuid']
-            logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Found device {device_id} for {mac} "
-                        "in device-to-mac cache")
         else:
-            logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Did not find device uuid for MAC {mac}"
-                        " - checking PSK lookup cache")
-            # Check the PSK lookup cache (we can get the hostapd indication before the controller update)
-            psk_lookup_entry = self.psk_lookup_cache.get(mac)
-            if not psk_lookup_entry:
-                logger.info(f"NetreachAdapter.handle_hostapd_cli_event: No device for {mac} in PSK lookup cache")
-                return
-            if not psk_lookup_entry['pskFound']:
-                logger.info(f"NetreachAdapter.handle_hostapd_cli_event: PSK lookup cache for '{mac}' is a failed lookup")
-                return
-            lookup_result = psk_lookup_entry['lookupResult']
-            logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Found cached PSK lookup result for MAC {mac}: "
-                        + lookup_result)
-            service_id = lookup_result['serviceUuid']
-            device_id = lookup_result['deviceUuid']
-            logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Configuring service/device ID "
-                        f"{service_id}/{device_id} for MAC {mac}")
+            logger.warning(f"NetreachAdapter._update_device_status_and_cache: Could not find {mac} "
+                           "in device-to-mac cache")
+            return
 
-        if event == "AP-STA-CONNECTED":
-            self.connected_devices[mac] = {"deviceUuid": device_id, "serviceUuid": service_id,
-                                           "connectedTime": int(time.time())}
-        else:  # event == "AP-STA-DISCONNECTED"
+        logger.info(f"NetreachAdapter._update_device_status_and_cache: Found device {device_id} for {mac} "
+                    "in device-to-mac cache")
+
+        # First update the local cache
+        if connected:
+            cache_entry = {"deviceUuid": device_id, "serviceUuid": service_id, "connectedTime": int(time.time())}
+            self.connected_devices[mac] = cache_entry
+        else:
             del self.connected_devices[mac]
 
-        result = httpx.patch(f"{self.controller_base_url}/v1/services/{service_id}/devices/{device_id}",
-                             headers={"x-api-token": self.api_token},
-                             json=device_patch)
-        logger.info(f"NetreachAdapter.handle_hostapd_cli_event: Setting status of device {device_id} of service {service_id} "
-                    f"to {device_patch}")
+        # Now update the Device on the controller
+        async with httpx.AsyncClient() as httpx_client:
+            device_patch = {"associated": associated, "connected": connected}
+            result = await httpx_client.patch(f"{self.controller_base_url}/v1/services/{service_id}/devices/{device_id}",
+                                              headers={"x-api-token": self.api_token},
+                                              json=device_patch)
+            if result.is_error:
+                logger.warning(f"NetreachAdapter._update_device_status_and_cache: Could not update status of Device "
+                               f"{device_id} in Service {service_id} to {device_patch} on NetReach Controller: "
+                               f"{result.reason_phrase} ({result.status_code})")
+            else:
+                logger.info("NetreachAdapter._update_device_status_and_cache: Updated controller status of Device "
+                            f"{device_id} in Service {service_id} to {device_patch}")
 
-    async def get_connected_devices(self, service_uuid=None):
+    def get_connected_devices(self, service_uuid=None):
         if service_uuid is None:
             return self.connected_devices
         connected_dev_list = []
