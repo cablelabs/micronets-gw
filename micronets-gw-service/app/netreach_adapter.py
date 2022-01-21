@@ -10,7 +10,7 @@ from urllib import parse as urllib_dot_parse
 from quart import jsonify
 from pathlib import Path
 
-from .netreach_tunnel_manager import NetreachTunnelManager
+from .netreach_ap_net_manager import NetreachApNetworkManager
 
 from .hostapd_adapter import HostapdAdapter
 
@@ -42,7 +42,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.use_device_pass = bool(config.get('NETREACH_ADAPTER_USE_DEVICE_PASS', "False"))
         self.psk_cache_enabled = bool(config.get('NETREACH_ADAPTER_PSK_CACHE_ENABLED', "True"))
         self.psk_cache_expire_s = config.get('NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S', 120)
-        self.tunnel_man = NetreachTunnelManager(config, self)
+        self.tunnel_man = NetreachApNetworkManager(config, self)
         self.api_token = None
         self.api_token_refresh = None
         self.ap_uuid = None
@@ -200,7 +200,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 self.ap_group = ap_group
                 await self._setup_micronets_for_ap(ap_services, ap_service_devices)
                 if self.tunnel_man:
-                    await self.tunnel_man.init_ap_online(self.ap_uuid, self.ap_group,
+                    await self.tunnel_man.init_ap_online(str(self.ap_uuid), self.ap_group,
                                                          ap_services, ap_service_devices)
                 await self._configure_hostapd(ap_group)
             except Exception as ex:
@@ -306,7 +306,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             return ap_info
 
     async def _get_services_for_ap(self):
-        # Return the AP Group , a list of all the services currently configured on the AP
+        # Return the AP Group, a list of all the services currently configured on the AP
         # and a dict keyed off the Service uuid mapped to an array of Device entries
 
         async with httpx.AsyncClient() as httpx_client:
@@ -393,14 +393,14 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
         logger.info(f"NetreachAdapter._register_ap: Successfully updated AP management address/geolocation")
 
-    async def _refresh_micronets(self):
+    async def _refresh_all_services(self):
+        logger.info(f"NetreachAdapter:_refresh_all_services()")
         (ap_group, ap_services, ap_service_devices) = await self._get_services_for_ap()
         self.ap_group = ap_group
         await self._setup_micronets_for_ap(ap_services, ap_service_devices)
         await self._configure_hostapd(ap_group)
         if self.tunnel_man:
-            await self.tunnel_man.init_ap_online(self.ap_uuid, self.ap_group,
-                                                 ap_services, ap_service_devices)
+            await self.tunnel_man.update_ap_network(ap_services, ap_service_devices)
 
     async def _setup_micronets_for_ap(self, service_list, service_device_list):
         logger.info(f"NetreachAdapter:_setup_micronets_for_ap {self.ap_name} ({self.ap_uuid})")
@@ -634,12 +634,12 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     async def _handle_ap_update(self, client, message):
         logger.info(f"NetreachAdapter:_handle_ap_update()")
         self._report_event_success(message)
-        await self._refresh_micronets()
+        await self._refresh_all_services()
 
     async def _handle_ap_included_in_ap_group(self, client, message):
         logger.info(f"NetreachAdapter: handle_ap_included_in_ap_group()")
         try:
-            await self._refresh_micronets()
+            await self._refresh_all_services()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -652,7 +652,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     async def _handle_ap_excluded_from_ap_group(self, client, message):
         logger.info(f"NetreachAdapter: handle_ap_excluded_from_ap_group()")
         try:
-            await self._refresh_micronets()
+            await self._refresh_all_services()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -665,7 +665,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     async def _handle_ap_provision_service(self, client, message):
         logger.info(f"NetreachAdapter:_handle_ap_provision_service()")
         try:
-            await self._refresh_micronets()
+            await self._refresh_all_services()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -678,7 +678,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     async def _handle_ap_update_service(self, client, message):
         logger.info(f"NetreachAdapter:_handle_ap_update_service()")
         try:
-            await self._refresh_micronets()
+            await self._refresh_all_services()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -691,7 +691,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     async def _handle_ap_remove_service(self, client, message):
         logger.info(f"NetreachAdapter:_handle_ap_remove_service()")
         try:
-            await self._refresh_micronets()
+            await self._refresh_all_services()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -704,7 +704,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     async def _handle_ap_provision_device(self, client, message):
         logger.info(f"NetreachAdapter:_handle_ap_provision_device({message})")
         try:
-            await self._refresh_micronets()
+            await self._refresh_all_services()
             # Report Success
             # Clear the PSK lookup cache (in case the device being added has a cache fail)
             logger.info(f"NetreachAdapter:_handle_ap_provision_device: Clearing the PSK lookup cache")
@@ -729,11 +729,12 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             if connected is not None:
                 logger.info(f"NetreachAdapter:_handle_ap_update_device: Device status updated for Device {device_id} "
                             f"(Service {service_id})")
-                await self.tunnel_man.update_tunnels_for_device(device_id, service_id, connected, associated_ap_id)
+                await self._refresh_all_services()
+                # await self.tunnel_man.update_ap_network_for_device(device_id, service_id, connected, associated_ap_id)
             else:
                 logger.info(f"NetreachAdapter:_handle_ap_update_device: Device record updated for Device {device_id} "
                             f" (Service {service_id})")
-                await self._refresh_micronets()
+                await self._refresh_all_services()
             # TODO: Move failure/success reporting
             # Report Success
             self._report_event_success(message)
@@ -748,7 +749,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     async def _handle_ap_remove_device(self, client, message):
         logger.info(f"NetreachAdapter:_handle_ap_remove_device({message})")
         try:
-            await self._refresh_micronets()
+            await self._refresh_all_services()
             # TODO: Move failure/success reporting
             async with httpx.AsyncClient() as httpx_client:
                 logger.info(f"NetreachAdapter._handle_ap_remove_device: Looking up client object at {message['href']}")
@@ -917,8 +918,16 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     def get_connected_devices(self, service_uuid=None):
         if service_uuid is None:
             return self.connected_devices
-        connected_dev_list = []
-        for device in self.connected_devices:
-            if device['serviceUuid'] == service_uuid:
-                connected_dev_list.append(device)
-        return connected_dev_list
+        connected_devs = {}
+        for mac, entry in self.connected_devices.items():
+            if entry['serviceUuid'] == service_uuid:
+                connected_devs[mac] = entry
+        return connected_devs
+
+    def dump_connected_devices(self, service_uuid=None, prefix="") -> str:
+        strcat = ""
+        for mac, entry in self.connected_devices.items():
+            if service_uuid and entry['serviceUuid'] != service_uuid:
+                continue
+            strcat += f"{prefix}{mac}: {entry}\n"
+        return strcat
