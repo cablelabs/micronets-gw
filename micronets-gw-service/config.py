@@ -72,9 +72,9 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_VXLAN_LIST_PORTS = "/usr/bin/ovs-vsctl list-ports {vxlan_net_bridge}"
     NETREACH_ADAPTER_VXLAN_CONNECT_CMD = "/usr/bin/ovs-vsctl add-port {vxlan_net_bridge} {vxlan_port_name} -- " \
                                        "set interface {vxlan_port_name} type=vxlan " \
-                                       "options:remote_ip={remote_vxlan_host}" \
+                                       "options:remote_ip={remote_vxlan_host} " \
                                        "options:key={vxlan_conn_key}"
-    NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD = "/usr/bin/ovs-vsctl del-port {local_vxlan_name}"
+    NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD = "/usr/bin/ovs-vsctl del-port {vxlan_port_name}"
     NETREACH_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {vxlan_net_bridge} {flow_file}'
 
 #

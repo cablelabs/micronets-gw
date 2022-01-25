@@ -1,5 +1,6 @@
 import logging, json, re, asyncio, httpx, hashlib, subprocess, tempfile
 from pathlib import Path
+from uuid import UUID
 from .utils import short_uuid
 
 logger = logging.getLogger ('netreach-ap-net-manager')
@@ -34,55 +35,38 @@ class NetreachApNetworkManager:
         vlan = connection['service']['vlan']
         return f"netreach.ap-{ap_uuid[:4]}-{ap_uuid[-4:]}.{vlan}"
 
-    async def _get_tunnel_int_name_set(self) -> {str}:
+    async def _get_open_tunnel_names(self) -> {str}:
         run_cmd = self.vxlan_list_ports_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge})
-        logger.info(f"_get_tunnel_int_name_set: Running: {run_cmd}")
-        proc = await asyncio.create_subprocess_shell(run_cmd,
-                                                     stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        logger.info(f"_get_open_tunnel_names: Running: {run_cmd}")
+        proc = await asyncio.create_subprocess_shell(run_cmd, stdout=asyncio.subprocess.PIPE, stderr=subprocess.STDOUT)
         stdout, stderr = await proc.communicate()
 
-        logger.info(f"_get_tunnel_int_name_set: Bridge list command exited "
+        logger.info(f"_get_open_tunnel_names: Bridge list command exited "
                     f"with exit code {proc.returncode}")
 
         output = stdout.decode() if stdout else ""
         if stdout:
-            logger.info(f"_get_tunnel_int_name_set: stdout: {output}")
-        if stderr:
-            logger.info(f"_get_tunnel_int_name_set: stderr: {stderr.decode()}")
+            logger.info(f"_get_open_tunnel_names: stdout: {output}")
         if proc.returncode != 0:
-            logger.warning(f"_get_tunnel_int_name_set: Error retrieving interface list "
-                           f"for bridge {self.vxlan_net_bridge}")
-            return []
+            logger.error(f"_get_open_tunnel_names: Error retrieving interface list "
+                         f"for bridge {self.vxlan_net_bridge}")
+            return set()
 
         bridge_ints = output.splitlines()
         tunnel_ints = set()
         for int_name in bridge_ints:
             if int_name.startswith(self.vxlan_port_prefix):
                 tunnel_ints.add(int_name)
-        logger.info(f"_get_tunnel_int_name_set: Found interfaces: {tunnel_ints}")
+        logger.info(f"_get_open_tunnel_names: Found interfaces: {tunnel_ints}")
         return tunnel_ints
 
-    async def _setup_tunnel_to_ap_for_vlan(self, ap_addr, vxlan_port_name, vlan, conn_key) -> str:
-        run_cmd = self.vxlan_connect_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge,
-                                                    "vxlan_port_name": vxlan_port_name,
-                                                    "remote_vxlan_host": ap_addr,
-                                                    "vxlan_conn_key": conn_key})
-        logger.info(f"_setup_tunnel_to_ap_for_vlan: Running: {run_cmd}")
-        proc = await asyncio.create_subprocess_shell(
-            run_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE)
-
-        stdout, stderr = await proc.communicate()
-        logger.info(f"_setup_tunnel_to_ap_for_vlan: Tunnel setup command completed "
-                    f"with exit code {proc.returncode}")
-
-    async def close_tunnel_to_ap(self, vxlan_int_name) -> str:
-        pass
-
-    def vxlan_key_for_connection(self, uuid_1, uuid_2, vlan) -> int:
+    def _vxlan_key_for_connection(self, connection) -> int:
         # vxlan keys are 24-bit values. This function should generate a key which is the same even if ap_uuid_1 and
         # ap_uuid_2 are transposed. The key only needs to be unique between 2 hosts
+        uuid_1 = UUID(self.ap_uuid)
+        uuid_2 = UUID(connection['accessPoint']['uuid'])
+        vlan = connection['service']['vlan']
+
         if uuid_1 < uuid_2:
             lid = uuid_1
             hid = uuid_2
@@ -112,22 +96,21 @@ class NetreachApNetworkManager:
             logger.info ("Applying flows using: " + run_cmd)
 
             proc = await asyncio.create_subprocess_shell(run_cmd,
-                                                         stdout=asyncio.subprocess.PIPE,
-                                                         stderr=subprocess.STDOUT)
+                                                         stdout=asyncio.subprocess.PIPE, stderr=subprocess.STDOUT)
             stdout, stderr = await proc.communicate()
 
             if proc.returncode == 0:
                 logger.info(f"SUCCESSFULLY APPLIED FLOWS TO OVS BRIDGE {self.vxlan_net_bridge}")
             else:
-                logger.warning(f"ERROR APPLYING FLOWS TO OVS BRIDGE {self.vxlan_net_bridge} "
-                               f"(exit code {proc.returncode}")
-                logger.warning(f"FLOW APPLICATION OUTPUT: {stdout.decode()}")
+                logger.error(f"ERROR APPLYING FLOWS TO OVS BRIDGE {self.vxlan_net_bridge} "
+                             f"(exit code {proc.returncode}")
+                logger.error(f"FLOW APPLICATION OUTPUT: {stdout.decode()}")
         except Exception as e:
             logger.warning(f"ERROR APPLYING FLOWS: {e}")
 
     async def _setup_ap_network(self, service_list, service_device_list):
         # Note: this should only be called when the AP is initializaed for an AP Group
-        logger.info (f"OpenFlowAdapter._setup_ap_network()")
+        logger.info (f"_setup_ap_network()")
 
         with tempfile.NamedTemporaryFile(mode='wt') as flow_file:
             flow_file_path = Path(flow_file.name)
@@ -167,39 +150,30 @@ class NetreachApNetworkManager:
         await self.update_ap_network(service_list, service_device_list)
 
     async def update_ap_network(self, service_list, service_device_list):
-        logger.info (f"OpenFlowAdapter.update_ap_network()")
-        needed_connections = await self._determine_all_network_connections(service_list, service_device_list)
-        existing_tun_names = await self._get_tunnel_int_name_set()
-        if len(needed_connections) == 0:
-            logger.info (f"OpenFlowAdapter.update_ap_network(): No tunnel connections needed")
-        else:
-            logger.info (f"OpenFlowAdapter.update_ap_network(): NEEDED connections:")
-            for connection in needed_connections:
-                dev = connection['device']
-                serv = connection['service']
-                ap = connection['accessPoint']
-                tun_name = self._tunnel_name_for_connection(connection)
-                logger.info (f"OpenFlowAdapter.update_ap_network():  {tun_name} to {ap['name']} ({ap['managementAddress']}) "
-                             f"for Dev {dev['name']} ({short_uuid(dev['uuid'])}) in Service {serv['name']} "
-                             f"({short_uuid(serv['uuid'])}) with vlan {serv['vlan']}")
+        logger.info (f"update_ap_network()")
 
-        missing_connections = await self._determine_missing_connections(needed_connections, existing_tun_names)
-        logger.info (f"OpenFlowAdapter.update_ap_network(): MISSING connections:")
-        for connection in missing_connections:
+        needed_connections = await self._determine_needed_network_connections(service_list, service_device_list)
+        existing_tun_names = await self._get_open_tunnel_names()
+
+        logger.info (f"update_ap_network(): {len(needed_connections)} connections NEEDED:")
+        for connection in needed_connections:
             dev = connection['device']
             serv = connection['service']
             ap = connection['accessPoint']
             tun_name = self._tunnel_name_for_connection(connection)
-            logger.info (f"OpenFlowAdapter.update_ap_network():  {tun_name} to {ap['name']} ({ap['managementAddress']}) "
+            logger.info (f"update_ap_network():  {tun_name} to {ap['name']} ({ap['managementAddress']}) "
                          f"for Dev {dev['name']} ({short_uuid(dev['uuid'])}) in Service {serv['name']} "
                          f"({short_uuid(serv['uuid'])}) with vlan {serv['vlan']}")
 
-        unneeded_tunnels = await self._determine_unneeded_tunnel_names(needed_connections, existing_tun_names)
-        logger.info (f"OpenFlowAdapter.update_ap_network(): UNNEEDED tunnel connections:")
-        for tun_name in unneeded_tunnels:
-            logger.info (f"OpenFlowAdapter.update_ap_network():   Tunnel {tun_name} can be closed")
+        missing_connections = await self._determine_missing_connections(needed_connections, existing_tun_names)
+        logger.info (f"update_ap_network(): {len(missing_connections)} MISSING connections:")
+        added_connections = await self._setup_network_connections(missing_connections)
 
-        added_connection = await self._setup_network_connections(missing_connections)
+        unneeded_tunnels = await self._determine_unneeded_tunnel_names(needed_connections, existing_tun_names)
+        logger.info (f"update_ap_network(): {len(unneeded_tunnels)} UNNEEDED tunnel connections:")
+        for tun_name in unneeded_tunnels:
+            logger.info (f"update_ap_network():   Tunnel {tun_name} can be closed")
+        await self._close_tunnels(unneeded_tunnels)
 
         with tempfile.NamedTemporaryFile(mode='wt') as flow_file:
             flow_file_path = Path(flow_file.name)
@@ -217,11 +191,10 @@ class NetreachApNetworkManager:
         logger.info(f"update_tunnels_for_device(device {device_id}, service {service_id}, "
                     f"connected {connected}, associated_ap_id {associated_ap_id})")
 
-    async def _determine_all_network_connections(self, service_list, service_device_list) -> []:
+    async def _determine_needed_network_connections(self, service_list, service_device_list) -> []:
         # Return a list of needed network connections
-        logger.info(f"_determine_all_network_connections()")
         # TODO: REMOVE ME
-        logger.info(f"_determine_all_network_connections: Connected devices:")
+        logger.info(f"_determine_needed_network_connections: Connected devices:")
         logger.info(self.netreach_adapter.dump_connected_devices(prefix="       "))
         needed_connection_list = []
         ap_list = None
@@ -230,15 +203,15 @@ class NetreachApNetworkManager:
             service_uuid = service['uuid']
             service_name = service['name']
             if not service_enabled:
-                logger.info(f"_determine_all_network_connections: "
+                logger.info(f"_determine_needed_network_connections: "
                             f"Service  \"{service_name}\" ({service_uuid}) is disabled - skipping")
                 continue
             local_devices_in_service = self.netreach_adapter.get_connected_devices(service_uuid)
             if len(local_devices_in_service) == 0:
-                logger.info(f"_determine_all_network_connections: no local devices "
+                logger.info(f"_determine_needed_network_connections: no local devices "
                             f"in Service \"{service_name}\" ({service_uuid}) - skipping")
                 continue
-            logger.info(f"_determine_all_network_connections: AP has "
+            logger.info(f"_determine_needed_network_connections: AP has "
                         f"{len(local_devices_in_service)} connected devices "
                         f"in Service \"{service_name}\" ({service_uuid}) - Setting up connections")
             # Assert: This AP has at least one Device from the service directly connected
@@ -249,26 +222,26 @@ class NetreachApNetworkManager:
                 device_name = device['name']
                 device_connected = device['connected']
                 if not device_connected:
-                    logger.info(f"_determine_all_network_connections:   Device "
+                    logger.info(f"_determine_needed_network_connections:   Device "
                                 f"\"{device_name}\" ({device_id}) isn't connected - skipping")
                     continue
                 associated_ap_uuid = device['associatedApUuid']
                 if not associated_ap_uuid:
-                    logger.warning(f"_determine_all_network_connections:   Device "
+                    logger.warning(f"_determine_needed_network_connections:   Device "
                                    f"\"{device_name}\" ({device_id}) connected but doesn't have an associated AP field")
                     continue
                 if associated_ap_uuid == self.ap_uuid:
-                    logger.info(f"_determine_all_network_connections:   "
+                    logger.info(f"_determine_needed_network_connections:   "
                                 f"Device \"{device_name}\" ({device_id}) is connected locally - skipping")
-                logger.info(f"_determine_all_network_connections:   "
+                logger.info(f"_determine_needed_network_connections:   "
                             f"Device \"{device_name}\" ({device_id}) is on AP {associated_ap_uuid} "
                             "- connection required")
                 if not ap_list:  # Only get the ap list if/when needed
                     ap_list = await self._get_ap_list_for_apgroup(self.ap_group_uuid)
                 connection_entry = {"device": device, "service": service, "accessPoint": ap_list[associated_ap_uuid]}
-                logger.info(f"_determine_all_network_connections:   "
+                logger.info(f"_determine_needed_network_connections:   "
                             f"Need network connection for:  Device \"{device_name}\" ({device_id}):")
-                # logger.info(f"_determine_all_network_connections:     {json.dumps(connection_entry, indent=4)}")
+                # logger.info(f"_determine_needed_network_connections:     {json.dumps(connection_entry, indent=4)}")
                 needed_connection_list.append(connection_entry)
         return needed_connection_list
 
@@ -282,10 +255,10 @@ class NetreachApNetworkManager:
             if tun_name not in existing_tun_names:
                 missing_connections.append(connection)
                 # TODO: REMOVE ME
-                logger.info (f"OpenFlowAdapter._determine_missing_connections():  {tun_name} needs to be created")
+                logger.info (f"_determine_missing_connections():  {tun_name} needs to be created")
         return missing_connections
 
-    async def _determine_unneeded_tunnel_names(self, needed_connections, existing_tun_names) -> {}:
+    async def _determine_unneeded_tunnel_names(self, needed_connections, existing_tun_names) -> set:
         needed_tun_names = set()
         for connection in needed_connections:
             dev = connection['device']
@@ -293,6 +266,50 @@ class NetreachApNetworkManager:
             ap = connection['accessPoint']
             needed_tun_names.add(self._tunnel_name_for_connection(connection))
         return existing_tun_names.difference(needed_tun_names)
+
+    async def _setup_network_connections(self, connections):
+        for connection in connections:
+            dev = connection['device']
+            serv = connection['service']
+            ap = connection['accessPoint']
+            tun_name = self._tunnel_name_for_connection(connection)
+            logger.info (f"_setup_network_connections():  {tun_name} to {ap['name']} "
+                         f"({ap['managementAddress']}) "
+                         f"for Dev {dev['name']} ({short_uuid(dev['uuid'])}) in Service {serv['name']} "
+                         f"({short_uuid(serv['uuid'])}) with vlan {serv['vlan']}")
+            await self._setup_tunnel_for_connection(connection)
+
+    async def _setup_tunnel_for_connection(self, connection) -> str:
+        vxlan_port_name = self._tunnel_name_for_connection(connection)
+        ap_addr = connection['accessPoint']['managementAddress']
+        conn_key = self._vxlan_key_for_connection(connection)
+        run_cmd = self.vxlan_connect_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge,
+                                                    "vxlan_port_name": vxlan_port_name,
+                                                    "remote_vxlan_host": ap_addr,
+                                                    "vxlan_conn_key": conn_key})
+        logger.info(f"_setup_tunnel_to_ap_for_vlan: Running: {run_cmd}")
+        proc = await asyncio.create_subprocess_shell(run_cmd, stdout=asyncio.subprocess.PIPE, stderr=subprocess.STDOUT)
+
+        stdout, stderr = await proc.communicate()
+        logger.info(f"_setup_tunnel_to_ap_for_vlan: Tunnel setup command completed "
+                    f"with exit code {proc.returncode} (\"{stdout.decode()}\")")
+        if proc.returncode != 0:
+            logger.error(f"_setup_tunnel_to_ap_for_vlan: Error connecting {vxlan_port_name} to {ap['name']} "
+                         f"({ap_addr}) with connection key {conn_key}")
+
+    async def _close_tunnels(self, tunnel_connection_names) -> set:
+        for tunnel_name in tunnel_connection_names:
+            await self._close_tunnel(tunnel_name)
+
+    async def _close_tunnel(self, vxlan_port_name):
+        run_cmd = self.vxlan_disconnect_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge,
+                                                       "vxlan_port_name": vxlan_port_name})
+        logger.info(f"_setup_tunnel_to_ap_for_vlan: Running: {run_cmd}")
+        proc = await asyncio.create_subprocess_shell(run_cmd, stdout=asyncio.subprocess.PIPE, stderr=subprocess.STDOUT)
+
+        stdout, stderr = await proc.communicate()
+        logger.info(f"_setup_tunnel_to_ap_for_vlan: Tunnel close command completed "
+                    f"with exit code {proc.returncode} (\"{stdout.decode()}\")")
 
     async def _get_ap_list_for_apgroup(self, apgroup_uuid) -> dict:
         # Returns a dict of APs keyed by AP UUID
@@ -310,20 +327,3 @@ class NetreachApNetworkManager:
             for ap in ap_list['results']:
                 aps[ap['uuid']] = ap
             return aps
-
-    async def _setup_network_connections(self, connections):
-        pass
-
-    async def _setup_ap_network_for_device(self, device, service):
-        logger.info(f"_setup_ap_network_for_device(device: {device},service:...")
-
-        device_id = device['uuid']
-        device_name = device['name']
-        device_enabled = device['enabled']
-        device_mac = device['macAddress']
-        device_ip = device['ipAddress']
-        associated_ap_uuid = device['associatedApUuid']
-        logger.info(f"_setup_ap_network_for_device: Setting up network for Device \"{device_name}\" "
-                    f"mac {device_mac} ip {device_ip}")
-        if not device_enabled or not device_mac:
-            pass
