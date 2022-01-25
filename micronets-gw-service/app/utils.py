@@ -175,6 +175,9 @@ def parse_portlistspec (portlistspec):
         portelem_list.append(portspec_elems)
     return portelem_list
 
+def short_uuid(uuidstr: str) -> str:
+    return f"{uuidstr[:3]}..{uuidstr[-3:]}"
+
 async def main():
     print("Running utils tests...")
     hpsl = ["1.2.3.4", "5.6.7.8:99", "example.com", "bogus.org:80", "www.yahoo.com:443,80/tcp,8080", "www.example.com:443/tcp,80/tcp,7/udp", \
