@@ -218,16 +218,20 @@ class NetreachApNetworkManager:
         return existing_tun_names.difference(needed_tun_names)
 
     async def _setup_network_connections(self, connections):
+        tunnels_added = set()
         for connection in connections:
+            tun_name = self._tunnel_name_for_connection(connection)
+            if tun_name in tunnels_added:
+                continue
             dev = connection['device']
             serv = connection['service']
             ap = connection['accessPoint']
-            tun_name = self._tunnel_name_for_connection(connection)
-            logger.info (f"_setup_network_connections():  {tun_name} to {ap['name']} "
+            logger.info (f"_setup_network_connections():  Connecting {tun_name} to {ap['name']} "
                          f"({ap['managementAddress']}) "
                          f"for Dev {dev['name']} ({short_uuid(dev['uuid'])}) in Service {serv['name']} "
                          f"({short_uuid(serv['uuid'])}) with vlan {serv['vlan']}")
             await self._setup_tunnel_for_connection(connection)
+            tunnels_added.add(tun_name)
 
     async def _setup_tunnel_for_connection(self, connection) -> str:
         vxlan_port_name = self._tunnel_name_for_connection(connection)
@@ -244,7 +248,8 @@ class NetreachApNetworkManager:
         logger.info(f"_setup_tunnel_to_ap_for_vlan: Tunnel setup command completed "
                     f"with exit code {proc.returncode} (\"{stdout.decode()}\")")
         if proc.returncode != 0:
-            logger.error(f"_setup_tunnel_to_ap_for_vlan: Error connecting {vxlan_port_name} to {ap['name']} "
+            ap_name = connection['accessPoint']['name']
+            logger.error(f"_setup_tunnel_to_ap_for_vlan: Error connecting {vxlan_port_name} to {ap_name} "
                          f"({ap_addr}) with connection key {conn_key}")
 
     async def _close_tunnels(self, tunnel_connection_names) -> set:
