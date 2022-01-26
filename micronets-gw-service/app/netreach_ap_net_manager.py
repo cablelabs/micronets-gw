@@ -20,6 +20,7 @@ class NetreachApNetworkManager:
         self.vxlan_disconnect_cmd = config['NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD']
         self.ovs_flow_apply_cmd = config['NETREACH_ADAPTER_APPLY_FLOWS_COMMAND']
         self.vxlan_port_prefix = config['NETREACH_ADAPTER_VXLAN_PEER_INAME_PREFIX']
+        self.vxlan_port_format = config['NETREACH_ADAPTER_VXLAN_PEER_INAME_FORMAT']
         self.netreach_adapter = netreach_adapter
         self.ap_group = None
         self.vxlan_key_max = pow(2,24)
@@ -33,7 +34,7 @@ class NetreachApNetworkManager:
     def _tunnel_name_for_connection(self, connection) -> str:
         ap_uuid = connection['accessPoint']['uuid']
         vlan = connection['service']['vlan']
-        return f"netreach.ap-{ap_uuid[:4]}-{ap_uuid[-4:]}.{vlan}"
+        return self.vxlan_port_format.format(**{"ap_uuid": ap_uuid, "short_ap_id": ap_uuid[-6:], "vlan": vlan})
 
     async def _get_open_tunnel_names(self) -> {str}:
         run_cmd = self.vxlan_list_ports_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge})
@@ -109,45 +110,11 @@ class NetreachApNetworkManager:
             logger.warning(f"ERROR APPLYING FLOWS: {e}")
 
     async def _setup_ap_network(self, service_list, service_device_list):
-        # Note: this should only be called when the AP is initializaed for an AP Group
+        # Note: this should only be called when the AP is initialized for an AP Group
         logger.info (f"_setup_ap_network()")
 
-        with tempfile.NamedTemporaryFile(mode='wt') as flow_file:
-            flow_file_path = Path(flow_file.name)
-            logger.info(f"opened temporary file {flow_file_path}")
-
-            flow_file.write ("del\n") # This will clear all flows
-            flow_file.write(f"add table=0,priority=950, in_port={self.vxlan_net_bridge_micronets_port}, "
-                            f"actions=output:{self.vxlan_net_bridge_hostapd_port}\n")
-            flow_file.write(f"add table=0,priority=950, in_port={self.vxlan_net_bridge_hostapd_port}, "
-                            f"actions=resubmit(,100)\n")
-            # Rules will be added here for ingress from vxlan ports
-            flow_file.write(f"add table=0,priority=0, actions={self.vxlan_net_bridge_drop_action}\n")
-            flow_file.write("\n")
-
-            # Rules for traffic coming from hostapd
-            flow_file.write(f"add table=100,priority=950, udp,tp_src=67, "
-                            f"actions=output:{self.vxlan_net_bridge_micronets_port}\n")
-            flow_file.write(f"add table=100,priority=950, udp,tp_src=68, "
-                            f"actions=output:{self.vxlan_net_bridge_micronets_port}\n")
-            # Add gateway-bound traffic rules here (one per service/subnet) - to ensure no traffic destined for the
-            #  subnet gateway is handled locally
-            # e.g. table=100, priority=900, ip,ip_dst=10.0.6.1, actions=output:{self.vxlan_net_bridge_micronets_port}
-            # TODO: Determine if we need rules to ensure ARPs for gateway addresses are handled locally (not flooded)
-            # TODO: Determine if we can do service-level flooding (copying packets to a subset of ports)
-            flow_file.write(f"add table=100,priority=800, dl_dst=FF:FF:FF:FF:FF:FF,"
-                            f"actions=output:flood\n")
-            # TODO: Add rule for flooding multicast traffic
-            # Rules will be added here for each MAC address to direct traffic from hostapd to the appropriate vxlan port
-            # e.g. table=100, priority=700,  dl_dst=b8:27:eb:6e:3a:6f,     actions=strip_vlan,output:gw-4-vlan-6
-
-            # Any traffic not destined for a vxlan should be handled locally (via micronets)
-            flow_file.write(f"add table=100,priority=0, actions=output:{self.vxlan_net_bridge_micronets_port}\n")
-            flow_file.flush()
-
-            await self._apply_flows_to_vxlan_bridge(flow_file_path)
-
         await self.update_ap_network(service_list, service_device_list)
+        await self._apply_flow_rules_for_connections([])
 
     async def update_ap_network(self, service_list, service_device_list):
         logger.info (f"update_ap_network()")
@@ -169,23 +136,15 @@ class NetreachApNetworkManager:
         logger.info (f"update_ap_network(): {len(missing_connections)} MISSING connections:")
         added_connections = await self._setup_network_connections(missing_connections)
 
+        await self._apply_flow_rules_for_connections(needed_connections)
+
+        # No need to do this immediately - so do it last
+        # TODO: Consider doing this lazily - after some time has passed
         unneeded_tunnels = await self._determine_unneeded_tunnel_names(needed_connections, existing_tun_names)
         logger.info (f"update_ap_network(): {len(unneeded_tunnels)} UNNEEDED tunnel connections:")
         for tun_name in unneeded_tunnels:
             logger.info (f"update_ap_network():   Tunnel {tun_name} can be closed")
         await self._close_tunnels(unneeded_tunnels)
-
-        with tempfile.NamedTemporaryFile(mode='wt') as flow_file:
-            flow_file_path = Path(flow_file.name)
-            logger.info(f"opened temporary file {flow_file_path}")
-            # ovs-vsctl add-port brhapd gw-4-vlan-6 -- set interface gw-4-vlan-6 type=vxlan options:remote_ip=10.10.1.62  options:key=030406
-            # ovs-vsctl add-port brhapd gw-5-vlan-6 -- set interface gw-5-vlan-6 type=vxlan options:remote_ip=10.10.1.218 options:key=030506
-
-            # table=0,   priority=940,  in_port=gw-4-vlan-6,          actions=mod_vlan_vid:6,output:haport-sw
-            # table=0,   priority=940,  in_port=gw-5-vlan-6,          actions=mod_vlan_vid:6,output:haport-sw
-            #
-            # table=100, priority=700,  dl_dst=b8:27:eb:6e:3a:6f,     actions=strip_vlan,output:gw-4-vlan-6
-            # table=100, priority=700,  dl_dst=00:12:7b:21:6c:b6,     actions=strip_vlan,output:gw-5-vlan-6
 
     async def update_ap_network_for_device(self, device_id, service_id, connected, associated_ap_id):
         logger.info(f"update_tunnels_for_device(device {device_id}, service {service_id}, "
@@ -193,9 +152,9 @@ class NetreachApNetworkManager:
 
     async def _determine_needed_network_connections(self, service_list, service_device_list) -> []:
         # Return a list of needed network connections
-        # TODO: REMOVE ME
-        logger.info(f"_determine_needed_network_connections: Connected devices:")
-        logger.info(self.netreach_adapter.dump_connected_devices(prefix="       "))
+        # # TODO: REMOVE LOGGING
+        # logger.info(f"_determine_needed_network_connections: Connected devices:")
+        # logger.info(self.netreach_adapter.dump_connected_devices(prefix="       "))
         needed_connection_list = []
         ap_list = None
         for service in service_list:
@@ -204,16 +163,16 @@ class NetreachApNetworkManager:
             service_name = service['name']
             if not service_enabled:
                 logger.info(f"_determine_needed_network_connections: "
-                            f"Service  \"{service_name}\" ({service_uuid}) is disabled - skipping")
+                            f"Service  \"{service_name}\" ({service_uuid}) is disabled - skipping it")
                 continue
             local_devices_in_service = self.netreach_adapter.get_connected_devices(service_uuid)
             if len(local_devices_in_service) == 0:
                 logger.info(f"_determine_needed_network_connections: no local devices "
-                            f"in Service \"{service_name}\" ({service_uuid}) - skipping")
+                            f"in Service \"{service_name}\" ({service_uuid}) - skipping it")
                 continue
             logger.info(f"_determine_needed_network_connections: AP has "
                         f"{len(local_devices_in_service)} connected devices "
-                        f"in Service \"{service_name}\" ({service_uuid}) - Setting up connections")
+                        f"in Service \"{service_name}\" ({service_uuid}) - Setting up inter-AP connections")
             # Assert: This AP has at least one Device from the service directly connected
             # Determine if there are Devices connected to other APs
             nr_device_list = service_device_list[service_uuid]
@@ -222,8 +181,8 @@ class NetreachApNetworkManager:
                 device_name = device['name']
                 device_connected = device['connected']
                 if not device_connected:
-                    logger.info(f"_determine_needed_network_connections:   Device "
-                                f"\"{device_name}\" ({device_id}) isn't connected - skipping")
+                    logger.debug(f"_determine_needed_network_connections:   Device "
+                                 f"\"{device_name}\" ({device_id}) isn't connected - skipping it")
                     continue
                 associated_ap_uuid = device['associatedApUuid']
                 if not associated_ap_uuid:
@@ -231,16 +190,15 @@ class NetreachApNetworkManager:
                                    f"\"{device_name}\" ({device_id}) connected but doesn't have an associated AP field")
                     continue
                 if associated_ap_uuid == self.ap_uuid:
-                    logger.info(f"_determine_needed_network_connections:   "
-                                f"Device \"{device_name}\" ({device_id}) is connected locally - skipping")
+                    logger.debug(f"_determine_needed_network_connections:   "
+                                 f"Device \"{device_name}\" ({device_id}) is connected locally - skipping it")
+                    continue
                 logger.info(f"_determine_needed_network_connections:   "
-                            f"Device \"{device_name}\" ({device_id}) is on AP {associated_ap_uuid} "
-                            "- connection required")
+                            f"Connection required for Device \"{device_name}\" ({device_id}) "
+                            f"on AP {associated_ap_uuid}")
                 if not ap_list:  # Only get the ap list if/when needed
                     ap_list = await self._get_ap_list_for_apgroup(self.ap_group_uuid)
                 connection_entry = {"device": device, "service": service, "accessPoint": ap_list[associated_ap_uuid]}
-                logger.info(f"_determine_needed_network_connections:   "
-                            f"Need network connection for:  Device \"{device_name}\" ({device_id}):")
                 # logger.info(f"_determine_needed_network_connections:     {json.dumps(connection_entry, indent=4)}")
                 needed_connection_list.append(connection_entry)
         return needed_connection_list
@@ -248,22 +206,14 @@ class NetreachApNetworkManager:
     async def _determine_missing_connections(self, needed_connections, existing_tun_names) -> []:
         missing_connections = []
         for connection in needed_connections:
-            dev = connection['device']
-            serv = connection['service']
-            ap = connection['accessPoint']
             tun_name = self._tunnel_name_for_connection(connection)
             if tun_name not in existing_tun_names:
                 missing_connections.append(connection)
-                # TODO: REMOVE ME
-                logger.info (f"_determine_missing_connections():  {tun_name} needs to be created")
         return missing_connections
 
     async def _determine_unneeded_tunnel_names(self, needed_connections, existing_tun_names) -> set:
         needed_tun_names = set()
         for connection in needed_connections:
-            dev = connection['device']
-            serv = connection['service']
-            ap = connection['accessPoint']
             needed_tun_names.add(self._tunnel_name_for_connection(connection))
         return existing_tun_names.difference(needed_tun_names)
 
@@ -310,6 +260,56 @@ class NetreachApNetworkManager:
         stdout, stderr = await proc.communicate()
         logger.info(f"_setup_tunnel_to_ap_for_vlan: Tunnel close command completed "
                     f"with exit code {proc.returncode} (\"{stdout.decode()}\")")
+
+    async def _apply_flow_rules_for_connections(self, connections):
+        with tempfile.NamedTemporaryFile(mode='wt') as flow_file:
+            flow_file_path = Path(flow_file.name)
+            logger.info(f"_apply_flow_rules_for_connections: opened temporary file {flow_file_path}")
+
+            flow_file.write ("del\n") # This will clear all flows
+            flow_file.write(f"add table=0,priority=950, in_port={self.vxlan_net_bridge_micronets_port}, "
+                            f"actions=output:{self.vxlan_net_bridge_hostapd_port}\n")
+            flow_file.write(f"add table=0,priority=950, in_port={self.vxlan_net_bridge_hostapd_port}, "
+                            f"actions=resubmit(,100)\n")
+            # Rules will be added here for ingress from vxlan ports
+            flow_file.write(f"add table=0,priority=0, actions={self.vxlan_net_bridge_drop_action}\n")
+            flow_file.write("\n")
+
+            # Rules for traffic coming from hostapd
+            flow_file.write(f"add table=100,priority=950, udp,tp_src=67, "
+                            f"actions=output:{self.vxlan_net_bridge_micronets_port}\n")
+            flow_file.write(f"add table=100,priority=950, udp,tp_src=68, "
+                            f"actions=output:{self.vxlan_net_bridge_micronets_port}\n")
+            # Add gateway-bound traffic rules here (one per service/subnet) - to ensure no traffic destined for the
+            #  subnet gateway is handled locally
+            # e.g. table=100, priority=900, ip,ip_dst=10.0.6.1, actions=output:{self.vxlan_net_bridge_micronets_port}
+            # TODO: Determine if we need rules to ensure ARPs for gateway addresses are handled locally (not flooded)
+            # TODO: Determine if we can do service-level flooding (copying packets to a subset of ports)
+            flow_file.write(f"add table=100,priority=800, dl_dst=FF:FF:FF:FF:FF:FF,"
+                            f"actions=output:flood\n")
+            # TODO: Add rule for flooding multicast traffic
+            # Rules will be added here for each MAC address to direct traffic from hostapd to the appropriate vxlan port
+            # e.g. table=100, priority=700,  dl_dst=b8:27:eb:6e:3a:6f,     actions=strip_vlan,output:gw-4-vlan-6
+
+            # Any traffic not destined for a vxlan should be handled locally (via micronets)
+            flow_file.write(f"add table=100,priority=0, actions=output:{self.vxlan_net_bridge_micronets_port}\n")
+
+            inports_added = set()
+            for connection in connections:
+                dev_mac = connection['device']['macAddress']
+                vlan = connection['service']['vlan']
+                tun_name = self._tunnel_name_for_connection(connection)
+                if tun_name not in inports_added:
+                    # table=0,   priority=940,  in_port=gw-4-vlan-6,          actions=mod_vlan_vid:6,output:haport-sw
+                    flow_file.write(f"add table=0,priority=940, in_port={tun_name}, "
+                                    f"actions=mod_vlan_vid:{vlan},output:{self.vxlan_net_bridge_hostapd_port}\n")
+                    inports_added.add(tun_name)
+                # table=100, priority=700,  dl_dst=b8:27:eb:6e:3a:6f,     actions=strip_vlan,output:gw-4-vlan-6
+                flow_file.write(f"add table=100,priority=700, dl_dst={dev_mac}, "
+                                f"actions=strip_vlan,output:{tun_name}\n")
+            flow_file.flush()
+
+            await self._apply_flows_to_vxlan_bridge(flow_file_path)
 
     async def _get_ap_list_for_apgroup(self, apgroup_uuid) -> dict:
         # Returns a dict of APs keyed by AP UUID
