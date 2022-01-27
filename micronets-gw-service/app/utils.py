@@ -2,6 +2,7 @@ import collections
 import re
 import asyncio
 import socket
+import netifaces
 from copy import deepcopy
 from ipaddress import IPv4Address, IPv4Network, AddressValueError, NetmaskValueError
 
@@ -164,7 +165,6 @@ def parse_macportspec (macportspec):
         raise Exception(f"host-port specification '{macportspec}' does not have a port number")
     return macportspec_elems
 
-
 def parse_portlistspec (portlistspec):
     portspecs = portlistspec.split(",")
     portelem_list = []
@@ -174,6 +174,24 @@ def parse_portlistspec (portlistspec):
             raise Exception(f"host-port specification '{portspec}' does not have a port number")
         portelem_list.append(portspec_elems)
     return portelem_list
+
+def ip_for_interface(int_name):
+    addrs = netifaces.ifaddresses(int_name)
+    if not addrs:
+        raise ValueError(f"No addresses for interface {int_name}")
+    inet_addrs = addrs.get(netifaces.AF_INET)
+    if not inet_addrs:
+        raise ValueError(f"No internet addresses for interface {int_name}")
+    return inet_addrs[0]['addr']
+
+def mac_for_interface(int_name):
+    addrs = netifaces.ifaddresses(int_name)
+    if not addrs:
+        raise ValueError(f"No addresses for interface {int_name}")
+    mac_addrs = addrs.get(netifaces.AF_LINK)
+    if not mac_addrs:
+        raise ValueError(f"No mac addresses for interface {int_name}")
+    return mac_addrs[0]['addr']
 
 def short_uuid(uuidstr: str) -> str:
     return f"{uuidstr[:3]}..{uuidstr[-3:]}"

@@ -1,7 +1,7 @@
 import logging, json, re, asyncio, httpx, hashlib, subprocess, tempfile
 from pathlib import Path
 from uuid import UUID
-from .utils import short_uuid
+from .utils import short_uuid, mac_for_interface
 
 logger = logging.getLogger ('netreach-ap-net-manager')
 
@@ -9,10 +9,13 @@ logger = logging.getLogger ('netreach-ap-net-manager')
 class NetreachApNetworkManager:
     def __init__(self, config, netreach_adapter):
         logger.info (f"NetreachTunnelManager init({netreach_adapter})")
-        self.config = config
         self.vxlan_net_bridge = config['NETREACH_ADAPTER_VXLAN_NET_BRIDGE']
         self.vxlan_net_bridge_micronets_port = config['NETREACH_ADAPTER_VXLAN_NET_MICRONETS_PORT']
         self.vxlan_net_bridge_hostapd_port = config['NETREACH_ADAPTER_VXLAN_NET_HOSTAPD_PORT']
+        self.micronets_bridge = config.get('MICRONETS_OVS_BRIDGE')
+        self.micronets_gateways_netmask = config['MICRONETS_GATEWAY_NETMASK']
+        self.micronets_gateway_macaddr = config.get('MICRONETS_GATEWAY_MAC_ADDR',
+                                                    mac_for_interface(self.micronets_bridge))
         self.vxlan_net_bridge_drop_port = config['MICRONETS_OVS_BRIDGE_DROP_PORT']
         self.vxlan_net_bridge_drop_action = f"output:{self.vxlan_net_bridge_drop_port}"
         self.vxlan_list_ports_cmd = config['NETREACH_ADAPTER_VXLAN_LIST_PORTS']
@@ -24,6 +27,9 @@ class NetreachApNetworkManager:
         self.netreach_adapter = netreach_adapter
         self.ap_group = None
         self.vxlan_key_max = pow(2,24)
+        for (name, val) in vars(self).items():
+            if val is not None and val != [] and val != {}:
+                logger.info(f"NetreachApNetworkManager: {name} = {val}")
 
     async def init_ap_online(self, ap_uuid, ap_group, service_list, service_device_list):
         self.ap_uuid = ap_uuid
@@ -123,6 +129,7 @@ class NetreachApNetworkManager:
         existing_tun_names = await self._get_open_tunnel_names()
 
         logger.info (f"update_ap_network(): {len(needed_connections)} connections NEEDED:")
+        # TODO: Enable via diagnostics
         for connection in needed_connections:
             dev = connection['device']
             serv = connection['service']
@@ -152,7 +159,6 @@ class NetreachApNetworkManager:
 
     async def _determine_needed_network_connections(self, service_list, service_device_list) -> []:
         # Return a list of needed network connections
-        # # TODO: REMOVE LOGGING
         # logger.info(f"_determine_needed_network_connections: Connected devices:")
         # logger.info(self.netreach_adapter.dump_connected_devices(prefix="       "))
         needed_connection_list = []
@@ -281,36 +287,44 @@ class NetreachApNetworkManager:
             flow_file.write("\n")
 
             # Rules for traffic coming from hostapd
-            flow_file.write(f"add table=100,priority=950, udp,tp_src=67, "
+            flow_file.write(f"add table=100,priority=700, dl_dst={self.micronets_gateway_macaddr}, "
                             f"actions=output:{self.vxlan_net_bridge_micronets_port}\n")
-            flow_file.write(f"add table=100,priority=950, udp,tp_src=68, "
+            flow_file.write(f"add table=100,priority=600, arp,arp_tpa={self.micronets_gateways_netmask}, "
                             f"actions=output:{self.vxlan_net_bridge_micronets_port}\n")
-            # Add gateway-bound traffic rules here (one per service/subnet) - to ensure no traffic destined for the
-            #  subnet gateway is handled locally
-            # e.g. table=100, priority=900, ip,ip_dst=10.0.6.1, actions=output:{self.vxlan_net_bridge_micronets_port}
-            # TODO: Determine if we need rules to ensure ARPs for gateway addresses are handled locally (not flooded)
+            flow_file.write(f"add table=100,priority=500, udp,tp_dst=67, "
+                            f"actions=output:{self.vxlan_net_bridge_micronets_port}\n")
             # TODO: Determine if we can do service-level flooding (copying packets to a subset of ports)
-            flow_file.write(f"add table=100,priority=800, dl_dst=FF:FF:FF:FF:FF:FF,"
-                            f"actions=output:flood\n")
             # TODO: Add rule for flooding multicast traffic
+            # Add gateway-bound traffic rules here (one per service/subnet) - to ensure no traffic destined for the
+            #  subnet gateway is handled locally (priority 200)
             # Rules will be added here for each MAC address to direct traffic from hostapd to the appropriate vxlan port
             # e.g. table=100, priority=700,  dl_dst=b8:27:eb:6e:3a:6f,     actions=strip_vlan,output:gw-4-vlan-6
 
             # Any traffic not destined for a vxlan should be handled locally (via micronets)
             flow_file.write(f"add table=100,priority=0, actions=output:{self.vxlan_net_bridge_micronets_port}\n")
 
-            inports_added = set()
+            tunnels_covered = set()
+            vlans_covered = set()
             for connection in connections:
                 dev_mac = connection['device']['macAddress']
                 vlan = connection['service']['vlan']
                 tun_name = self._tunnel_name_for_connection(connection)
-                if tun_name not in inports_added:
+                if tun_name not in tunnels_covered:
                     # table=0,   priority=940,  in_port=gw-4-vlan-6,          actions=mod_vlan_vid:6,output:haport-sw
+                    # Ingress rule for Service traffic from AP
+                    # We only need one of these per tunnel
                     flow_file.write(f"add table=0,priority=940, in_port={tun_name}, "
                                     f"actions=mod_vlan_vid:{vlan},output:{self.vxlan_net_bridge_hostapd_port}\n")
-                    inports_added.add(tun_name)
-                # table=100, priority=700,  dl_dst=b8:27:eb:6e:3a:6f,     actions=strip_vlan,output:gw-4-vlan-6
-                flow_file.write(f"add table=100,priority=700, dl_dst={dev_mac}, "
+                    tunnels_covered.add(tun_name)
+                if vlan not in vlans_covered:
+                    # We only need one of these rules per VLAN
+                    flow_file.write(f"add table=100,priority=300, dl_vlan={vlan},dl_dst=FF:FF:FF:FF:FF:FF,"
+                                    f"actions=strip_vlan,output:flood\n")
+                    # TODO: Replace this flood action with a service-level flood action (using groups)
+                    vlans_covered.add(vlan)
+
+                # Every remote device needs one rule
+                flow_file.write(f"add table=100,priority=200, dl_dst={dev_mac}, "
                                 f"actions=strip_vlan,output:{tun_name}\n")
             flow_file.flush()
 

@@ -16,6 +16,9 @@ class BaseConfigSettings:
     HOSTAPD_ADAPTER_ENABLED = False
     DPP_HANDLER_ENABLED = False
     MICRONETS_OVS_BRIDGE = os.environ.get('MICRONETS_OVS_BRIDGE') or 'brmn001'
+    MICRONETS_GATEWAY_NETMASK = "10.0.0.1/255.0.0.255"
+    # If not set, the MAC of the MICRONETS_OVS_BRIDGE host interface will be used
+    # MICRONETS_GATEWAY_MAC_ADDR = "00:10:00:21:12:42"
     MICRONETS_OVS_BRIDGE_TRUNK_PORT = int(os.environ.get('MICRONETS_OVS_BRIDGE_TRUNK_PORT', '1'))
     MICRONETS_OVS_BRIDGE_DROP_PORT = int(os.environ.get('MICRONETS_OVS_BRIDGE_DROP_PORT', '42'))
     DPP_CONFIG_KEY_FILE = SERVER_LIB_DIR.joinpath("hostapd-dpp-configurator.key")

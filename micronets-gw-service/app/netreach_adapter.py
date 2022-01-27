@@ -1,4 +1,4 @@
-import logging, base64, json, httpx, re, asyncio, time, random, netifaces, uuid
+import logging, base64, json, httpx, re, asyncio, time, random, uuid
 
 from app import get_conf_model
 from ipaddress import IPv4Network, IPv4Address, AddressValueError, NetmaskValueError
@@ -9,9 +9,8 @@ import paho.mqtt.client as mqtt
 from urllib import parse as urllib_dot_parse
 from quart import jsonify
 from pathlib import Path
-
+from .utils import short_uuid, ip_for_interface, mac_for_interface
 from .netreach_ap_net_manager import NetreachApNetworkManager
-
 from .hostapd_adapter import HostapdAdapter
 
 logger = logging.getLogger ('netreach-adapter')
@@ -63,29 +62,18 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.reg_token = self.reg_token_file.read_text().strip() if self.reg_token_file.exists() else None
         if not self.management_address and self.management_interface:
             logger.info(f"NetreachAdapter: Setting management address to {self.management_interface} address")
-            self.management_address = self._ip_for_interface(self.management_interface)
+            self.management_address = ip_for_interface(self.management_interface)
         self.ssid_override = self.ssid_override_file.read_text().strip() if self.ssid_override_file.exists() else None
         if not self.geolocation:
             self.geolocation = self._get_geolocation()
         self.pub_key = None
         self.priv_key = None
-        logger.info(f"NetreachAdapter: Base url: {self.controller_base_url}")
-        logger.info(f"NetreachAdapter: Serial number: {self.serial_number}")
-        logger.info(f"NetreachAdapter: Management interface: {self.management_interface}")
-        logger.info(f"NetreachAdapter: Management address: {self.management_address}")
-        logger.info(f"NetreachAdapter: using micronets API prefix: {self.micronets_api_prefix}")
         self.mqtt_client = None
         self.mqtt_connection_state = "DISCONNECTED"
         self.async_event_loop = asyncio.get_event_loop()
-
-    def _ip_for_interface(self, int_name):
-        addrs = netifaces.ifaddresses(int_name)
-        if not addrs:
-            raise ValueError(f"No addresses for interface {int_name}")
-        inet_addrs = addrs.get(netifaces.AF_INET)
-        if not inet_addrs:
-            raise ValueError(f"No internet addresses for interface {int_name}")
-        return inet_addrs[0]['addr']
+        for (name, val) in vars(self).items():
+            if val is not None:
+                logger.info(f"NetreachAdapter: {name} = {val}")
 
     def _get_geolocation(self):
         return {"latitude": "0.0", "longitude": "0.0"}
