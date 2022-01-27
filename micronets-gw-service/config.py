@@ -40,7 +40,8 @@ class ReferenceGatewaySettings (BaseConfigSettings):
     LOGFILE_MODE = 'a'
     DNSMASQ_ADAPTER_CONF_FILE = '/etc/dnsmasq.d/micronets'
     DNSMASQ_ADAPTER_RESTART_COMMAND = ['sudo', 'systemctl', 'restart', 'dnsmasq.service']
-    FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {flow_file}'
+    FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {command_file}'
+    FLOW_ADAPTER_APPLY_RULES_COMMAND = '/usr/bin/ovs-ofctl add-groups {ovs_bridge} {command_file}'
     HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
     HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
 
@@ -79,7 +80,6 @@ class NetreachDefaultSettings():
                                        "options:remote_ip={remote_vxlan_host} " \
                                        "options:key={vxlan_conn_key}"
     NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD = "/usr/bin/ovs-vsctl del-port {vxlan_port_name}"
-    NETREACH_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {vxlan_net_bridge} {flow_file}'
 
 #
 # Configure settings for local/development testing

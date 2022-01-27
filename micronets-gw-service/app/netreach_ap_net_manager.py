@@ -1,7 +1,7 @@
 import logging, json, re, asyncio, httpx, hashlib, subprocess, tempfile
 from pathlib import Path
 from uuid import UUID
-from .utils import short_uuid, mac_for_interface
+from .utils import short_uuid, mac_for_interface, apply_commands_to_ovs_bridge
 
 logger = logging.getLogger ('netreach-ap-net-manager')
 
@@ -21,7 +21,8 @@ class NetreachApNetworkManager:
         self.vxlan_list_ports_cmd = config['NETREACH_ADAPTER_VXLAN_LIST_PORTS']
         self.vxlan_connect_cmd = config['NETREACH_ADAPTER_VXLAN_CONNECT_CMD']
         self.vxlan_disconnect_cmd = config['NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD']
-        self.ovs_flow_apply_cmd = config['NETREACH_ADAPTER_APPLY_FLOWS_COMMAND']
+        self.ovs_flow_apply_cmd = config['FLOW_ADAPTER_APPLY_FLOWS_COMMAND']
+        self.ovs_group_apply_cmd = config['FLOW_ADAPTER_APPLY_RULES_COMMAND']
         self.vxlan_port_prefix = config['NETREACH_ADAPTER_VXLAN_PEER_INAME_PREFIX']
         self.vxlan_port_format = config['NETREACH_ADAPTER_VXLAN_PEER_INAME_FORMAT']
         self.netreach_adapter = netreach_adapter
@@ -87,33 +88,6 @@ class NetreachApNetworkManager:
         m.update(vlan.to_bytes(2, byteorder='big'))
 
         return int.from_bytes(m.digest(), 'big')
-
-    async def _apply_flows_to_vxlan_bridge(self, flow_file_path):
-        with flow_file_path.open('r') as infile:
-            infile.line_no = 1
-            logger.info(f"Issuing new flows for OVS bridge {self.vxlan_net_bridge}:")
-            logger.info ("------------------------------------------------------------------------")
-            for line in infile:
-                logger.info ("{0:4}: ".format(infile.line_no) + line[0:-1])
-                infile.line_no += 1
-            logger.info ("------------------------------------------------------------------------")
-        run_cmd = self.ovs_flow_apply_cmd.format(**{"vxlan_net_bridge": self.vxlan_net_bridge,
-                                                    "flow_file": flow_file_path})
-        try:
-            logger.info ("Applying flows using: " + run_cmd)
-
-            proc = await asyncio.create_subprocess_shell(run_cmd,
-                                                         stdout=asyncio.subprocess.PIPE, stderr=subprocess.STDOUT)
-            stdout, stderr = await proc.communicate()
-
-            if proc.returncode == 0:
-                logger.info(f"SUCCESSFULLY APPLIED FLOWS TO OVS BRIDGE {self.vxlan_net_bridge}")
-            else:
-                logger.error(f"ERROR APPLYING FLOWS TO OVS BRIDGE {self.vxlan_net_bridge} "
-                             f"(exit code {proc.returncode}")
-                logger.error(f"FLOW APPLICATION OUTPUT: {stdout.decode()}")
-        except Exception as e:
-            logger.warning(f"ERROR APPLYING FLOWS: {e}")
 
     async def _setup_ap_network(self, service_list, service_device_list):
         # Note: this should only be called when the AP is initialized for an AP Group
@@ -273,9 +247,11 @@ class NetreachApNetworkManager:
                     f"with exit code {proc.returncode} (\"{stdout.decode()}\")")
 
     async def _apply_flow_rules_for_connections(self, connections):
+        vlan_map = {}
+
         with tempfile.NamedTemporaryFile(mode='wt') as flow_file:
             flow_file_path = Path(flow_file.name)
-            logger.info(f"_apply_flow_rules_for_connections: opened temporary file {flow_file_path}")
+            logger.info(f"_apply_flow_rules_for_connections: opened temporary flowrule file {flow_file_path}")
 
             flow_file.write ("del\n") # This will clear all flows
             flow_file.write(f"add table=0,priority=950, in_port={self.vxlan_net_bridge_micronets_port}, "
@@ -293,42 +269,55 @@ class NetreachApNetworkManager:
                             f"actions=output:{self.vxlan_net_bridge_micronets_port}\n")
             flow_file.write(f"add table=100,priority=500, udp,tp_dst=67, "
                             f"actions=output:{self.vxlan_net_bridge_micronets_port}\n")
-            # TODO: Determine if we can do service-level flooding (copying packets to a subset of ports)
             # TODO: Add rule for flooding multicast traffic
             # Add gateway-bound traffic rules here (one per service/subnet) - to ensure no traffic destined for the
-            #  subnet gateway is handled locally (priority 200)
+            #  subnet gateway is handled locally
             # Rules will be added here for each MAC address to direct traffic from hostapd to the appropriate vxlan port
             # e.g. table=100, priority=700,  dl_dst=b8:27:eb:6e:3a:6f,     actions=strip_vlan,output:gw-4-vlan-6
 
             # Any traffic not destined for a vxlan should be handled locally (via micronets)
             flow_file.write(f"add table=100,priority=0, actions=output:{self.vxlan_net_bridge_micronets_port}\n")
 
-            tunnels_covered = set()
-            vlans_covered = set()
             for connection in connections:
                 dev_mac = connection['device']['macAddress']
                 vlan = connection['service']['vlan']
                 tun_name = self._tunnel_name_for_connection(connection)
-                if tun_name not in tunnels_covered:
-                    # table=0,   priority=940,  in_port=gw-4-vlan-6,          actions=mod_vlan_vid:6,output:haport-sw
+                if vlan not in vlan_map:
+                    # We only need one of these rules per VLAN
+                    flow_file.write(f"add table=100,priority=300, dl_vlan={vlan},dl_dst=FF:FF:FF:FF:FF:FF,"
+                                    f"actions=strip_vlan,group:{vlan}\n")
+                    vlan_map[vlan] = []
+                tunnel_list = vlan_map[vlan]
+                if tun_name not in tunnel_list:
                     # Ingress rule for Service traffic from AP
                     # We only need one of these per tunnel
                     flow_file.write(f"add table=0,priority=940, in_port={tun_name}, "
                                     f"actions=mod_vlan_vid:{vlan},output:{self.vxlan_net_bridge_hostapd_port}\n")
-                    tunnels_covered.add(tun_name)
-                if vlan not in vlans_covered:
-                    # We only need one of these rules per VLAN
-                    flow_file.write(f"add table=100,priority=300, dl_vlan={vlan},dl_dst=FF:FF:FF:FF:FF:FF,"
-                                    f"actions=strip_vlan,output:flood\n")
-                    # TODO: Replace this flood action with a service-level flood action (using groups)
-                    vlans_covered.add(vlan)
+                    tunnel_list.append(tun_name)
 
                 # Every remote device needs one rule
                 flow_file.write(f"add table=100,priority=200, dl_dst={dev_mac}, "
                                 f"actions=strip_vlan,output:{tun_name}\n")
             flow_file.flush()
 
-            await self._apply_flows_to_vxlan_bridge(flow_file_path)
+            with tempfile.NamedTemporaryFile(mode='wt') as group_file:
+                group_file_path = Path(group_file.name)
+                logger.info(f"_apply_flow_rules_for_connections: opened temporary group file {group_file}")
+
+                group_file.write("del\n") # This will clear all groups
+                # Create one group for each vlan
+                for (vlan, tunnels) in vlan_map.items():
+                    # add group_id=6,type=all,bucket=output:nap.023270.6,bucket=output:nap.5ef22e.6,bucket=output:nap.73cc5b.6
+                    group_file.write(f"add group_id={vlan},type=all")
+                    # Create one bucket for each tunnel. This will cause a packet sent to the group to go to all tunnels
+                    for tunnel in tunnels:
+                        group_file.write(f",bucket=output:{tunnel}")
+                    group_file.write("\n")
+                group_file.flush()
+                # Note that the groups need to be established before rules can refer to them. Hence the order..
+                await apply_commands_to_ovs_bridge(logger, self.ovs_group_apply_cmd, self.vxlan_net_bridge, group_file_path)
+            await apply_commands_to_ovs_bridge(logger, self.ovs_flow_apply_cmd, self.vxlan_net_bridge, flow_file_path)
+
 
     async def _get_ap_list_for_apgroup(self, apgroup_uuid) -> dict:
         # Returns a dict of APs keyed by AP UUID
