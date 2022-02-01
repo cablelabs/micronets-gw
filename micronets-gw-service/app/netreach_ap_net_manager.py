@@ -36,85 +36,28 @@ class NetreachApNetworkManager:
         self.ap_uuid = ap_uuid
         self.ap_group = ap_group
         self.ap_group_uuid = ap_group['uuid']
-        await self._setup_ap_network(service_list, service_device_list)
-
-    def _tunnel_name_for_connection(self, connection) -> str:
-        ap_uuid = connection['accessPoint']['uuid']
-        vlan = connection['service']['vlan']
-        return self.vxlan_port_format.format(**{"ap_uuid": ap_uuid, "short_ap_id": ap_uuid[-6:], "vlan": vlan})
-
-    async def _get_open_tunnel_names(self) -> {str}:
-        run_cmd = self.vxlan_list_ports_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge})
-        logger.info(f"_get_open_tunnel_names: Running: {run_cmd}")
-        proc = await asyncio.create_subprocess_shell(run_cmd, stdout=asyncio.subprocess.PIPE, stderr=subprocess.STDOUT)
-        stdout, stderr = await proc.communicate()
-
-        logger.info(f"_get_open_tunnel_names: Bridge list command exited "
-                    f"with exit code {proc.returncode}")
-
-        output = stdout.decode() if stdout else ""
-        if stdout:
-            logger.info(f"_get_open_tunnel_names: stdout: {output}")
-        if proc.returncode != 0:
-            logger.error(f"_get_open_tunnel_names: Error retrieving interface list "
-                         f"for bridge {self.vxlan_net_bridge}")
-            return set()
-
-        bridge_ints = output.splitlines()
-        tunnel_ints = set()
-        for int_name in bridge_ints:
-            if int_name.startswith(self.vxlan_port_prefix):
-                tunnel_ints.add(int_name)
-        logger.info(f"_get_open_tunnel_names: Found interfaces: {tunnel_ints}")
-        return tunnel_ints
-
-    def _vxlan_key_for_connection(self, connection) -> int:
-        # vxlan keys are 24-bit values. This function should generate a key which is the same even if ap_uuid_1 and
-        # ap_uuid_2 are transposed. The key only needs to be unique between 2 hosts
-        uuid_1 = UUID(self.ap_uuid)
-        uuid_2 = UUID(connection['accessPoint']['uuid'])
-        vlan = connection['service']['vlan']
-
-        if uuid_1 < uuid_2:
-            lid = uuid_1
-            hid = uuid_2
-        else:
-            lid = uuid_2
-            hid = uuid_1
-
-        m = hashlib.blake2b(digest_size=3)
-        m.update(lid.bytes)
-        m.update(hid.bytes)
-        m.update(vlan.to_bytes(2, byteorder='big'))
-
-        return int.from_bytes(m.digest(), 'big')
-
-    async def _setup_ap_network(self, service_list, service_device_list):
-        # Note: this should only be called when the AP is initialized for an AP Group
-        logger.info (f"_setup_ap_network()")
-
         await self.update_ap_network(service_list, service_device_list)
         await self._apply_flow_rules_for_connections([])
 
     async def update_ap_network(self, service_list, service_device_list):
-        logger.info (f"update_ap_network()")
+        logger.info(f"update_ap_network()")
 
         needed_connections = await self._determine_needed_network_connections(service_list, service_device_list)
         existing_tun_names = await self._get_open_tunnel_names()
 
-        logger.info (f"update_ap_network(): {len(needed_connections)} connections NEEDED:")
+        logger.info(f"update_ap_network(): {len(needed_connections)} connections NEEDED:")
         # TODO: Enable via diagnostics
         for connection in needed_connections:
             dev = connection['device']
             serv = connection['service']
             ap = connection['accessPoint']
             tun_name = self._tunnel_name_for_connection(connection)
-            logger.info (f"update_ap_network():  {tun_name} to {ap['name']} ({ap['managementAddress']}) "
-                         f"for Dev {dev['name']} ({short_uuid(dev['uuid'])}) in Service {serv['name']} "
-                         f"({short_uuid(serv['uuid'])}) with vlan {serv['vlan']}")
+            logger.info(f"update_ap_network():  {tun_name} to {ap['name']} ({ap['managementAddress']}) "
+                        f"for Dev {dev['name']} ({short_uuid(dev['uuid'])}) in Service {serv['name']} "
+                        f"({short_uuid(serv['uuid'])}) with vlan {serv['vlan']}")
 
         missing_connections = await self._determine_missing_connections(needed_connections, existing_tun_names)
-        logger.info (f"update_ap_network(): {len(missing_connections)} MISSING connections:")
+        logger.info(f"update_ap_network(): {len(missing_connections)} MISSING connections:")
         added_connections = await self._setup_network_connections(missing_connections)
 
         await self._apply_flow_rules_for_connections(needed_connections)
@@ -130,6 +73,7 @@ class NetreachApNetworkManager:
     async def update_ap_network_for_device(self, device_id, service_id, connected, associated_ap_id):
         logger.info(f"update_tunnels_for_device(device {device_id}, service {service_id}, "
                     f"connected {connected}, associated_ap_id {associated_ap_id})")
+        # TODO
 
     async def _determine_needed_network_connections(self, service_list, service_device_list) -> []:
         # Return a list of needed network connections
@@ -183,6 +127,48 @@ class NetreachApNetworkManager:
                 needed_connection_list.append(connection_entry)
         return needed_connection_list
 
+    async def _get_open_tunnel_names(self) -> {str}:
+        run_cmd = self.vxlan_list_ports_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge})
+        logger.info(f"_get_open_tunnel_names: Running: {run_cmd}")
+        proc = await asyncio.create_subprocess_shell(run_cmd, stdout=asyncio.subprocess.PIPE, stderr=subprocess.STDOUT)
+        stdout, stderr = await proc.communicate()
+
+        logger.info(f"_get_open_tunnel_names: Bridge list command exited "
+                    f"with exit code {proc.returncode}")
+
+        output = stdout.decode() if stdout else ""
+        if stdout:
+            logger.info(f"_get_open_tunnel_names: stdout: {output}")
+        if proc.returncode != 0:
+            logger.error(f"_get_open_tunnel_names: Error retrieving interface list "
+                         f"for bridge {self.vxlan_net_bridge}")
+            return set()
+
+        bridge_ints = output.splitlines()
+        tunnel_ints = set()
+        for int_name in bridge_ints:
+            if int_name.startswith(self.vxlan_port_prefix):
+                tunnel_ints.add(int_name)
+        logger.info(f"_get_open_tunnel_names: Found interfaces: {tunnel_ints}")
+        return tunnel_ints
+
+    async def _get_ap_list_for_apgroup(self, apgroup_uuid) -> dict:
+        # Returns a dict of APs keyed by AP UUID
+        logger.info (f"NetreachTunnelManager._get_ap_list_for_apgroup()")
+        async with httpx.AsyncClient() as httpx_client:
+            response = await httpx_client.get(f"{self.netreach_adapter.controller_base_url}"
+                                              f"/v1/ap-groups/{apgroup_uuid}/access-points",
+                                              headers={"x-api-token": self.netreach_adapter.api_token})
+            if response.status_code != 200:
+                logger.warning(f"NetreachTunnelManager._get_ap_list_for_apgroup: FAILED retrieving AP list for "
+                               f"AP group {apgroup_uuid} ({response.status_code}): {response.text}")
+                raise ValueError(response.status_code)
+            ap_list = response.json()
+            aps = {}
+            for ap in ap_list['results']:
+                aps[ap['uuid']] = ap
+            return aps
+
     async def _determine_missing_connections(self, needed_connections, existing_tun_names) -> []:
         missing_connections = []
         for connection in needed_connections:
@@ -190,12 +176,6 @@ class NetreachApNetworkManager:
             if tun_name not in existing_tun_names:
                 missing_connections.append(connection)
         return missing_connections
-
-    async def _determine_unneeded_tunnel_names(self, needed_connections, existing_tun_names) -> set:
-        needed_tun_names = set()
-        for connection in needed_connections:
-            needed_tun_names.add(self._tunnel_name_for_connection(connection))
-        return existing_tun_names.difference(needed_tun_names)
 
     async def _setup_network_connections(self, connections):
         tunnels_added = set()
@@ -232,23 +212,7 @@ class NetreachApNetworkManager:
             logger.error(f"_setup_tunnel_to_ap_for_vlan: Error connecting {vxlan_port_name} to {ap_name} "
                          f"({ap_addr}) with connection key {conn_key}")
 
-    async def _close_tunnels(self, tunnel_connection_names) -> set:
-        for tunnel_name in tunnel_connection_names:
-            await self._close_tunnel(tunnel_name)
-
-    async def _close_tunnel(self, vxlan_port_name):
-        run_cmd = self.vxlan_disconnect_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge,
-                                                       "vxlan_port_name": vxlan_port_name})
-        logger.info(f"_setup_tunnel_to_ap_for_vlan: Running: {run_cmd}")
-        proc = await asyncio.create_subprocess_shell(run_cmd, stdout=asyncio.subprocess.PIPE, stderr=subprocess.STDOUT)
-
-        stdout, stderr = await proc.communicate()
-        logger.info(f"_setup_tunnel_to_ap_for_vlan: Tunnel close command completed "
-                    f"with exit code {proc.returncode} (\"{stdout.decode()}\")")
-
     async def _apply_flow_rules_for_connections(self, connections):
-        vlan_map = {}
-
         with tempfile.NamedTemporaryFile(mode='wt') as flow_file:
             flow_file_path = Path(flow_file.name)
             logger.info(f"_apply_flow_rules_for_connections: opened temporary flowrule file {flow_file_path}")
@@ -278,6 +242,7 @@ class NetreachApNetworkManager:
             # Any traffic not destined for a vxlan should be handled locally (via micronets)
             flow_file.write(f"add table=100,priority=0, actions=output:{self.vxlan_net_bridge_micronets_port}\n")
 
+            vlan_map = {}
             for connection in connections:
                 dev_mac = connection['device']['macAddress']
                 vlan = connection['service']['vlan']
@@ -307,7 +272,7 @@ class NetreachApNetworkManager:
                 group_file.write("del\n") # This will clear all groups
                 # Create one group for each vlan
                 for (vlan, tunnels) in vlan_map.items():
-                    # add group_id=6,type=all,bucket=output:nap.023270.6,bucket=output:nap.5ef22e.6,bucket=output:nap.73cc5b.6
+                    # eg: add group_id=6,type=all,bucket=output:nap.023270.6,bucket=output:nap.5ef22e.6,bucket=output:nap.73cc5b.6
                     group_file.write(f"add group_id={vlan},type=all")
                     # Create one bucket for each tunnel. This will cause a packet sent to the group to go to all tunnels
                     for tunnel in tunnels:
@@ -318,20 +283,48 @@ class NetreachApNetworkManager:
                 await apply_commands_to_ovs_bridge(logger, self.ovs_group_apply_cmd, self.vxlan_net_bridge, group_file_path)
             await apply_commands_to_ovs_bridge(logger, self.ovs_flow_apply_cmd, self.vxlan_net_bridge, flow_file_path)
 
+    async def _determine_unneeded_tunnel_names(self, needed_connections, existing_tun_names) -> set:
+        needed_tun_names = set()
+        for connection in needed_connections:
+            needed_tun_names.add(self._tunnel_name_for_connection(connection))
+        return existing_tun_names.difference(needed_tun_names)
 
-    async def _get_ap_list_for_apgroup(self, apgroup_uuid) -> dict:
-        # Returns a dict of APs keyed by AP UUID
-        logger.info (f"NetreachTunnelManager._get_ap_list_for_apgroup()")
-        async with httpx.AsyncClient() as httpx_client:
-            response = await httpx_client.get(f"{self.netreach_adapter.controller_base_url}"
-                                              f"/v1/ap-groups/{apgroup_uuid}/access-points",
-                                              headers={"x-api-token": self.netreach_adapter.api_token})
-            if response.status_code != 200:
-                logger.warning(f"NetreachTunnelManager._get_ap_list_for_apgroup: FAILED retrieving AP list for "
-                               f"AP group {apgroup_uuid} ({response.status_code}): {response.text}")
-                raise ValueError(response.status_code)
-            ap_list = response.json()
-            aps = {}
-            for ap in ap_list['results']:
-                aps[ap['uuid']] = ap
-            return aps
+    async def _close_tunnels(self, tunnel_connection_names) -> set:
+        for tunnel_name in tunnel_connection_names:
+            await self._close_tunnel(tunnel_name)
+
+    async def _close_tunnel(self, vxlan_port_name):
+        run_cmd = self.vxlan_disconnect_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge,
+                                                       "vxlan_port_name": vxlan_port_name})
+        logger.info(f"_setup_tunnel_to_ap_for_vlan: Running: {run_cmd}")
+        proc = await asyncio.create_subprocess_shell(run_cmd, stdout=asyncio.subprocess.PIPE, stderr=subprocess.STDOUT)
+
+        stdout, stderr = await proc.communicate()
+        logger.info(f"_setup_tunnel_to_ap_for_vlan: Tunnel close command completed "
+                    f"with exit code {proc.returncode} (\"{stdout.decode()}\")")
+
+    def _tunnel_name_for_connection(self, connection) -> str:
+        ap_uuid = connection['accessPoint']['uuid']
+        vlan = connection['service']['vlan']
+        return self.vxlan_port_format.format(**{"ap_uuid": ap_uuid, "short_ap_id": ap_uuid[-6:], "vlan": vlan})
+
+    def _vxlan_key_for_connection(self, connection) -> int:
+        # vxlan keys are 24-bit values. This function should generate a key which is the same even if ap_uuid_1 and
+        # ap_uuid_2 are transposed. The key only needs to be unique between 2 hosts
+        uuid_1 = UUID(self.ap_uuid)
+        uuid_2 = UUID(connection['accessPoint']['uuid'])
+        vlan = connection['service']['vlan']
+
+        if uuid_1 < uuid_2:
+            lid = uuid_1
+            hid = uuid_2
+        else:
+            lid = uuid_2
+            hid = uuid_1
+
+        m = hashlib.blake2b(digest_size=3)
+        m.update(lid.bytes)
+        m.update(hid.bytes)
+        m.update(vlan.to_bytes(2, byteorder='big'))
+
+        return int.from_bytes(m.digest(), 'big')

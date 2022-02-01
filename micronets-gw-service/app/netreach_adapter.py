@@ -385,6 +385,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"NetreachAdapter:_refresh_all_services()")
         (ap_group, ap_services, ap_service_devices) = await self._get_services_for_ap()
         self.ap_group = ap_group
+        self.psk_lookup_cache.clear()
         await self._setup_micronets_for_ap(ap_services, ap_service_devices)
         await self._configure_hostapd(ap_group)
         if self.tunnel_man:
@@ -712,7 +713,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             service_id = href_components[2]
             device_id = href_components[4]
             payload = message['payload']
-            connected = payload.get("connected")
+            connected = payload.get("connected") if payload else None
             associated_ap_id = payload.get("associatedApUuid")
             if connected is not None:
                 logger.info(f"NetreachAdapter:_handle_ap_update_device: Device status updated for Device {device_id} "
