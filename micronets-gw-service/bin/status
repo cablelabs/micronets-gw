@@ -2,11 +2,20 @@
 
 # set -x
 
-bridgename=brmn001
+if [ $# -eq 0 ]; then
+  bridgename="brmn001"
+elif [ $# -eq 1 ]; then
+  bridgename="$1"
+else
+  echo "Error: Only 1 parameter allowed (bridge name)"
+  exit 1
+fi
 
 shortname="${0##*/}"
 script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
+echo "---------------------------------------------------------------------------------------"
+echo "SHOWING STATUS FOR BRIDGE $bridgename"
 echo "---------------------------------------------------------------------------------------"
 ip address show dev $bridgename
 echo "---------------------------------------------------------------------------------------"

@@ -1,8 +1,21 @@
+# Copyright (c) 2022 Cable Television Laboratories, Inc. ("CableLabs")
+#                    and others.  All rights reserved.
+#
+# Licensed in accordance of the accompanied LICENSE.txt or LICENSE.md
+# file in the base directory for this project. If none is supplied contact
+# CableLabs for licensing terms of this software.
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import re, logging, tempfile, netifaces, asyncio, subprocess
 
 from pathlib import Path
-from .utils import blank_line_re, comment_line_re, get_ipv4_hostports_for_hostportspec, parse_portspec, \
-                   parse_hostportspec, unroll_hostportspec_list, mac_addr_re, parse_macportspec
+from .utils import get_ipv4_hostports_for_hostportspec, parse_portspec, parse_hostportspec, unroll_hostportspec_list, \
+                   unroll_hostportspec_list, mac_addr_re, parse_macportspec, apply_commands_to_ovs_bridge
 
 from .hostapd_adapter import HostapdAdapter
 
@@ -20,7 +33,6 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     to_micronets_ct_zone = 5150
     from_micronets_ct_zone = 5151
-
 
     def __init__ (self, config):
         self.apply_openflow_command = config['FLOW_ADAPTER_APPLY_FLOWS_COMMAND']
@@ -266,28 +278,8 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                             f"actions=output:{self.micronet_trunk_port}\n")
 
             flow_file.flush()
+            await apply_commands_to_ovs_bridge(logger, self.apply_openflow_command, self.bridge_name, flow_file_path)
 
-            with flow_file_path.open('r') as infile:
-                infile.line_no = 1
-                logger.info ("Issuing new flows:")
-                logger.info ("------------------------------------------------------------------------")
-                for line in infile:
-                    logger.info ("{0:4}: ".format(infile.line_no) + line[0:-1])
-                    infile.line_no += 1
-                logger.info ("------------------------------------------------------------------------")
-
-            run_cmd = self.apply_openflow_command.format (**{"ovs_bridge": self.bridge_name,
-                                                             "flow_file": flow_file_path})
-            try:
-                logger.info ("Applying flows using: " + run_cmd)
-                run_out = subprocess.run(run_cmd.split(), stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
-                if run_out.returncode == 0:
-                    logger.info(f"SUCCESSFULLY APPLIED FLOWS")
-                else:
-                    logger.warning(f"ERROR APPLYING FLOWS (exit code {run_out.returncode}")
-                    logger.warning(f"FLOW APPLICATION OUTPUT: {run_out.stdout.decode('utf-8')}")
-            except Exception as e:
-                logger.warning(f"ERROR APPLYING FLOWS: {e}")
 
     def flow_fields_for_ip_host(self, direction, ip_addr, port, protocol):
         if not (direction == "src" or direction == "dst"):

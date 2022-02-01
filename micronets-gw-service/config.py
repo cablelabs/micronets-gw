@@ -16,6 +16,9 @@ class BaseConfigSettings:
     HOSTAPD_ADAPTER_ENABLED = False
     DPP_HANDLER_ENABLED = False
     MICRONETS_OVS_BRIDGE = os.environ.get('MICRONETS_OVS_BRIDGE') or 'brmn001'
+    MICRONETS_GATEWAY_NETMASK = "10.0.0.1/255.0.0.255"
+    # If not set, the MAC of the MICRONETS_OVS_BRIDGE host interface will be used
+    # MICRONETS_GATEWAY_MAC_ADDR = "00:10:00:21:12:42"
     MICRONETS_OVS_BRIDGE_TRUNK_PORT = int(os.environ.get('MICRONETS_OVS_BRIDGE_TRUNK_PORT', '1'))
     MICRONETS_OVS_BRIDGE_DROP_PORT = int(os.environ.get('MICRONETS_OVS_BRIDGE_DROP_PORT', '42'))
     DPP_CONFIG_KEY_FILE = SERVER_LIB_DIR.joinpath("hostapd-dpp-configurator.key")
@@ -37,7 +40,8 @@ class ReferenceGatewaySettings (BaseConfigSettings):
     LOGFILE_MODE = 'a'
     DNSMASQ_ADAPTER_CONF_FILE = '/etc/dnsmasq.d/micronets'
     DNSMASQ_ADAPTER_RESTART_COMMAND = ['sudo', 'systemctl', 'restart', 'dnsmasq.service']
-    FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {flow_file}'
+    FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {command_file}'
+    FLOW_ADAPTER_APPLY_RULES_COMMAND = '/usr/bin/ovs-ofctl add-groups {ovs_bridge} {command_file}'
     HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
     HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
 
@@ -65,6 +69,17 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_USE_DEVICE_PASS = True
     NETREACH_ADAPTER_PSK_CACHE_ENABLED = True
     NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S = 60
+    NETREACH_ADAPTER_VXLAN_PEER_INAME_PREFIX = "nap."
+    NETREACH_ADAPTER_VXLAN_PEER_INAME_FORMAT = "nap.{short_ap_id}.{vlan:x}"
+    NETREACH_ADAPTER_VXLAN_NET_BRIDGE = "brhapd"
+    NETREACH_ADAPTER_VXLAN_NET_MICRONETS_PORT = "hapd-tr-patch"
+    NETREACH_ADAPTER_VXLAN_NET_HOSTAPD_PORT = "haport-sw"
+    NETREACH_ADAPTER_VXLAN_LIST_PORTS = "/usr/bin/ovs-vsctl list-ports {vxlan_net_bridge}"
+    NETREACH_ADAPTER_VXLAN_CONNECT_CMD = "/usr/bin/ovs-vsctl add-port {vxlan_net_bridge} {vxlan_port_name} -- " \
+                                       "set interface {vxlan_port_name} type=vxlan " \
+                                       "options:remote_ip={remote_vxlan_host} " \
+                                       "options:key={vxlan_conn_key}"
+    NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD = "/usr/bin/ovs-vsctl del-port {vxlan_port_name}"
 
 #
 # Configure settings for local/development testing

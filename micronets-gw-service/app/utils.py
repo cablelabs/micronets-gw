@@ -2,6 +2,7 @@ import collections
 import re
 import asyncio
 import socket
+import netifaces
 from copy import deepcopy
 from ipaddress import IPv4Address, IPv4Network, AddressValueError, NetmaskValueError
 
@@ -164,7 +165,6 @@ def parse_macportspec (macportspec):
         raise Exception(f"host-port specification '{macportspec}' does not have a port number")
     return macportspec_elems
 
-
 def parse_portlistspec (portlistspec):
     portspecs = portlistspec.split(",")
     portelem_list = []
@@ -174,6 +174,56 @@ def parse_portlistspec (portlistspec):
             raise Exception(f"host-port specification '{portspec}' does not have a port number")
         portelem_list.append(portspec_elems)
     return portelem_list
+
+def ip_for_interface(int_name):
+    addrs = netifaces.ifaddresses(int_name)
+    if not addrs:
+        raise ValueError(f"No addresses for interface {int_name}")
+    inet_addrs = addrs.get(netifaces.AF_INET)
+    if not inet_addrs:
+        raise ValueError(f"No internet addresses for interface {int_name}")
+    return inet_addrs[0]['addr']
+
+def mac_for_interface(int_name):
+    addrs = netifaces.ifaddresses(int_name)
+    if not addrs:
+        raise ValueError(f"No addresses for interface {int_name}")
+    mac_addrs = addrs.get(netifaces.AF_LINK)
+    if not mac_addrs:
+        raise ValueError(f"No mac addresses for interface {int_name}")
+    return mac_addrs[0]['addr']
+
+
+def short_uuid(uuidstr: str) -> str:
+    return f"{uuidstr[:3]}..{uuidstr[-3:]}"
+
+
+async def apply_commands_to_ovs_bridge(logger, command_format, bridge_name, command_file_path):
+    with command_file_path.open('r') as infile:
+        infile.line_no = 1
+        logger.info(f"Issuing new commands for OVS bridge {bridge_name}:")
+        logger.info ("------------------------------------------------------------------------")
+        for line in infile:
+            logger.info ("{0:4}: ".format(infile.line_no) + line[0:-1])
+            infile.line_no += 1
+        logger.info ("------------------------------------------------------------------------")
+        run_cmd = command_format.format(**{"ovs_bridge": bridge_name, "command_file": command_file_path})
+        try:
+            logger.info ("Applying commands using: " + run_cmd)
+
+            proc = await asyncio.create_subprocess_shell(run_cmd,
+                                                         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+            stdout, stderr = await proc.communicate()
+
+            if proc.returncode == 0:
+                logger.info(f"SUCCESSFULLY APPLIED COMMANDS TO OVS BRIDGE {bridge_name}")
+            else:
+                logger.error(f"ERROR APPLYING COMMANDS TO OVS BRIDGE {bridge_name} "
+                             f"(exit code {proc.returncode}")
+                logger.error(f"COMMAND APPLICATION OUTPUT: {stdout.decode()}")
+        except Exception as e:
+            logger.warning(f"ERROR APPLYING COMMANDS: {e}")
+
 
 async def main():
     print("Running utils tests...")
