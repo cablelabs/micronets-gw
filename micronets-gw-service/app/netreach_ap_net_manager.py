@@ -209,7 +209,7 @@ class NetreachApNetworkManager:
     async def _setup_tunnel_for_connection(self, connection) -> str:
         vxlan_port_name = self._tunnel_name_for_connection(connection)
         ap_addr = connection['accessPoint']['managementAddress']
-        conn_key = self._vxlan_key_for_connection(connection)
+        conn_key = connection['service']['vlan']
         run_cmd = self.vxlan_connect_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge,
                                                     "vxlan_port_name": vxlan_port_name,
                                                     "remote_vxlan_host": ap_addr,
@@ -320,24 +320,3 @@ class NetreachApNetworkManager:
         ap_uuid = connection['accessPoint']['uuid']
         vlan = connection['service']['vlan']
         return self.vxlan_port_format.format(**{"ap_uuid": ap_uuid, "short_ap_id": ap_uuid[-6:], "vlan": vlan})
-
-    def _vxlan_key_for_connection(self, connection) -> int:
-        # vxlan keys are 24-bit values. This function should generate a key which is the same even if ap_uuid_1 and
-        # ap_uuid_2 are transposed. The key only needs to be unique between 2 hosts
-        uuid_1 = UUID(self.ap_uuid)
-        uuid_2 = UUID(connection['accessPoint']['uuid'])
-        vlan = connection['service']['vlan']
-
-        if uuid_1 < uuid_2:
-            lid = uuid_1
-            hid = uuid_2
-        else:
-            lid = uuid_2
-            hid = uuid_1
-
-        m = hashlib.blake2b(digest_size=3)
-        m.update(lid.bytes)
-        m.update(hid.bytes)
-        m.update(vlan.to_bytes(2, byteorder='big'))
-
-        return int.from_bytes(m.digest(), 'big')
