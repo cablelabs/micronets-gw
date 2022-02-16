@@ -64,6 +64,8 @@ class DnsMasqAdapter:
                     dns_server += "," + server
                 outfile.write ("dhcp-option=tag:{}, option:dns-server{}\n"
                                .format (micronet_id, dns_server))
+            if 'mtu' in micronet:
+                outfile.write (f"dhcp-option=tag:{micronet_id}, option:mtu,{micronet['mtu']}\n")
             outfile.write ("\n")
 
     def write_devices (self, outfile, devices):
@@ -85,4 +87,6 @@ class DnsMasqAdapter:
                 outfile.write (f"\n# Device: {device_id}/(\"{device_name}\")\n")
                 outfile.write ("dhcp-host={},{},set:{},{},{}\n"
                                .format (mac_addr, short_device_id, device_id, ip_addr, lease_period))
+                if 'mtu' in device:
+                    outfile.write (f"dhcp-option=tag:{device_id}, option:mtu,{device['mtu']}\n")
             outfile.write ("\n")
