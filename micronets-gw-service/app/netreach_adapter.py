@@ -54,6 +54,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.use_device_pass = bool(config.get('NETREACH_ADAPTER_USE_DEVICE_PASS', "False"))
         self.psk_cache_enabled = bool(config.get('NETREACH_ADAPTER_PSK_CACHE_ENABLED', "True"))
         self.psk_cache_expire_s = config.get('NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S', 120)
+        self.device_mtu = config.get('NETREACH_ADAPTER_DEVICE_MTU', 0)
         self.tunnel_man = NetreachApNetworkManager(config, self)
         self.api_token = None
         self.api_token_refresh = None
@@ -445,6 +446,9 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                         "nameservers": [micronet_gateway]
                     }
                 }
+
+                if self.device_mtu:
+                    micronet_to_add['micronet']['mtu'] = self.device_mtu
                 logger.info(f"NetreachAdapter:_setup_micronets_for_ap: micronet: {json.dumps(micronet_to_add, indent=4)}")
                 result = await micronets_api.post(f"{self.micronets_api_prefix}/micronets",
                                                   json=micronet_to_add)

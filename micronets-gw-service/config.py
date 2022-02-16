@@ -80,6 +80,7 @@ class NetreachDefaultSettings():
                                        "options:remote_ip={remote_vxlan_host} " \
                                        "options:key={vxlan_conn_key}"
     NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD = "/usr/bin/ovs-vsctl del-port {vxlan_port_name}"
+    NETREACH_ADAPTER_DEVICE_MTU = 1430
 
 #
 # Configure settings for local/development testing
