@@ -1,0 +1,27 @@
+@startuml
+'actor "NetReach User" as user
+'participant "NetReach App" as app
+participant "Extender Device X\n(for Service S)" as extender
+participant "AP A \n(Nearest AP to Extender X)" as AP
+participant "Other APs" as APs
+participant "NetReach Controller" as controller
+hide footbox
+
+extender -> AP: Connect using NetReach-provisioned passphrase
+AP -> APs: Setup tunnels for other Devices on Service S
+AP -> controller: Device X connected to AP A
+note left: Note: The steps AP A performs\nto connect the extender\nare the same as connecting\nany Device
+controller -> APs: Device X updated (associated AP set to A)
+APs -> AP: Setup tunnels for Devices on Service S
+extender -> AP: DHCP Request
+note right: Note: AP A may limit traffic for AP A\nto select destinations
+AP -> extender: DHCP Response (address in Service S subnet)
+extender -> controller: Get extender AP token (signed request with extender SN signed by Ext X's private key)
+controller -> extender: Extender AP token, Service S uuid, Device X uuid
+extender -> controller: Get extender Device info (/v1/services/<uuid S>/devices/<uuid X>)
+controller -> extender: Extender Device info (SSID, etc)
+extender -> controller: Get Service S Device info (/v1/services/<uuid S>/devices)
+controller -> extender: Service S Devices (passphrases, MACs, etc)
+extender -> extender: Setup AP with extender SSID and Service S macs/passphrases
+note right of extender #aqua: **Extender is now ready to accept connections from Service S Devices on configured SSID**
+@enduml

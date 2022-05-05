@@ -1,0 +1,34 @@
+@startuml
+actor "NetReach User" as user
+participant "NetReach App" as app
+participant "NetReach Portal" as portal
+participant "Extender Device X\n(for Service S)" as extender
+participant "AP A \n(Nearest AP to Extender X)" as AP
+participant "Other APs" as APs
+participant "NetReach Controller" as controller
+hide footbox
+
+user -> user: Purchases extender with a QR code \ncontaining DPP bootstrapping information. \nThe extender is made ready for DPP \nonboarding at power on
+user -> app: scans the QR code on/with the\nExtender device
+app -> portal:
+portal -> controller: Create Device object X containing name, dev type //Extender//, DPP QR code (bootstrap key)\nPOST /v1/services///service S///devices
+controller <- controller: Generate passphrase\nAssign service-specific SSID\nAssigns IP address\n//configured// = //false//
+controller --> APs: MQTT Update for Service S (Device X added)
+APs -> controller: GET /v1/services///service S///devices///device X//
+controller -> APs: Device X (with passphrase, IP address, DPP QR code)
+APs -> APs: Listens for DPP Presence Announcements ("chirps")
+controller --> AP: MQTT Update for Service S (Device X added)
+AP -> controller: GET /v1/services///service S///devices///device X//
+controller -> AP: Device X (with passphrase, IP address, DPP QR code)
+AP -> AP: Listens for DPP Presence Announcements ("chirps")
+user -> user: Powers on extender device
+extender --> AP: DPP Presence Announcement ("chirp")
+AP -> extender: Provision device using DPP bootstrap key\n(AP Group SSID, passphrase for X)
+AP -> controller: Update Device X\nPATCH /v1/services///service S///devices///device X//\n//configured// = //true//
+controller --> APs: MQTT Update for Service S (Device X updated)
+APs -> controller: GET /v1/services///service S///devices///device X//\n//configured// = //true//
+APs <- APs: Stop listening for DPP Presence Announcements
+note right of extender #aqua:: The Extender now has the credentials necessary to connect to any AP in the AP Group and will perform the steps in AP Extender Setup
+
+
+@enduml

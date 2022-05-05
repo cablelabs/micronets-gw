@@ -1,0 +1,39 @@
+@startuml
+
+participant "Extender Device X\n(for Service S)" as extender
+participant "AP A \n(Nearest AP to Extender X)" as AP
+participant "Other APs" as APs
+participant "NetReach Controller" as controller
+hide footbox
+
+note right of extender: Note: This NetReach PSK claiming process is the same as any other device type
+extender -> AP: Connect using AP Group SSID and configured passphrase
+AP -> controller: Perform PSK lookup against unclaimed PSKs\nPOST /v1/psks/psk-lookup (M2, Dev X mac)
+controller -> AP: Returns the PSK and VLAN for Device X, Service S
+AP -> controller: Add Device X mac address\nPATCH /v1/services///service S///devices///device X//\n//macAddress// = //mac X//
+controller -> AP:
+controller --> APs: MQTT Update for Device X (updated)
+APs -> controller: GET /v1/services///service S///devices///device X//\n//macAddress// = mac X
+AP --> extender: WPA2 M2 for 4-way handshake
+extender --> AP: WPA2 connection complete
+AP -> controller: Set AP association\nPATCH /v1/services///service S///devices///device X//\n//associatedApUuid// = //AP A uuid//
+controller -> AP:
+controller --> APs: MQTT Update for Device X (updated)
+APs -> controller: GET /v1/services///service S///devices///device X//\n//associatedApUuid// = //AP A uuid//
+controller -> APs:
+APs <- APs: Setup tunnel to AP A for \ndevices in Service S
+
+
+extender --> AP: DHCP Request (mac X)
+AP --> extender: DHCP Response (IP X)
+extender -> controller: Get Controller API token (request signed by Ext X's private key)\nPOST /v1/access-points/token
+controller -> extender: //token//, //serviceUuid// (Service S), //deviceUuid// (Device X)
+extender -> controller: Get extender Device info\nGET /v1/services///uuid S///devices///uuid X//
+controller -> extender: //extenderSsid//, //enabled = true//
+extender -> controller: Get all Service S Device info\nGET /v1/services///uuid S///devices
+controller -> extender: //passphrase//, //macAddress//, etc for all Service S Devices
+extender -> extender: Start extender Access Point with extender SSID and Service S macs/passphrases
+note right of extender #aqua: **Extender is now ready to onboard and accept connections from Service S Devices on //extenderSsid//**
+
+
+@enduml

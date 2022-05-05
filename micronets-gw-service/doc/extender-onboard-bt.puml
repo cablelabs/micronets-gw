@@ -1,0 +1,30 @@
+@startuml
+actor "NetReach User" as user
+participant "NetReach App" as app
+participant "NetReach Portal" as portal
+participant "Extender Device X\n(for Service S)" as extender
+participant "AP A \n(Nearest AP to Extender X)" as AP
+participant "Other APs" as APs
+participant "NetReach Controller" as controller
+hide footbox
+
+user -> user: Purchases extender
+user -> user: Powers on extender
+user -> app: Selects option to\nadd extender to Service
+app -> portal:
+portal -> controller: Create Device object X containing name, dev type //Extender//\nPOST /v1/services///service S///devices
+controller <- controller: Generate passphrase\nAssign service-specific SSID\nAssigns IP address
+controller --> APs: MQTT Update for Service S (Device X added)
+APs -> controller: GET /v1/services///service S///devices///device X//
+controller -> AP: Device X (with passphrase, IP address, DPP QR code)
+controller --> AP: MQTT Update for Service S (Device X added)
+AP -> controller: GET /v1/services///service S///devices///device X//
+controller -> AP: Device X (with passphrase, IP address, DPP QR code)
+app -> user: Instructs user to\npress pairing button
+app --> extender: Initiate Bluetooth connection
+app -> extender: Configure AP Group SSID, passphrase for Device X
+
+note right of extender #aqua:: The Extender now has the credentials necessary to connect to any AP in the AP Group
+
+
+@enduml
