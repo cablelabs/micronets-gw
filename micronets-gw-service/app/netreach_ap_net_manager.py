@@ -111,7 +111,7 @@ class NetreachApNetworkManager:
                         f"{len(local_devices_in_service)} connected devices "
                         f"in Service \"{service_name}\" ({service_uuid}) - Setting up inter-AP connections")
             # Assert: This AP has at least one Device from the service directly connected
-            # Determine if there are Devices connected to other APs
+            # Determine if there are Devices in this service connected to other APs
             nr_device_list = service_device_list[service_uuid]
             for device in nr_device_list:
                 device_id = device['uuid']
@@ -123,6 +123,7 @@ class NetreachApNetworkManager:
                     continue
                 associated_ap_uuid = device['associatedApUuid']
                 if not associated_ap_uuid:
+                    # Should not happen if the dev is "connected" - it represents an error in the NR Controller
                     logger.warning(f"_determine_needed_network_connections:   Device "
                                    f"\"{device_name}\" ({device_id}) connected but doesn't have an associated AP field")
                     continue
@@ -130,6 +131,7 @@ class NetreachApNetworkManager:
                     logger.debug(f"_determine_needed_network_connections:   "
                                  f"Device \"{device_name}\" ({device_id}) is connected locally - skipping it")
                     continue
+                # Assert: device is connected to a non-local AP (and we have local devices in the same service)
                 logger.info(f"_determine_needed_network_connections:   "
                             f"Connection required for Device \"{device_name}\" ({device_id}) "
                             f"on AP {associated_ap_uuid}")
@@ -199,8 +201,8 @@ class NetreachApNetworkManager:
             dev = connection['device']
             serv = connection['service']
             ap = connection['accessPoint']
-            logger.info (f"_setup_network_connections():  Connecting {tun_name} to {ap['name']} "
-                         f"({ap['managementAddress']}) "
+            logger.info (f"_setup_network_connections():  Connecting {tun_name} to AP {ap['name']} "
+                         f"(@{ap['managementAddress']}) "
                          f"for Dev {dev['name']} ({short_uuid(dev['uuid'])}) in Service {serv['name']} "
                          f"({short_uuid(serv['uuid'])}) with vlan {serv['vlan']}")
             await self._setup_tunnel_for_connection(connection)

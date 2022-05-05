@@ -90,6 +90,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 logger.info(f"NetreachAdapter: {name} = {val}")
 
     def _get_geolocation(self):
+        # TODO: Implement this to retrieve physical location coords
         return {"latitude": "0.0", "longitude": "0.0"}
 
     async def update (self, micronet_list, device_lists):
@@ -801,9 +802,9 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
         sta_mac = psk_lookup_fields['sta_mac'].lower()
         if not self.api_token:
-            logger.info(f"NetreachAdapter.lookup_psk_for_device: Cannot perform PSK lookup "
-                        f"for device with MAC {sta_mac}: the API key has not been established")
-            return f"The NetReach API key is not set", 500
+            logger.info(f"NetreachAdapter.lookup_psk_for_device: Internal error "
+                        f"looking up device {sta_mac}: the controller API key has not been established")
+            return {"detail": "The controller API key is not set"}, 500
 
         if self.psk_cache_enabled:
             psk_entry = self.psk_lookup_cache.get(sta_mac)
@@ -822,13 +823,16 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     psk_entry['count'] += 1
                     return (psk_entry['lookupResult'], psk_entry['lookupResultCode'], psk_entry['headers'])
 
-        # Perform the actual lookup of the PSK with the cloud
-        result = httpx.post(f"{self.controller_base_url}/v1/psks/psk-lookup",
-                            headers={"x-api-token": self.api_token},
-                            json=psk_lookup_fields)
-        logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup {'FAILED' if result.is_error else 'SUCCEEDED'}")
-        logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup response: {result.text}")
-        headers_to_pass = {k: result.headers[k] for k in result.headers.keys() & {"content-type"}}
+        try:
+            # Perform the actual lookup of the PSK with the cloud
+            result = httpx.post(f"{self.controller_base_url}/v1/psks/psk-lookup",
+                                headers={"x-api-token": self.api_token},
+                                json=psk_lookup_fields)
+            logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup {'FAILED' if result.is_error else 'SUCCEEDED'}")
+            logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup response: {result.text}")
+            headers_to_pass = {k: result.headers[k] for k in result.headers.keys() & {"content-type"}}
+        except Exception as e:
+            return {"detail": f"Unexpected error performing PSK lookup on controller: {str(e)}"}, 500
 
         if self.psk_cache_enabled:
             # If result is 200, response will have "psk', "vlan", "deviceUuid", and "serviceUuid"
