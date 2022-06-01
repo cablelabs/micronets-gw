@@ -81,6 +81,8 @@ class NetreachDefaultSettings():
                                        "options:key={vxlan_conn_key}"
     NETREACH_ADAPTER_VXLAN_DISCONNECT_CMD = "/usr/bin/ovs-vsctl del-port {vxlan_port_name}"
     NETREACH_ADAPTER_DEVICE_MTU = 1430
+    # Set this to False when using a DHCP server that signals DHCP renew (e.g. dnsmask 2.81 script-on-renewal option)
+    NETREACH_ADAPTER_SET_CONN_ON_ASSOC = True
 
 #
 # Configure settings for local/development testing

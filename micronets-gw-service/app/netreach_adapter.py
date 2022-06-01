@@ -55,6 +55,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.psk_cache_enabled = bool(config.get('NETREACH_ADAPTER_PSK_CACHE_ENABLED', "True"))
         self.psk_cache_expire_s = config.get('NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S', 120)
         self.device_mtu = config.get('NETREACH_ADAPTER_DEVICE_MTU', 0)
+        self.set_connected_on_associated = config['NETREACH_ADAPTER_SET_CONN_ON_ASSOC']
         self.tunnel_man = NetreachApNetworkManager(config, self)
         self.api_token = None
         self.api_token_refresh = None
@@ -866,7 +867,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         sta_macs = await list_sta_cmd.get_sta_macs()
         for sta_mac in sta_macs:
             logger.info(f"NetreachAdapter:_add_connected_stas_to_device_mac_cache: Processing STA MAC {sta_mac}")
-            await self._update_device_status_and_cache(sta_mac, True, True)
+            await self._update_device_status_and_cache(sta_mac, True, self.set_connected_on_associated)
 
     async def handle_hostapd_cli_event(self, event_msg):
         # Note: Handler is registered to receive "AP-STA" events only
@@ -880,7 +881,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         mac = mac.lower()
 
         if event == "AP-STA-CONNECTED":
-            await self._update_device_status_and_cache(mac, True, True)
+            await self._update_device_status_and_cache(mac, True, self.set_connected_on_associated)
         elif event == "AP-STA-DISCONNECTED":
             await self._update_device_status_and_cache(mac, False, False)
         else:
