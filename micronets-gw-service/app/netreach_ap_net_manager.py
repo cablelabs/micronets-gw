@@ -102,7 +102,7 @@ class NetreachApNetworkManager:
                 logger.info(f"_determine_needed_network_connections: "
                             f"Service  \"{service_name}\" ({service_uuid}) is disabled - skipping it")
                 continue
-            local_devices_in_service = self.netreach_adapter.get_connected_devices(service_uuid)
+            local_devices_in_service = self.netreach_adapter.get_associated_devices(service_uuid)
             if len(local_devices_in_service) == 0:
                 logger.info(f"_determine_needed_network_connections: no local devices "
                             f"in Service \"{service_name}\" ({service_uuid}) - skipping it")
@@ -116,10 +116,10 @@ class NetreachApNetworkManager:
             for device in nr_device_list:
                 device_id = device['uuid']
                 device_name = device['name']
-                device_connected = device['connected']
-                if not device_connected:
+                device_associated = device['associated']
+                if not device_associated:
                     logger.debug(f"_determine_needed_network_connections:   Device "
-                                 f"\"{device_name}\" ({device_id}) isn't connected - skipping it")
+                                 f"\"{device_name}\" ({device_id}) isn't associated - skipping it")
                     continue
                 associated_ap_uuid = device['associatedApUuid']
                 if not associated_ap_uuid:
