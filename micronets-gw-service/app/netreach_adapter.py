@@ -55,6 +55,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.psk_cache_enabled = bool(config.get('NETREACH_ADAPTER_PSK_CACHE_ENABLED', "True"))
         self.psk_cache_expire_s = config.get('NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S', 120)
         self.device_mtu = config.get('NETREACH_ADAPTER_DEVICE_MTU', 0)
+        self.set_connected_on_associated = config['NETREACH_ADAPTER_SET_CONN_ON_ASSOC']
         self.tunnel_man = NetreachApNetworkManager(config, self)
         self.api_token = None
         self.api_token_refresh = None
@@ -70,7 +71,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.psk_lookup_cache = {}
         # Caching device MACs to map hostapd notifications
         self.device_mac_cache = {}
-        self.connected_devices = {}
+        self.associated_devices = {}
         self.micronets_api_prefix = f"http://{config['LISTEN_HOST']}:{config['LISTEN_PORT']}/gateway/v1"
         self.serial_number = self.serial_number_file.read_text().strip() if self.serial_number_file.exists() else None
         self.reg_token = self.reg_token_file.read_text().strip() if self.reg_token_file.exists() else None
@@ -784,15 +785,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             return f"The NetReach API key is not set", 500
 
         if action == "leaseAcquired":
-            conf_model = get_conf_model()
-            micronet_id, device_id = await conf_model.get_micronetid_deviceid_for_mac(mac_addr)
-            device_patch = {"connected": True}
-
-            result = httpx.patch(f"{self.controller_base_url}/v1/services/{micronet_id}/devices/{device_id}",
-                                 headers={"x-api-token": self.api_token},
-                                 json={"connected": True})
-            logger.info(f"NetreachAdapter.process_dhcp_lease_event: Setting status of device {device_id} of service {micronet_id}"
-                        f" to {device_patch}")
+            await self._update_device_status_and_cache(mac_addr, True, True)
         else:
             logger.info(f"NetreachAdapter.process_dhcp_lease_event: Ignoring action '{action}' for MAC {mac_addr}")
 
@@ -866,7 +859,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         sta_macs = await list_sta_cmd.get_sta_macs()
         for sta_mac in sta_macs:
             logger.info(f"NetreachAdapter:_add_connected_stas_to_device_mac_cache: Processing STA MAC {sta_mac}")
-            await self._update_device_status_and_cache(sta_mac, True, True)
+            await self._update_device_status_and_cache(sta_mac, True, self.set_connected_on_associated)
 
     async def handle_hostapd_cli_event(self, event_msg):
         # Note: Handler is registered to receive "AP-STA" events only
@@ -880,7 +873,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         mac = mac.lower()
 
         if event == "AP-STA-CONNECTED":
-            await self._update_device_status_and_cache(mac, True, True)
+            await self._update_device_status_and_cache(mac, True, self.set_connected_on_associated)
         elif event == "AP-STA-DISCONNECTED":
             await self._update_device_status_and_cache(mac, False, False)
         else:
@@ -892,24 +885,25 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         # Note: This method must only be called on authoritative changes in local station state
         #       i.e. This should only be called when a device is known to transition from CONNECTED to DISCONNECTED
         #            or vice-versa
+        # The mac cache is for all devices in all services for the associated AP group
         mac_cache_entry = self.device_mac_cache.get(mac)
-        if mac_cache_entry:
-            service_id = mac_cache_entry['serviceUuid']
-            device_id = mac_cache_entry['deviceUuid']
-        else:
+        if not mac_cache_entry:
             logger.warning(f"NetreachAdapter._update_device_status_and_cache: Could not find {mac} "
                            "in device-to-mac cache")
             return
+        service_id = mac_cache_entry['serviceUuid']
+        device_id = mac_cache_entry['deviceUuid']
 
         logger.info(f"NetreachAdapter._update_device_status_and_cache: Found device {device_id} for {mac} "
                     "in device-to-mac cache")
 
-        # First update the local cache
-        if connected:
+        # The associated device cache is for devices associated with this AP
+        if associated:
             cache_entry = {"deviceUuid": device_id, "serviceUuid": service_id, "connectedTime": int(time.time())}
-            self.connected_devices[mac] = cache_entry
+            self.associated_devices[mac] = cache_entry
         else:
-            del self.connected_devices[mac]
+            if self.associated_devices.get(mac):
+                del self.associated_devices[mac]
 
         # Now update the Device on the controller
         async with httpx.AsyncClient() as httpx_client:
@@ -925,18 +919,18 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 logger.info("NetreachAdapter._update_device_status_and_cache: Updated controller status of Device "
                             f"{device_id} in Service {service_id} to {device_patch}")
 
-    def get_connected_devices(self, service_uuid=None):
+    def get_associated_devices(self, service_uuid=None):
         if service_uuid is None:
-            return self.connected_devices
+            return self.associated_devices
         connected_devs = {}
-        for mac, entry in self.connected_devices.items():
+        for mac, entry in self.associated_devices.items():
             if entry['serviceUuid'] == service_uuid:
                 connected_devs[mac] = entry
         return connected_devs
 
-    def dump_connected_devices(self, service_uuid=None, prefix="") -> str:
+    def dump_associated_devices(self, service_uuid=None, prefix="") -> str:
         strcat = ""
-        for mac, entry in self.connected_devices.items():
+        for mac, entry in self.associated_devices.items():
             if service_uuid and entry['serviceUuid'] != service_uuid:
                 continue
             strcat += f"{prefix}{mac}: {entry}\n"
