@@ -886,13 +886,12 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         #            or vice-versa
         # The mac cache is for all devices in all services for the associated AP group
         mac_cache_entry = self.device_mac_cache.get(mac)
-        if mac_cache_entry:
-            service_id = mac_cache_entry['serviceUuid']
-            device_id = mac_cache_entry['deviceUuid']
-        else:
+        if not mac_cache_entry:
             logger.warning(f"NetreachAdapter._update_device_status_and_cache: Could not find {mac} "
                            "in device-to-mac cache")
             return
+        service_id = mac_cache_entry['serviceUuid']
+        device_id = mac_cache_entry['deviceUuid']
 
         logger.info(f"NetreachAdapter._update_device_status_and_cache: Found device {device_id} for {mac} "
                     "in device-to-mac cache")
@@ -919,7 +918,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 logger.info("NetreachAdapter._update_device_status_and_cache: Updated controller status of Device "
                             f"{device_id} in Service {service_id} to {device_patch}")
 
-    def get_connected_devices(self, service_uuid=None):
+    def get_associated_devices(self, service_uuid=None):
         if service_uuid is None:
             return self.associated_devices
         connected_devs = {}
@@ -928,7 +927,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 connected_devs[mac] = entry
         return connected_devs
 
-    def dump_connected_devices(self, service_uuid=None, prefix="") -> str:
+    def dump_associated_devices(self, service_uuid=None, prefix="") -> str:
         strcat = ""
         for mac, entry in self.associated_devices.items():
             if service_uuid and entry['serviceUuid'] != service_uuid:
