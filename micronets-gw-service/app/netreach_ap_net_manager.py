@@ -86,7 +86,7 @@ class NetreachApNetworkManager:
     async def update_ap_network_for_device(self, device_id, service_id, connected, associated_ap_id):
         logger.info(f"update_tunnels_for_device(device {device_id}, service {service_id}, "
                     f"connected {connected}, associated_ap_id {associated_ap_id})")
-        # TODO
+        # TODO: This can allow for some optimization
 
     async def _determine_needed_network_connections(self, service_list, service_device_list) -> []:
         # Return a list of needed network connections

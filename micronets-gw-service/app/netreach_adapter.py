@@ -54,7 +54,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.psk_cache_enabled = bool(config.get('NETREACH_ADAPTER_PSK_CACHE_ENABLED', "True"))
         self.psk_cache_expire_s = config.get('NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S', 120)
         self.device_mtu = config.get('NETREACH_ADAPTER_DEVICE_MTU', 0)
-        self.set_connected_on_associated = config['NETREACH_ADAPTER_SET_CONN_ON_ASSOC']
+        self.set_connected_on_associated = config['NETREACH_ADAPTER_SET_CONN_ON_ASSOC', "True"]
         self.tunnel_man = NetreachApNetworkManager(config, self)
         self.api_token = None
         self.api_token_refresh = None
@@ -733,18 +733,16 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             service_id = href_components[2]
             device_id = href_components[4]
             payload = message['payload']
-            connected = payload.get("connected") if payload else None
-            associated_ap_id = payload.get("associatedApUuid")
-            if connected is not None:
-                logger.info(f"NetreachAdapter:_handle_ap_update_device: Device status updated for Device {device_id} "
-                            f"(Service {service_id})")
-                await self._refresh_all_services()
-                # await self.tunnel_man.update_ap_network_for_device(device_id, service_id, connected, associated_ap_id)
-            else:
-                logger.info(f"NetreachAdapter:_handle_ap_update_device: Device record updated for Device {device_id} "
-                            f" (Service {service_id})")
-                await self._refresh_all_services()
-            # TODO: Move failure/success reporting
+            if payload:
+                associated = payload.get("associated")
+                connected = payload.get("connected")
+                associated_ap_id = payload.get("associatedApUuid")
+                # Not doing anything with these ATM - but using these can def can enable some optimizations
+            logger.info(f"NetreachAdapter:_handle_ap_update_device: Device status updated for Device {device_id} "
+                        f"(Service {service_id})")
+            # Note: this can be slightly optimized by refreshing_service(service_id,device_id)
+            await self._refresh_all_services()
+
             # Report Success
             self._report_event_success(message)
         except Exception as e:
@@ -787,6 +785,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
         if action == "leaseAcquired":
             await self._update_device_status_and_cache(mac_addr, True, True)
+        if action == "leaseExpired":
+            await self._update_device_status_and_cache(mac_addr, None, False)
         else:
             logger.info(f"NetreachAdapter.process_dhcp_lease_event: Ignoring action '{action}' for MAC {mac_addr}")
 
@@ -859,6 +859,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         list_sta_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.ListStationsCLICommand())
         sta_macs = await list_sta_cmd.get_sta_macs()
         for sta_mac in sta_macs:
+            sta_mac = sta_mac.lower()
             logger.info(f"NetreachAdapter:_add_connected_stas_to_device_mac_cache: Processing STA MAC {sta_mac}")
             await self._update_device_status_and_cache(sta_mac, True, self.set_connected_on_associated)
 
@@ -891,28 +892,39 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         mac_cache_entry = self.device_mac_cache.get(mac)
         if not mac_cache_entry:
             logger.warning(f"NetreachAdapter._update_device_status_and_cache: Could not find {mac} "
-                           "in device-to-mac cache")
+                           "in mac-to-deviceId cache - CANNOT issue connection status update")
             return
         service_id = mac_cache_entry['serviceUuid']
         device_id = mac_cache_entry['deviceUuid']
 
         logger.info(f"NetreachAdapter._update_device_status_and_cache: Found device {device_id} for {mac} "
-                    "in device-to-mac cache")
+                    "in mac-to-deviceId cache")
 
-        # The associated device cache is for devices associated with this AP
-        if associated:
+        # The associated device cache is for devices associated with this AP. Only add or remove it if
+        #   the flag is set (i.e. if associated is None, don't do anything
+        if associated is True:
             cache_entry = {"deviceUuid": device_id, "serviceUuid": service_id, "connectedTime": int(time.time())}
             self.associated_devices[mac] = cache_entry
-        else:
+        elif associated is False:
             if self.associated_devices.get(mac):
                 del self.associated_devices[mac]
+                logger.info(f"NetreachAdapter._update_device_status_and_cache: Removed {mac} "
+                            "from associated device list")
 
         # Now update the Device on the controller
         async with httpx.AsyncClient() as httpx_client:
-            device_patch = {"associated": associated, "connected": connected}
+            device_patch = {}
+            if associated is not None:
+                device_patch['associated'] = associated
+            if connected is not None:
+                device_patch['connected'] = connected
             result = await httpx_client.patch(f"{self.controller_base_url}/v1/services/{service_id}/devices/{device_id}",
                                               headers={"x-api-token": self.api_token},
                                               json=device_patch)
+            # Note: The controller will disregard patches that set associated to False if the associatedAp
+            #       does not match the calling AP's uuid. This is to prevent race conditions when devices
+            #       transition from AP A to AP B and the connect for B is is processed before the disconnect
+            #       from AP A.
             if result.is_error:
                 logger.warning(f"NetreachAdapter._update_device_status_and_cache: Could not update status of Device "
                                f"{device_id} in Service {service_id} to {device_patch} on NetReach Controller: "
