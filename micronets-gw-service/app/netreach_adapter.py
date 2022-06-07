@@ -54,7 +54,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.psk_cache_enabled = bool(config.get('NETREACH_ADAPTER_PSK_CACHE_ENABLED', "True"))
         self.psk_cache_expire_s = config.get('NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S', 120)
         self.device_mtu = config.get('NETREACH_ADAPTER_DEVICE_MTU', 0)
-        self.set_connected_on_associated = config['NETREACH_ADAPTER_SET_CONN_ON_ASSOC', "True"]
+        self.set_connected_on_associated = config.get('NETREACH_ADAPTER_SET_CONN_ON_ASSOC', "True")
         self.tunnel_man = NetreachApNetworkManager(config, self)
         self.api_token = None
         self.api_token_refresh = None
