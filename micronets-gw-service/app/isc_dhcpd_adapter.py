@@ -151,7 +151,7 @@ class IscDhcpdAdapter:
             hardware_ethernet_match_result = self.hardware_ethernet_re.match (line)
             if (hardware_ethernet_match_result):
                 host_mac_address = hardware_ethernet_match_result.group (1)
-                device ['macAddress'] = {'eui48': host_mac_address}
+                device ['macAddress'] = host_mac_address
                 continue
             fixed_address_match_result = self.fixed_address_re.match (line)
             if (fixed_address_match_result):
@@ -202,7 +202,10 @@ class IscDhcpdAdapter:
     def write_devices_for_micronet (self, outfile, micronetId):
         device_list = self.micronet_block ['devices'] [micronetId].items ()
         for device_id, device in device_list:
-            mac_addr = EUI (device ['macAddress']['eui48'])
+            mac_addr_str = device.get('macAddress')
+            if not mac_addr_str:
+                continue
+            mac_addr = EUI(mac_addr_str)
             mac_addr.dialect = netaddr.mac_unix_expanded
             outfile.write ("  host {}\n".format (device_id))
             outfile.write ("  {\n")

@@ -63,7 +63,7 @@ if __name__ == '__main__':
         lease_change_type = "leaseExpired"
     lease_change_event = {"leaseChangeEvent": {
                               "action": lease_change_type,
-                              "macAddress": {"eui48": mac_address},
+                              "macAddress": mac_address,
                               "networkAddress": {"ipv4": ip_address},
                               "hostname": hostname}
                          }

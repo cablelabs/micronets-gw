@@ -37,9 +37,15 @@ class HostapdAdapter:
             self.event_prefixes = event_prefixes
 
         async def handle_hostapd_ready(self):
+            # Called when the connection to hostapd is made ready
             pass
 
         async def handle_hostapd_cli_event(self, event):
+            # Called when a hostapd event is received
+            pass
+
+        async def handle_hostapd_status_var_change(self):
+            # Called when a change to a status var is pushed to hostapd
             pass
 
     def register_cli_event_handler(self, handler):
@@ -74,10 +80,13 @@ class HostapdAdapter:
                 outfile.write (f"# DEVICES FOR MICRONET {micronet_id}/\"{micronet_name}\" (interface {interface_id}, vlan {vlan_id})\n")
                 outfile.write ("###############################################################\n\n")
                 for device_id, device in devices.items ():
+                    mac_addr_str = device.get('macAddress')
+                    if not mac_addr_str:
+                        continue
+                    mac_addr = netaddr.EUI(mac_addr_str)
+                    mac_addr.dialect = netaddr.mac_unix_expanded
                     psk = device.get('psk')
                     device_name = device.get('name')
-                    mac_addr = netaddr.EUI(device ['macAddress']['eui48'])
-                    mac_addr.dialect = netaddr.mac_unix_expanded
                     ip_addr = IPv4Address (device ['networkAddress']['ipv4'])
                     if not psk:
                         logger.info(f"HostapdAdapter.update: no psk for device {device_id}/\"{device_name}\" in micronet {micronet_id} - skipping")
@@ -157,11 +166,11 @@ class HostapdAdapter:
                 if not self.cli_ready and self.cli_ready_re.match(line):
                     logger.info(f"HostapdAdapter:read_cli_output: hostapd CLI is now READY")
                     self.cli_ready = True
-                    asyncio.run_coroutine_threadsafe(self.process_hostapd_ready(), self.event_loop)
+                    asyncio.run_coroutine_threadsafe(self._process_hostapd_ready(), self.event_loop)
                 cli_event_match = HostapdAdapter.cli_event_re.match(line)
                 if cli_event_match:
                     event_data = cli_event_match.group(2).strip()
-                    asyncio.run_coroutine_threadsafe(self.process_event(event_data), self.event_loop)
+                    asyncio.run_coroutine_threadsafe(self._process_hostapd_event(event_data), self.event_loop)
                     continue
                 if not command:
                     response_data = None
@@ -190,13 +199,18 @@ class HostapdAdapter:
         self.cli_connected = False
         self.cli_ready = False
 
-    async def process_hostapd_ready(self):
+    async def _process_hostapd_ready(self):
         logger.info(f"HostapdAdapter:process_hostapd_ready()")
-        await self.refresh_status_vars()
+        await self._refresh_status_vars()
         for handler in self.event_handler_table:
             asyncio.ensure_future(handler.handle_hostapd_ready())
 
-    async def process_event(self, event_data):
+    async def _process_status_var_change(self):
+        logger.info(f"HostapdAdapter:process_status_var_change()")
+        for handler in self.event_handler_table:
+            asyncio.ensure_future(handler.handle_hostapd_status_var_change())
+
+    async def _process_hostapd_event(self, event_data):
         logger.info(f"HostapdAdapter:process_event: EVENT: (\"{event_data}\")")
         if event_data.startswith("CTRL-EVENT-TERMINATING"):
             logger.info(f"HostapdAdapter:process_event: hostapd CLI is now NOT READY")
@@ -208,6 +222,10 @@ class HostapdAdapter:
 
     async def refresh_status_vars(self):
         logger.info(f"HostapdAdapter:refresh_status_vars()")
+        await self._refresh_status_vars()
+        await self._process_status_var_change()
+
+    async def _refresh_status_vars(self):
         status_cmd = await self.send_command(HostapdAdapter.StatusCLICommand())
         self.status_vars = await status_cmd.get_status_dict()
 
@@ -244,7 +262,7 @@ class HostapdAdapter:
             raise Exception("hostapd adapter CLI is not ready")
         self.command_queue.put(command)
         command_string = command.get_command_string()
-        logger.info (f"HostapdAdapter:send_command: issuing command: {command} (\"{command_string}\")")
+        logger.info (f"HostapdAdapter:send_command: issuing command: {command}")
         # Put 2 newlines on the end to force a newline on the output
         command_string = command_string + "\n\n"
         self.hostapd_cli_process.stdin.write(command_string.encode())
@@ -457,6 +475,25 @@ class HostapdAdapter:
             await self.get_response()
             return self.success
 
+    class DPPBootstrapUriDeleteCommand(HostapdCLICommand):
+        def __init__ (self, qrcode_id=None, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.qrcode_id = qrcode_id
+
+        def get_command_string(self):
+            cmd = f"dpp_bootstrap_remove {self.qrcode_id if self.qrcode_id else '*'}"
+            return cmd
+
+        async def process_response_data(self, response):
+            try:
+                self.success = "OK" in response
+            finally:
+                await super().process_response_data(response)
+
+        async def was_successful(self):
+            await self.get_response()
+            return self.success
+
     class DPPAuthInitCommand(HostapdCLICommand):
         def __init__ (self, configurator_id, qrcode_id, ssid, akms, psk=None, passphrase=None, freq=None,
                       event_loop=asyncio.get_event_loop()):
@@ -568,6 +605,9 @@ class HostapdAdapter:
             await self.get_response()
             return self.success
 
+        def __str__(self):
+            return type(self).__name__ + ": " + self.get_command_string() + f" (SSID {self.ssid})"
+
     class DPPSetDPPConfigParamsCommand(HostapdCLICommand):
         def __init__ (self, configurator_id, ssid, akms, psk=None, passphrase=None,
                       event_loop=asyncio.get_event_loop()):
@@ -657,7 +697,7 @@ class HostapdAdapter:
             return self.success
 
     class DPPConfiguratorDPPSignCLICommand(HostapdCLICommand):
-        def __init__ (self, configurator_id, ssid, event_loop=asyncio.get_event_loop()):
+        def __init__ (self, configurator_id, ssid=None, event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
             self.configurator_id = configurator_id
             self.ssid = ssid
@@ -667,52 +707,19 @@ class HostapdAdapter:
             self.dpp_connector = None
 
         def get_command_string(self):
-            ssid_asciihex = self.ssid.encode("ascii").hex()
-            return f"dpp_configurator_sign conf=ap-dpp ssid={ssid_asciihex} configurator={self.configurator_id}"
+            cmd = f"dpp_configurator_sign conf=ap-dpp configurator={self.configurator_id}"
+            if self.ssid:
+                ssid_asciihex = self.ssid.encode("ascii").hex()
+                cmd += " ssid=" + ssid_asciihex
+            return cmd
 
         sign_response_re = re.compile("^<3>([-A-Z0-9]+)(?: (.+))?$")
 
         async def process_response_data(self, response):
             try:
-                for line in response.splitlines():
-                    try:
-                        if line == "OK":
-                            self.success = self.c_sign_key and self.net_access_key and self.dpp_connector
-                            continue
-                        sign_response_elem = HostapdAdapter.DPPConfiguratorDPPSignCLICommand.sign_response_re.match(line)
-                        if sign_response_elem:
-                            (param_name, param_val) = sign_response_elem.groups()
-                            if param_name == "DPP-CONNECTOR":
-                                self.dpp_connector = param_val
-                            elif param_name == "DPP-C-SIGN-KEY":
-                                self.c_sign_key = param_val
-                            elif param_name == "DPP-NET-ACCESS-KEY":
-                                self.net_access_key = param_val
-                            else:
-                                pass
-                    except Exception as ex:
-                        logger.warning(f"DPPConfiguratorDPPSignCLICommand.process_response_data: Error processing status line {line}: {ex}",
-                                       exc_info=True)
+                self.success = "OK" in response
             finally:
                 await super().process_response_data(response)
-
-        async def get_connector(self):
-            response = await self.get_response()
-            if not self.success:
-                raise Exception(f"Unexpected response: ({response})")
-            return self.dpp_connector
-
-        async def get_c_sign_key(self):
-            response = await self.get_response()
-            if not self.success:
-                raise Exception(f"Unexpected response: ({response})")
-            return self.c_sign_key
-
-        async def get_net_access_key(self):
-            response = await self.get_response()
-            if not self.success:
-                raise Exception(f"Unexpected response: ({response})")
-            return self.net_access_key
 
         async def was_successful(self):
             await self.get_response()

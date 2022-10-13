@@ -72,7 +72,10 @@ class DnsMasqAdapter:
         for micronet_id, devices in devices.items ():
             outfile.write(f"# DEVICES FOR MICRONET {micronet_id}\n")
             for device_id, device in devices.items ():
-                mac_addr = EUI (device ['macAddress']['eui48'])
+                mac_addr_str = device.get('macAddress')
+                if not mac_addr_str:
+                    continue
+                mac_addr = EUI (mac_addr_str)
                 mac_addr.dialect = netaddr.mac_unix_expanded
                 ip_addr = IPv4Address (device ['networkAddress']['ipv4'])
                 if 'leasePeriod' in device:

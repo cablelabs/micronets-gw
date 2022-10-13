@@ -14,16 +14,16 @@ class BaseConfigSettings:
     DNSMASQ_ADAPTER_LEASE_SCRIPT = SERVER_BIN_DIR.joinpath ("dnsmasq_lease_notify.py")
     FLOW_ADAPTER_ENABLED = False
     HOSTAPD_ADAPTER_ENABLED = False
-    DPP_HANDLER_ENABLED = False
+    DPP_ADAPTER_ENABLED = False
     MICRONETS_OVS_BRIDGE = os.environ.get('MICRONETS_OVS_BRIDGE') or 'brmn001'
     MICRONETS_GATEWAY_NETMASK = "10.0.0.1/255.0.0.255"
     # If not set, the MAC of the MICRONETS_OVS_BRIDGE host interface will be used
     # MICRONETS_GATEWAY_MAC_ADDR = "00:10:00:21:12:42"
     MICRONETS_OVS_BRIDGE_TRUNK_PORT = int(os.environ.get('MICRONETS_OVS_BRIDGE_TRUNK_PORT', '1'))
     MICRONETS_OVS_BRIDGE_DROP_PORT = int(os.environ.get('MICRONETS_OVS_BRIDGE_DROP_PORT', '42'))
-    DPP_CONFIG_KEY_FILE = SERVER_LIB_DIR.joinpath("hostapd-dpp-configurator.key")
-    DPP_AP_CONNECTOR_FILE = SERVER_LIB_DIR.joinpath("hostapd-dpp-ap-connector.json")
-    DPP_HANDLER_SIMULATE_ONBOARD_RESPONSE_EVENTS = False
+    DPP_CONFIG_KEY_FILE = SERVER_LIB_DIR.joinpath("hostapd-dpp-configurator.{ssid}.key")
+    DPP_AP_CONNECTOR_FILE = SERVER_LIB_DIR.joinpath("hostapd-dpp-ap-connector.{ssid}.json")
+    DPP_ADAPTER_SIMULATE_ONBOARD_RESPONSE_EVENTS = False
     WEBSOCKET_CONNECTION_ENABLED = False
     WEBSOCKET_LOOKUP_URL = 'https://dev.mso-portal-api.micronets.in/portal/v1/socket?gatewayId={gateway_id}'
     WEBSOCKET_TLS_CERTKEY_FILE = SERVER_LIB_DIR.joinpath ('micronets-gw-service.pkeycert.pem')
@@ -57,12 +57,11 @@ class NetreachDefaultSettings():
     # NETREACH_ADAPTER_MAN_ADDRESS = "1.2.3.4"
     # NETREACH_ADAPTER_GEOLOCATION = {"latitude": "0.0", "longitude": "0.0"}
     NETREACH_ADAPTER_SSID_OVERRIDE_FILE = libpath.joinpath('netreach-ssid-override.txt')
-    NETREACH_ADAPTER_UNASSIGNED_SSID = "netreach-inactive"
     NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://staging.api.controller.netreach.in"
     # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://api.controller.netreach.in"
     NETREACH_ADAPTER_API_KEY_FILE = libpath.joinpath('netreach-api-token.txt')
     NETREACH_ADAPTER_API_KEY_REFRESH_DAYS = 500
-    # NETREACH_ADAPTER_MQTT_BROKER_URL = "mqtts://staging.broker.controller.netreach.in:8885" # for overriding
+    # NETREACH_ADAPTER_MQTT_BROKER_URL = "mqtts://staging.broker.controller.netreach.in:4883" # for overriding
     NETREACH_ADAPTER_MQTT_CA_CERTS = libpath.joinpath('netreach-mqtt-ca.crt')
     NETREACH_ADAPTER_CONN_START_DELAY_S = 2
     NETREACH_ADAPTER_CONN_RETRY_S = 10
@@ -119,8 +118,8 @@ class LocalDevelopmentConfigWithWebsocket (LocalDevelopmentConfig):
 
 class LocalDevelopmentConfigWithSimDPPWebsocketEvents (LocalDevelopmentConfig):
     # Websocket URL will be looked up using the gateway ID
-    DPP_HANDLER_ENABLED = True
-    DPP_HANDLER_SIMULATE_ONBOARD_RESPONSE_EVENTS = "with success"
+    DPP_ADAPTER_ENABLED = True
+    DPP_ADAPTER_SIMULATE_ONBOARD_RESPONSE_EVENTS = "with success"
 
 class LocalDevelopmentConfigWithLocalWebsocket (LocalDevelopmentConfig):
     WEBSOCKET_URL = "wss://localhost:5050/micronets/v1/ws-proxy/gw/mock-gw"
@@ -156,7 +155,7 @@ class WiredGatewayConfigWithWebsocketLookup (WiredGatewayConfig):
 
 class WirelessGatewayConfig (ReferenceGatewaySettings):
     # Note: No websocket connection is setup
-    DPP_HANDLER_ENABLED = True
+    DPP_ADAPTER_ENABLED = True
     FLOW_ADAPTER_ENABLED = True
     HOSTAPD_ADAPTER_ENABLED = True
     DEBUG = False
@@ -187,7 +186,6 @@ class NetreachDebugConfig (WirelessGatewayDebugConfig, NetreachDefaultSettings):
 
 class NetreachDebugConfigNoLogFile (WirelessGatewayDebugConfig, NetreachDefaultSettings):
     LOGFILE_PATH = None
-    DPP_HANDLER_ENABLED = False
 
 #
 # The default configuration (default for the /lib/systemd/system/micronets-gw.service file)

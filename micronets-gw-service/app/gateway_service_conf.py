@@ -14,12 +14,14 @@ logger = logging.getLogger ('micronets-gw-service')
 
 
 class GatewayServiceConf:
-    def __init__ (self, ws_connection, db_adapter, dhcp_adapter, flow_adapter, hostapd_adapter, netreach_adapter, min_update_interval_s):
+    def __init__ (self, ws_connection, db_adapter, dhcp_adapter, flow_adapter, hostapd_adapter,
+                  dpp_adapter, netreach_adapter, min_update_interval_s):
         self.ws_connection = ws_connection
         self.db_adapter = db_adapter
         self.dhcp_adapter = dhcp_adapter
         self.flow_adapter = flow_adapter
         self.hostapd_adapter = hostapd_adapter
+        self.dpp_adapter = dpp_adapter
         self.netreach_adapter = netreach_adapter
         self.min_update_interval_s = min_update_interval_s
         self.update_conf_task = None
@@ -68,8 +70,13 @@ class GatewayServiceConf:
                 await self.flow_adapter.update(self.micronet_list, self.device_lists)
             if self.hostapd_adapter:
                 await self.hostapd_adapter.update(self.micronet_list, self.device_lists)
+            if self.dpp_adapter:
+                await self.dpp_adapter.update(self.micronet_list, self.device_lists)
         except Exception as ex:
             logger.warning(f"Caught exception performing update: {ex}", exc_info=True)
+
+    def get_micronets_and_devices(self):
+        return self.micronet_list, self.device_lists
 
     #
     # Interface Operations
@@ -150,7 +157,7 @@ class GatewayServiceConf:
             raise InvalidUsage (400, message=f"Error validating micronet '{micronet_id}' "
                                              f"(network {netaddr}/{netmask}): {ve}")
 
-    async def get_all_micronets (self):
+    async def get_all_micronets_json (self):
         logger.info (f"GatewayServiceConf.get_all_micronets ()")
         return jsonify ({'micronets': list (self.micronet_list.values ())}), 200
 
@@ -202,7 +209,7 @@ class GatewayServiceConf:
         await self.queue_conf_update ()
         return jsonify ({'micronet': updated_micronet}), 200
 
-    async def get_micronet (self, micronet_id):
+    async def get_micronet_json (self, micronet_id):
         logger.info (f"GatewayServiceConf.get_micronet ({micronet_id})")
         if micronet_id not in self.micronet_list:
             raise InvalidUsage (404, message=f"micronet '{micronet_id}' not found")
@@ -254,13 +261,17 @@ class GatewayServiceConf:
             self.check_device_for_micronet (device, micronet)
 
     def check_device_mac_unique (self, device_to_check, excluded_micronet_id=None, excluded_device_id=None):
-        addr_field_to_check = device_to_check ['macAddress']['eui48']
+        addr_field_to_check = device_to_check.get('macAddress')
+        if not addr_field_to_check:
+            return
         addr_to_check = EUI (addr_field_to_check)
         for micronet_id, device_list in self.device_lists.items ():
             for device_id, device in device_list.items ():
                 if (excluded_micronet_id == micronet_id) and (excluded_device_id == device_id):
                     continue
-                dev_addr_field = device ['macAddress']['eui48']
+                dev_addr_field = device.get('macAddress')
+                if not dev_addr_field:
+                    continue
                 dev_addr = EUI (dev_addr_field)
                 if (dev_addr == addr_to_check):
                     raise InvalidUsage (400, message=f"MAC address of device "
@@ -287,19 +298,15 @@ class GatewayServiceConf:
         addr_to_check = EUI (mac_address)
         for micronet_id, device_list in self.device_lists.items ():
             for device_id, device in device_list.items ():
-                dev_addr_field = device ['macAddress']['eui48']
+                dev_addr_field = device.get('macAddress')
+                if not dev_addr_field:
+                    continue
                 dev_addr = EUI (dev_addr_field)
                 if dev_addr == addr_to_check:
                     return micronet_id, device_id
         return None, None
 
-    async def dump_mock_lists (self):
-        logger.info ("micronets:")
-        logger.info (json.dumps (self.micronet_list, indent=4))
-        logger.info ("device_lists:")
-        logger.info (json.dumps (self.device_lists, indent=4))
-
-    async def get_all_devices (self, micronet_id):
+    async def get_all_devices_json (self, micronet_id):
         logger.info (f"GatewayServiceConf.get_all_devices ({micronet_id})")
         self.check_micronet_reference (micronet_id)
         return jsonify ({'devices': list (self.device_lists [micronet_id].values ())}), 200
@@ -367,7 +374,7 @@ class GatewayServiceConf:
         await self.queue_conf_update ()
         return jsonify ({'device': updated_device}), 200
 
-    async def get_device (self, micronet_id, device_id):
+    async def get_device_json (self, micronet_id, device_id):
         logger.info (f"GatewayServiceConf.get_device ({micronet_id}, {device_id})")
         logger.info (json.dumps (self.device_lists, indent=4))
         self.check_micronet_reference (micronet_id)
@@ -381,6 +388,9 @@ class GatewayServiceConf:
         del self.device_lists [micronet_id] [device_id]
         await self.queue_conf_update ()
         return '', 204
+    #
+    # Utility Operations
+    #
 
     async def process_dhcp_lease_event (self, dhcp_lease_event):
         logger.info (f"GatewayServiceConf.process_lease_event ({dhcp_lease_event})")
@@ -388,7 +398,7 @@ class GatewayServiceConf:
         event_fields = dhcp_lease_event ['leaseChangeEvent']
         action = event_fields ['action']
 
-        mac_addr = event_fields ['macAddress']['eui48']
+        mac_addr = event_fields ['macAddress']
         net_addr = event_fields ['networkAddress']['ipv4']
         micronet_id, device_id = await self.get_micronetid_deviceid_for_mac (mac_addr)
         if not (micronet_id and device_id):

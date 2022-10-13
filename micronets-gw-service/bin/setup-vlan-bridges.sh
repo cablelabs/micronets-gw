@@ -67,6 +67,17 @@ reset_ovsdb() {
   /etc/init.d/openvswitch-switch start
 }
 
+config_address_for_bridge() {
+    BRIDGE_INTERFACE=$1
+    BRIDGE_NETWORK_CIDR=$2
+    BRIDGE_GATEWAY_CIDR=$3
+    BRIDGE_NETWORK_ADDR=$(echo "${BRIDGE_NETWORK_CIDR}" | cut -d/ -f1)
+    BRIDGE_GATEWAY_ADDR=$(echo "${BRIDGE_GATEWAY_CIDR}" | cut -d/ -f1)
+    debug_log "Configuring bridge ${BRIDGE_INTERFACE} for network ${BRIDGE_NETWORK_CIDR} (gateway ${BRIDGE_GATEWAY_ADDR})..."
+    ip a add $BRIDGE_GATEWAY_CIDR dev $BRIDGE_INTERFACE
+    route add -net $BRIDGE_NETWORK_CIDR gw $BRIDGE_GATEWAY_ADDR dev $BRIDGE_INTERFACE
+}
+
 reset_ovsdb
 
 # TODO: Make bridge names, etc config variables
@@ -108,33 +119,31 @@ ovs-ofctl add-flow brhapd "table=0, priority=200, in_port=1, actions=output:hapo
 
 # Add Micronet-ready subnet defintions
 #  TODO: Make the Micronets agent perform these steps dynamically
-ip a add 10.0.5.1/24 dev brmn001
-route add -net 10.0.5.0/24 gw 10.0.5.1 dev brmn001
+echo "Enabling iptables NAT..."
 
-ip a add 10.0.6.1/24 dev brmn001
-route add -net 10.0.6.0/24 gw 10.0.6.1 dev brmn001
-
-ip a add 10.0.7.1/24 dev brmn001
-route add -net 10.0.7.0/24 gw 10.0.7.1 dev brmn001
-
-ip a add 10.0.8.1/24 dev brmn001
-route add -net 10.0.8.0/24 gw 10.0.8.1 dev brmn001
-
-ip a add 10.0.9.1/24 dev brmn001
-route add -net 10.0.9.0/24 gw 10.0.9.1 dev brmn001
-
-ip a add 10.0.10.1/24 dev brmn001
-route add -net 10.0.10.0/24 gw 10.0.10.1 dev brmn001
-
-ip a add 10.0.11.1/24 dev brmn001
-route add -net 10.0.11.0/24 gw 10.0.11.1 dev brmn001
-
-ip a add 10.0.12.1/24 dev brmn001
-route add -net 10.0.12.0/24 gw 10.0.12.1 dev brmn001
+config_address_for_bridge brmn001 10.0.5.0/24 10.0.5.1/24
+config_address_for_bridge brmn001 10.0.6.0/24 10.0.6.1/24
+config_address_for_bridge brmn001 10.0.7.0/24 10.0.7.1/24
+config_address_for_bridge brmn001 10.0.8.0/24 10.0.8.1/24
+config_address_for_bridge brmn001 10.0.9.0/24 10.0.9.1/24
+config_address_for_bridge brmn001 10.0.10.0/24 10.0.10.1/24
+config_address_for_bridge brmn001 10.0.11.0/24 10.0.11.1/24
+config_address_for_bridge brmn001 10.0.12.0/24 10.0.12.1/24
+config_address_for_bridge brmn001 10.0.13.0/24 10.0.13.1/24
+config_address_for_bridge brmn001 10.0.14.0/24 10.0.14.1/24
+config_address_for_bridge brmn001 10.0.15.0/24 10.0.15.1/24
 
 # Enable firewall rules
+debug_log "Enabling iptables NAT..."
 clear_iptables
 config_iptables_bridge_uplink $MICRONETS_BRIDGE $UPLINK_INTERFACE
 
 # Enable packet routing/forwarding
+debug_log "Enabling packet forwarding..."
 sysctl -w net.ipv4.ip_forward=1
+
+# Enable the reception of broadcast wifi control packets (for receiving DPP chirps)
+debug_log "Enabling reception of DPP chirps..."
+sudo iw phy phy0 interface add mon0 type monitor
+sudo ifconfig mon0 up
+

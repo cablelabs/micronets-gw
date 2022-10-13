@@ -544,9 +544,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "micronet": {
                "deviceId": "MyDevice01",
-               "macAddress": {
-                   "eui48": "00:23:12:0f:b0:26"
-               },
+               "macAddress": "00:23:12:0f:b0:26",
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                }
@@ -572,9 +570,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                "deviceId": "MyDevice01",
-               "macAddress": {
-                   "eui48": "00:23:12:0f:b0:26"
-               },
+               "macAddress": "00:23:12:0f:b0:26",
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                }
@@ -588,9 +584,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     {
         "device": {
             "deviceId": "MyDevice01",
-            "macAddress": {
-               "eui48": "00:23:12:0f:b0:26"
-            },
+            "macAddress": "00:23:12:0f:b0:26",
             "networkAddress": {
                 "ipv4": "192.168.1.42"
             }
@@ -605,18 +599,14 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
            "devices": [
                 {
                     "deviceId": "MyDevice01",
-                    "macAddress": {
-                       "eui48": "00:23:12:0f:b0:26"
-                    },
+                    "macAddress": "00:23:12:0f:b0:26",
                     "networkAddress": {
                         "ipv4": "192.168.1.42"
                     }
                 },
                 {
                     "deviceId": "MyDevice02",
-                    "macAddress": {
-                        "eui48": "00:23:12:0f:b0:27"
-                    },
+                    "macAddress": "00:23:12:0f:b0:27",
                     "networkAddress": {
                         "ipv4": "192.168.1.43"
                     }
@@ -632,18 +622,14 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
         "devices": [
             {
                 "deviceId": "MyDevice01",
-                "macAddress": {
-                    "eui48": "00:23:12:0f:b0:26"
-                },
+                "macAddress": "00:23:12:0f:b0:26",
                 "networkAddress": {
                     "ipv4": "192.168.1.42"
                 }
             },
             {
                 "deviceId": "MyDevice02",
-                "macAddress": {
-                    "eui48": "00:23:12:0f:b0:27",
-                },
+                "macAddress": "00:23:12:0f:b0:27",
                 "networkAddress": {
                     "ipv4": "192.168.1.43"
                 }
@@ -665,18 +651,14 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
         "devices": [
             {
                 "deviceId": "MyDevice02",
-                "macAddress": {
-                    "eui48": "00:23:12:0f:b0:27"
-                },
+                "macAddress": "00:23:12:0f:b0:27",
                 "networkAddress": {
                     "ipv4": "192.168.42.43"
                 }
             },
             {
                 "deviceId": "MyDevice01",
-                "macAddress": {
-                    "eui48": "00:23:12:0f:b0:26"
-                },
+                "macAddress": "00:23:12:0f:b0:26",
                 "networkAddress": {
                     "ipv4": "192.168.1.42"
                 }
@@ -691,9 +673,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                 "deviceId" :"MyDevice02",
-                "macAddress": {
-                    "eui48": "00:23:12:0f:b0:27"
-                },
+                "macAddress": "00:23:12:0f:b0:27",
                 "networkAddress": {
                     "ipv4": "192.168.42.43"
                 }
@@ -707,9 +687,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     {
         "device": {
             "deviceId": "MyDevice02",
-            "macAddress": {
-                "eui48": "00:23:12:0f:b0:27"
-            },
+            "macAddress": "00:23:12:0f:b0:27",
             "networkAddress": {
                 "ipv4": "192.168.42.43"
             }
@@ -717,15 +695,12 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     }
     ```
 
-* Creating a device with a PSK:
+* Creating a device with a PSK and without a MAC address:
 
     ```
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                "deviceId": "MyDevice01",
-               "macAddress": {
-                   "eui48": "00:23:12:0f:b0:26"
-               },
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                },
@@ -740,9 +715,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     {
         "device": {
             "deviceId": "MyDevice01",
-            "macAddress": {
-               "eui48": "00:23:12:0f:b0:26"
-            },
+            "macAddress": "00:23:12:0f:b0:26",
             "networkAddress": {
                 "ipv4": "192.168.1.42"
             }
@@ -768,9 +741,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     {
         "device": {
             "deviceId": "MyDevice01",
-            "macAddress": {
-               "eui48": "00:23:12:0f:b0:26"
-            },
+            "macAddress": "00:23:12:0f:b0:26",
             "networkAddress": {
                 "ipv4": "192.168.42.43"
             }
@@ -794,9 +765,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                "deviceId": "MyDevice03",
-               "macAddress": {
-                   "eui48": "b8:27:eb:75:a4:8a"
-               },
+               "macAddress": "b8:27:eb:75:a4:8a",
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                },
@@ -817,9 +786,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     {
         "device": {
             "deviceId": "MyDevice03",
-            "macAddress": {
-               "eui48": "b8:27:eb:75:a4:8a"
-            },
+            "macAddress": "b8:27:eb:75:a4:8a",
             "networkAddress": {
                 "ipv4": "192.168.1.42"
             },
@@ -840,9 +807,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                "deviceId": "MyDevice03",
-               "macAddress": {
-                   "eui48": "b8:27:eb:75:a4:8b"
-               },
+               "macAddress": "b8:27:eb:75:a4:8b",
                "networkAddress": {
                    "ipv4": "192.168.1.43"
                },
@@ -863,9 +828,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     {
         "device": {
             "deviceId": "MyDevice03",
-            "macAddress": {
-               "eui48": "b8:27:eb:75:a4:8b"
-            },
+            "macAddress": "b8:27:eb:75:a4:8b",
             "networkAddress": {
                 "ipv4": "192.168.1.43"
             },
@@ -886,9 +849,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                "deviceId": "MyDevice03",
-               "macAddress": {
-                   "eui48": "b8:27:eb:75:a4:8c"
-               },
+               "macAddress": "b8:27:eb:75:a4:8c",
                "networkAddress": {
                    "ipv4": "192.168.1.44"
                },
@@ -903,9 +864,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     {
         "device": {
             "deviceId": "MyDevice03",
-            "macAddress": {
-               "eui48": "b8:27:eb:75:a4:8c"
-            },
+            "macAddress": "b8:27:eb:75:a4:8c",
             "networkAddress": {
                 "ipv4": "192.168.1.44"
             },
@@ -991,9 +950,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                 "deviceId": "MyDevice01",
-                "macAddress": {
-                    "eui48": "00:23:12:0f:b0:26"
-                },
+                "macAddress": "00:23:12:0f:b0:26",
                 "networkAddress": {
                     "ipv4": "192.168.1.4222"
                 }
@@ -1013,9 +970,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                 "deviceId": "MyDevice01",
-                "macAddress": {
-                    "eui48": "00:23:12:0f:b0:26"
-                },
+                "macAddress": "00:23:12:0f:b0:26",
                 "networkAddress": "blah"
             }
         }' http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
@@ -1035,9 +990,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                 "deviceId": "MyDevice01",
-                "macAddress": {
-                    "eui48": "00:23:12:0f:b0:26"
-                },
+                "macAddress": "00:23:12:0f:b0:26",
                 "networkAddress": {}
             }
           }'  http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
@@ -1055,9 +1008,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                 "deviceId": "MyDevice01",
-                "macAddress": {
-                    "eui48": "00:23:12:0f:b0:26"
-                }
+                "macAddress": "00:23:12:0f:b0:26"
             }
         }'  http://localhost:5000/gateway/v1/micronets/mockmicronet007/devices
     ```
@@ -1076,9 +1027,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                "deviceId": "MyDevice01",
-               "macAddress": {
-                   "eui48": "00:23:12:0f:b0:"
-               },
+               "macAddress": "00:23:12:0f:b0:",
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                }
@@ -1098,9 +1047,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                "deviceId": "MyDevice01",
-               "macAddress": {
-                   "eui48": "00:23:12:0f:b0:26:00"
-               },
+               "macAddress": "00:23:12:0f:b0:26:00",
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                }
@@ -1112,7 +1059,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```json
     {
-        "message": "Supplied MAC '00:23:12:0f:b0:26:00' in 'eui48' is not valid"
+        "message": "Supplied MAC '00:23:12:0f:b0:26:00' in 'macAddress' is not valid"
     }
     ```
 
@@ -1120,9 +1067,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X PUT -H "Content-Type: application/json" -d '{
            "device": {
                "deviceId": "MyDevice01",
-               "macAddress": {
-                   "eui48": "0023120fb02600"
-               },
+               "macAddress": "0023120fb02600",
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                }
@@ -1133,7 +1078,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
 
     ```json
     {
-        "message": "Supplied MAC '0023120fb02600' in 'eui48' is not valid"
+        "message": "Supplied MAC '0023120fb02600' in 'macAddress' is not valid"
     }
     ```
 
@@ -1156,9 +1101,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                "deviceId": "MyDevice01",
-               "macAddress": {
-                   "eui48": "00:23:12:0f:b0:26"
-               },
+               "macAddress": "00:23:12:0f:b0:26",
                "networkAddress": {
                    "ipv4": "192.168.2.42"
                }
@@ -1193,9 +1136,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                "deviceId": "MyDevice01",
-               "macAddress": {
-                   "eui48": "00:23:12:0f:b0:26"
-               },
+               "macAddress": "00:23:12:0f:b0:26",
                "networkAddress": {
                    "ipv4": "192.168.1.42"
                }
@@ -1206,9 +1147,7 @@ Note: For the sake of brevity, many of these test cases require consecutive exec
     curl -X POST -H "Content-Type: application/json" -d '{
            "device": {
                "deviceId": "MyDevice02",
-               "macAddress": {
-                   "eui48": "00:23:12:0f:b0:26"
-               },
+               "macAddress": "00:23:12:0f:b0:26",
                "networkAddress": {
                    "ipv4": "192.168.1.43"
                }
@@ -1232,9 +1171,7 @@ Lease change notifications can be performed by posting to the `/gateway/v1/lease
 curl -X PUT -H "Content-Type: application/json" -d '{
     "leaseChangeEvent": {
         "action": "leaseExpired", 
-        "macAddress": {
-            "eui48": "00:23:12:0f:b0:26"
-        }, 
+        "macAddress": "00:23:12:0f:b0:26", 
         "networkAddress": {
             "ipv4": "192.168.1.42"
         }, 

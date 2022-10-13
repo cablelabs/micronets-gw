@@ -55,7 +55,9 @@ else:
     logging.basicConfig (level=logging_level, format=logging_format)
     print (f"Logging to standard out (level {logging_level})")
 
-logger.info (f"Running with config {config}")
+logger.info(f"Running with config {config}")
+for (k, v) in app.config.items():
+    logger.info(f"  {k}={v}")
 
 if logging_level <= logging.INFO:
     logging.getLogger('asyncio').setLevel(logging.WARNING)  # Remove asyncio debug messages, but leave warnings.
@@ -69,8 +71,8 @@ def get_conf_model ():
 def get_ws_connector():
     return ws_connector
 
-def get_dpp_handler():
-    return dpp_handler
+def get_dpp_adapter():
+    return dpp_adapter
 
 def get_netreach_adapter():
     return netreach_adapter
@@ -156,21 +158,20 @@ except Exception as ex:
     logger.info ("Error starting hostapd adapter:", exc_info=True)
     exit (1)
 
-from .dpp_handler import DPPHandler
-
-dpp_handler = None
+dpp_adapter = None
 try:
-    dpp_handler_enabled = app.config['DPP_HANDLER_ENABLED']
-    if dpp_handler_enabled:
-        dpp_handler = DPPHandler(app.config, hostapd_adapter)
+    dpp_adapter_enabled = app.config['DPP_ADAPTER_ENABLED']
+    if dpp_adapter_enabled:
+        from .dpp_adapter import DPPAdapter
+        dpp_adapter = DPPAdapter(app.config, hostapd_adapter)
         if ws_connector:
-            ws_connector.register_handler (dpp_handler)
+            ws_connector.register_handler (dpp_adapter)
         if hostapd_adapter:
-            hostapd_adapter.register_cli_event_handler(dpp_handler)
+            hostapd_adapter.register_cli_event_handler(dpp_adapter)
     else:
-        logger.info("Not initiating dpp handler (DPP handler disabled)")
+        logger.info("Not initiating dpp adapter (DPP adapter disabled)")
 except Exception as ex:
-    logger.info ("Error registering DPP handler:", exc_info=True)
+    logger.info ("Error registering DPP adapter:", exc_info=True)
     exit (1)
 
 flow_adapter = None
@@ -201,7 +202,7 @@ try:
     adapter_update_int_s = app.config ['ADAPTER_UPDATE_INTERVAL_S']
     logger.info (f"Adapter update interval (seconds): {adapter_update_int_s}")
     conf_model = GatewayServiceConf (ws_connector, db_adapter, dhcp_adapter, flow_adapter, hostapd_adapter,
-                                     netreach_adapter, adapter_update_int_s)
+                                     dpp_adapter, netreach_adapter, adapter_update_int_s)
 except Exception as ex:
     logger.info ("Error starting with adapter:", exc_info=True)
     exit (1)

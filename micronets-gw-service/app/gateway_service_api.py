@@ -1,6 +1,6 @@
 from quart import request, jsonify
 from ipaddress import IPv4Address, IPv4Network
-from app import app, get_conf_model, get_dpp_handler
+from app import app, get_conf_model, get_dpp_adapter
 from .utils import InvalidUsage, get_ipv4_hostports_for_hostportspec, parse_portlistspec
 
 import re
@@ -169,7 +169,7 @@ async def create_micronets ():
 
 @app.route (api_prefix + '/micronets', methods=['GET'])
 async def get_all_micronets ():
-    return await get_conf_model ().get_all_micronets ()
+    return await get_conf_model ().get_all_micronets_json ()
 
 @app.route (api_prefix + '/micronets', methods=['DELETE'])
 async def delete_all_micronets ():
@@ -192,7 +192,7 @@ async def update_micronet (micronet_id):
 async def get_micronet (micronet_id):
     micronet_id = micronet_id.lower ()
     check_micronet_id (micronet_id, request.path)
-    return await get_conf_model ().get_micronet (micronet_id)
+    return await get_conf_model ().get_micronet_json (micronet_id)
 
 @app.route (api_prefix + '/micronets/<micronet_id>', methods=['DELETE'])
 async def delete_micronet (micronet_id):
@@ -251,16 +251,11 @@ def check_hex_field(json_obj, hex_field, required, length=0):
         raise InvalidUsage(400, message=f"Supplied hex field '{hex_field}' in '{json_obj}' is not valid")
     return hex_field
 
-def check_wpa_psk(container, field_name, required):
-    psk = check_field(container, field_name, str, required)
-    if psk:
-        if len(psk) == 64:
-            if not device_wpa_psk_re.match(psk):
-                raise InvalidUsage(400, message=f"Supplied WPA PSK '{psk}' is invalid (must be 64 hex digits)")
-        else:
-            if not device_wpa_passphrase_re.match(psk):
-                raise InvalidUsage(400, message=f"Supplied WPA passphrase '{psk}' is invalid (must be 8-63 ASCII characters)")
-    return psk
+def check_dpp_bootstrap_field(container, field_name, required):
+    dpp_bootstrap_uri = check_field(container, field_name, str, required)
+    if dpp_bootstrap_uri:
+        pass # TODO: Check URI syntax accd to DPP API spec
+    return dpp_bootstrap_uri
 
 async def check_rules (container, field_name, required):
     rules = check_field (container, field_name, (list), required)
@@ -320,19 +315,11 @@ def check_portspec (container, field_name, required):
 
 async def check_device (device, required):
     check_for_unrecognized_entries (device, ['deviceId', 'macAddress', 'networkAddress', 'psk', 'outRules', 'inRules',
-                                             'allowHosts','denyHosts','name','mtu'])
+                                             'allowHosts', 'denyHosts', 'name', 'mtu', 'dppBootstrapUri'])
     device_id = check_field (device, 'deviceId', str, required)
     if device_id:
         device_id = device_id.lower ()
         check_device_id (device_id, device)
-
-    mac_address = check_field (device, 'macAddress', (dict, list), required)
-    if not mac_address:
-        if required:
-            raise InvalidUsage (400, message=f"macAddress missing from device '{device_id}'")
-    else:
-        check_for_unrecognized_entries (mac_address, ['eui48'])
-        check_mac_address_field (mac_address, 'eui48', required)
 
     network_address = check_field (device, 'networkAddress', (dict, list), required)
     if not network_address:
@@ -342,7 +329,9 @@ async def check_device (device, required):
         check_for_unrecognized_entries (network_address, ['ipv4'])
         check_ipv4_address_field (network_address, 'ipv4', required)
 
+    check_mac_address_field(device, 'macAddress', False)
     check_wpa_psk (device, 'psk', False)
+    check_dpp_bootstrap_field(device, 'dppBootstrapUri', False)
 
     await check_rules (device, 'outRules', False)
     await check_rules (device, 'inRules', False)
@@ -374,7 +363,7 @@ async def create_devices (micronet_id):
 async def get_devices (micronet_id):
     micronet_id = micronet_id.lower ()
     check_micronet_id (micronet_id, request.path)
-    return await get_conf_model ().get_all_devices (micronet_id)
+    return await get_conf_model ().get_all_devices_json (micronet_id)
 
 @app.route (api_prefix + '/micronets/<micronet_id>/devices', methods=['DELETE'])
 async def delete_devices (micronet_id):
@@ -401,7 +390,7 @@ async def get_device (micronet_id, device_id):
     device_id = device_id.lower ()
     check_micronet_id (micronet_id, request.path)
     check_device_id (device_id, request.path)
-    return await get_conf_model ().get_device (micronet_id, device_id)
+    return await get_conf_model ().get_device_json (micronet_id, device_id)
 
 @app.route (api_prefix + '/micronets/<micronet_id>/devices/<device_id>', methods=['DELETE'])
 async def delete_device (micronet_id, device_id):
@@ -424,7 +413,7 @@ async def onboard_device (micronet_id, device_id):
     check_for_unrecognized_entries(dpp_obj, ['uri','akms'])
     uri = check_field (dpp_obj, 'uri', str, True)
     akms = check_akms (dpp_obj, 'akms', True)
-    return await get_dpp_handler().onboard_device (micronet_id, device_id, top_level)
+    return await get_dpp_adapter().onboard_device (micronet_id, device_id, top_level)
 
 @app.route (api_prefix + '/micronets/<micronet_id>/devices/<device_id>/reconfigure', methods=['PUT'])
 async def reconfig_device (micronet_id, device_id):
@@ -432,7 +421,7 @@ async def reconfig_device (micronet_id, device_id):
     device_id = device_id.lower ()
     check_micronet_id (micronet_id, request.path)
     check_device_id (device_id, request.path)
-    return await get_dpp_handler().reprovision_device (micronet_id, device_id)
+    return await get_dpp_adapter().reprovision_device (micronet_id, device_id)
 
 valid_akms = ("psk", "dpp", "sae")
 
@@ -452,10 +441,7 @@ async def check_lease_event (lease_event):
         raise InvalidUsage (400, message=f"unrecognized lease action '{action}'"
                                          f" (must be 'leaseAcquired' or 'leaseExpired')")
 
-    mac_address = check_field (event_fields, 'macAddress', dict, True)
-    check_for_unrecognized_entries (mac_address, ['eui48'])
-    check_mac_address_field (mac_address, 'eui48', True)
-
+    mac_address = check_mac_address_field (event_fields, 'macAddress', True)
     network_address = check_field (event_fields, 'networkAddress', dict, True)
     check_for_unrecognized_entries (network_address, ['ipv4'])
     check_ipv4_address_field (network_address, 'ipv4', True)

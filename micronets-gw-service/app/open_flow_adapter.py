@@ -49,6 +49,9 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.bss = self.hostapd_adapter.get_status_var('bss')
         logger.info(f"OpenFlowAdapter.handle_hostapd_ready:   BSS: {self.bss}")
 
+    async def handle_hostapd_status_var_change(self):
+        # Called when a change to a status var is pushed to hostapd
+        pass
 
     async def update (self, micronet_list, device_lists):
         logger.info (f"OpenFlowAdapter.update ()")
@@ -121,9 +124,13 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     raise Exception(f"Cannot find vlan for micronet {micronet_id}")
                 # Walk the devices in the micronet and create rules
                 for device_id, device in device_lists [micronet_id].items():
-                    device_mac = device['macAddress']['eui48']
+                    device_mac = device.get('macAddress')
                     device_id = device['deviceId']
                     device_name = device.get('name')
+                    if not device_mac:
+                        flow_file.write(f"# MICRONET {micronet_id}/\"{micronet_name}\" "
+                                        f"DEVICE {device_id}/\"{device_name}\" has no MAC address\n")
+                        continue
                     flow_file.write(f"# MICRONET {micronet_id}/\"{micronet_name}\" DEVICE {device_id}/\"{device_name}\"\n")
                     flow_file.write(f"add table={OpenFlowAdapter.from_micronets_ingress},priority=850, "
                                     f"dl_vlan={micronet_vlan},dl_src={device_mac}, "
@@ -188,11 +195,16 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     raise Exception(f"Cannot find vlan for micronet {micronet_id}")
                 # Walk the devices in the micronet and create rules
                 for device_id, device in device_lists [micronet_id].items():
-                    device_mac = device['macAddress']['eui48']
+                    device_mac = device.get('macAddress')
+                    if not device_mac:
+                        flow_file.write(f"# NO INGRESS RULES FOR DEVICE {device_id}/\"{device_name}\" "
+                                        f"(micronet {micronet_id}/\"{micronet_name}\") - no MAC address defined\n")
+                        continue
                     device_id = device['deviceId']
                     device_name = device.get('name')
 
-                    flow_file.write(f"# LOCALHOST INGRESS FOR DEVICE {device_id}/\"{device_name}\" (micronet {micronet_id}/\"{micronet_name}\")\n")
+                    flow_file.write(f"# LOCALHOST INGRESS FOR DEVICE {device_id}/\"{device_name}\" "
+                                    f"(micronet {micronet_id}/\"{micronet_name}\")\n")
                     flow_file.write(f"add table={OpenFlowAdapter.from_localhost_ingress},priority=200, "
                                     f"dl_dst={device_mac}, "
                                     f"actions=mod_vlan_vid:{micronet_vlan},"
@@ -243,9 +255,13 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     raise Exception(f"Cannot find vlan for micronet {micronet_id}")
                 # Walk the devices in the micronet and create rules
                 for device_id, device in device_lists[micronet_id].items():
-                    device_mac = device['macAddress']['eui48']
+                    device_mac = device.get('macAddress')
                     device_id = device['deviceId']
                     device_name = device.get('name')
+                    if not device_mac:
+                        flow_file.write(f"# NO TO-DEVICE EGRESS RULES FOR DEVICE {device_id}/\"{device_name}\" "
+                                        f"(micronet {micronet_id}/\"{micronet_name}\") - no MAC address defined\n")
+                        continue
 
                     flow_file.write(f"# TO-DEVICE EGRESS RULES FOR DEVICE {device_id}/\"{device_name}\" (micronet {micronet_id}/\"{micronet_name}\")\n")
                     await self.create_in_rules_for_device(OpenFlowAdapter.from_localhost_egress,
@@ -311,8 +327,11 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     async def create_out_rules_for_device(self, table, priority, in_vlan, device, outfile):
         out_rules = device.get('outRules', None)
-        device_mac = device['macAddress']['eui48']
+        device_mac = device.get('macAddress')
         device_id = device['deviceId']
+        if not device_mac:
+            logger.info(f"OpenFlowAdapter.create_out_rules_for_device:   Skipping dev {device_id} - no MAC address")
+            return
         if not out_rules:
             # Allow all data out if no out rules
             outfile.write(f"add table={table},priority={priority}, "
@@ -383,8 +402,12 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     async def create_in_rules_for_device(self, table, priority, device, outfile):
         device_id = device['deviceId']
-        device_mac = device['macAddress']['eui48']
+        device_mac = device.get('macAddress')
         device_name = device.get('name')
+        if not device_mac:
+            outfile.write(f"  # table={table},priority={priority}: No in-Rules for Device "
+                          f"{device['deviceId']}/\"{device_name}\" - no MAC address defined\n")
+            return
 
         outfile.write(f"  # table={table},priority={priority}: In-Rules for Device {device['deviceId']}/\"{device_name}\" mac {device_mac}\n")
 

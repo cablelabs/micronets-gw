@@ -40,7 +40,6 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.priv_key_file = config['NETREACH_ADAPTER_PRIVATE_KEY_FILE']
         self.wifi_interface = config['NETREACH_ADAPTER_WIFI_INTERFACE']
         self.ssid_override_file = config['NETREACH_ADAPTER_SSID_OVERRIDE_FILE']
-        self.unassigned_ssid = config['NETREACH_ADAPTER_UNASSIGNED_SSID']
         self.geolocation = config.get('NETREACH_ADAPTER_GEOLOCATION')
         self.management_address = config.get('NETREACH_ADAPTER_MAN_ADDRESS')
         self.management_interface = config.get('NETREACH_ADAPTER_MAN_INTERFACE')
@@ -467,33 +466,35 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                     device_name = device['name']
                     logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   device \"{device_name}\" ({device_id})")
                     device_enabled = device['enabled']
-                    device_mac = device['macAddress']
+                    device_mac = device.get('macAddress')
                     device_ip = device['ipAddress']
+                    device_bootstrapping_info = device.get('bootstrappingInfo')
                     device_psk_or_pass = device['passphrase'] if self.use_device_pass else device['psks'][0]
                     logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   device \"{device_name}\" "
                                 f"mac {device_mac} ip {device_ip}")
-                    if not device_mac:
-                        continue
-                    device_mac = device_mac.lower()
-                    mac_cache_entry = {"updated": int(time.time()), "serviceUuid": service_uuid,
-                                       "deviceUuid": device_id}
-                    self.device_mac_cache[device_mac] = mac_cache_entry
-                    logger.info(f"NetreachAdapter._setup_micronets_for_ap:   Adding mac cache entry for {device_mac}: "
-                                + str(mac_cache_entry))
+                    device_to_add = {
+                        "deviceId": device_id,
+                        "name": device_name,
+                        "networkAddress": {"ipv4": device_ip}
+                    }
+                    if device_mac:
+                        device_mac = device_mac.lower()
+                        device_to_add['macAddress'] = device_mac
+                        mac_cache_entry = {"updated": int(time.time()), "serviceUuid": service_uuid,
+                                           "deviceUuid": device_id}
+                        self.device_mac_cache[device_mac] = mac_cache_entry
+                        logger.info(f"NetreachAdapter._setup_micronets_for_ap:   Adding mac cache entry for {device_mac}: "
+                                    + str(mac_cache_entry))
                     if not device_psk_or_pass:
                         logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   Device {device_id} (\"{device_name}\") "
                                     f" does not have a PSK ({device_id})")
                         continue
+                    if device_bootstrapping_info:
+                        device_to_add['dppBootstrapUri'] = device_bootstrapping_info
                     if not device_enabled or not service_enabled:
                         # Poison the PSK
                         device_psk_or_pass = "DISABLED-" + str(random.getrandbits(24)) + "-" + device_psk_or_pass
-                    device_to_add = {
-                            "deviceId": device_id,
-                            "name": device_name,
-                            "macAddress": {"eui48": device_mac},
-                            "networkAddress": {"ipv4": device_ip},
-                            "psk": device_psk_or_pass
-                    }
+                    device_to_add['psk'] = device_psk_or_pass
                     micronet_devices.append(device_to_add)
 
                 micronet_device_list = {"devices": micronet_devices}
@@ -509,7 +510,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
     async def _configure_hostapd(self, ap_group):
         logger.info(f"NetreachAdapter:_configure_hostapd({ap_group})")
         if not ap_group:
-            ssid_list = [self.unassigned_ssid]
+            ssid_list = None
         else:
             ssid_list = ap_group['ssid'] if not self.ssid_override else [self.ssid_override]
 
@@ -880,6 +881,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             logger.warning(f"NetreachAdapter.handle_hostapd_cli_event: Received unknown event '{event_msg}'")
             # If we're getting here, check the pattern provided to the HostapdCLIEventHandler constructor
             return
+
 
     async def _update_device_status_and_cache(self, mac, associated, connected) -> None:
         # Note: This method must only be called on authoritative changes in local station state

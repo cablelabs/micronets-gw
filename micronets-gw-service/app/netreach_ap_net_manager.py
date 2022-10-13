@@ -259,7 +259,9 @@ class NetreachApNetworkManager:
 
             vlan_map = {}
             for connection in connections:
-                dev_mac = connection['device']['macAddress']
+                dev_mac = connection['device'].get('macAddress')
+                if not dev_mac:
+                    continue
                 vlan = connection['service']['vlan']
                 tun_name = self._tunnel_name_for_connection(connection)
                 if vlan not in vlan_map:

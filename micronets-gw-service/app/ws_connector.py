@@ -315,7 +315,7 @@ class WSConnector:
         lease_change_event = { f"{action}Event": {
             'micronetId': micronet_id,
             'deviceId': device_id,
-            'macAddress': {"eui48": mac_addr},
+            'macAddress': mac_addr,
             'networkAddress': {"ipv4": ip_addr} }
         }
         logger.info (f"WSConnector.process_dhcp_lease_event: Sending: {action}")

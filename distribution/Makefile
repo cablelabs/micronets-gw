@@ -1,6 +1,6 @@
 .PHONY: all clean distclean deb scp
 
-VERSION=1.1.7
+VERSION=1.1.8
 DIST=U18.04+
 FBASE=micronets-gw
 SDIRS=../filesystem

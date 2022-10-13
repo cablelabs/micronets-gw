@@ -154,9 +154,7 @@ Note: Currently only data type _application/json_ is supported.
 ```json
 {
     "deviceId": string,
-    "macAddress": {
-       "eui48": string
-    },
+    "macAddress": string,
     "networkAddress": {
        "ipv4": string,
        "ipv6": string
@@ -179,8 +177,7 @@ Note: Currently only data type _application/json_ is supported.
 | Property name            | Value         | Required | Description                           | Example      |
 | ------------------------ | ------------- | -------- | ------------------------------------- | ------------- 
 | deviceId                 | string        | Y        | An alphanumeric device identifier (max 64 characters) | "device-1234"|
-| macAddress               | nested object | Y        | The device MAC address
-| macAddress.eui48         | string        | Y        | An EUI-48 format MAC address | "00:23:12:0f:b0:26" |
+| macAddress               | string        | Y        | An EUI-48 format MAC address | "00:23:12:0f:b0:26" |
 | networkAddress           | nested object | Y        | The network address definition. Either **_ipv4_** or **_ipv6_** must be specified ||
 | networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | "192.168.1.42" |
 | networkAddress.ipv6      | string        | N        | The IPv6 network definition | "fe80::104c:20b6:f71a:4e55" |
@@ -336,9 +333,7 @@ Note: Currently only data type _application/json_ is supported.
 {
     "leaseChangeEvent": {
         "action": string, 
-        "macAddress": {
-            "eui48": string
-        }, 
+        "macAddress": string, 
         "networkAddress": {
             "ipv4": string,
             "ipv6": string
@@ -351,8 +346,7 @@ Note: Currently only data type _application/json_ is supported.
 | Property name            | Value         | Required | Description                           | Example      |
 | ------------------------ | ------------- | -------- | ------------------------------------- | ------------- 
 | action                   | string        | Y        | One of "leaseAcquired" or "leaseExpired" | "leaseAcquired"|
-| macAddress               | nested object | Y        | The device MAC address
-| macAddress.eui48         | string        | Y        | An EUI-48 format MAC address |          "00:23:12:0f:b0:26" |
+| macAddress               | string        | Y        | An EUI-48 format MAC address |          "00:23:12:0f:b0:26" |
 | networkAddress           | nested object | Y        | The network address definition. Either **_ipv4_** or **_ipv6_** must be specified ||
 | networkAddress.ipv4      | string        | N        | The IPv4 network definition (dotted IP) | "192.168.1.42" |
 | networkAddress.ipv6      | string        | N        | The IPv6 network definition | "fe80::104c:20b6:f71a:4e55" |
