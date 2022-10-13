@@ -123,7 +123,7 @@ class NetreachApNetworkManager:
                     continue
                 associated_ap_uuid = device['associatedApUuid']
                 if not associated_ap_uuid:
-                    # Should not happen if the dev is "connected" - it represents an error in the NR Controller
+                    # Should not happen if the dev is "associated" - it represents an error in the NR Controller
                     logger.warning(f"_determine_needed_network_connections:   Device "
                                    f"\"{device_name}\" ({device_id}) connected but doesn't have an associated AP field")
                     continue
