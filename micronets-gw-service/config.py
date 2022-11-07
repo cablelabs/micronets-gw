@@ -55,8 +55,9 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_WIFI_INTERFACE = "wlan0"
     NETREACH_ADAPTER_MAN_INTERFACE = "eth0"
     # NETREACH_ADAPTER_MAN_ADDRESS = "1.2.3.4"
-    # NETREACH_ADAPTER_GEOLOCATION = {"latitude": "0.0", "longitude": "0.0"}
+    NETREACH_ADAPTER_GEOLOCATION = {"latitude": "39.956989", "longitude": "-105.160183"}
     NETREACH_ADAPTER_SSID_OVERRIDE_FILE = libpath.joinpath('netreach-ssid-override.txt')
+    # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://dev.api.controller.netreach.in"
     NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://staging.api.controller.netreach.in"
     # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://api.controller.netreach.in"
     NETREACH_ADAPTER_API_KEY_FILE = libpath.joinpath('netreach-api-token.txt')
@@ -66,6 +67,7 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_CONN_START_DELAY_S = 2
     NETREACH_ADAPTER_CONN_RETRY_S = 10
     NETREACH_ADAPTER_USE_DEVICE_PASS = True
+    NETREACH_ADAPTER_PSK_LOOKUP_TIMEOUT_S = 4
     NETREACH_ADAPTER_PSK_CACHE_ENABLED = True
     NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S = 60
     NETREACH_ADAPTER_VXLAN_PEER_INAME_PREFIX = "nap."
@@ -155,7 +157,7 @@ class WiredGatewayConfigWithWebsocketLookup (WiredGatewayConfig):
 
 class WirelessGatewayConfig (ReferenceGatewaySettings):
     # Note: No websocket connection is setup
-    DPP_ADAPTER_ENABLED = True
+    DPP_ADAPTER_ENABLED = False
     FLOW_ADAPTER_ENABLED = True
     HOSTAPD_ADAPTER_ENABLED = True
     DEBUG = False

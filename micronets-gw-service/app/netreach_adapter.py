@@ -15,6 +15,7 @@ import logging, base64, json, httpx, re, asyncio, time, random, uuid
 
 from app import get_conf_model
 from ipaddress import IPv4Network, IPv4Address, AddressValueError, NetmaskValueError
+from collections import defaultdict
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.backends import default_backend
@@ -40,7 +41,6 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.priv_key_file = config['NETREACH_ADAPTER_PRIVATE_KEY_FILE']
         self.wifi_interface = config['NETREACH_ADAPTER_WIFI_INTERFACE']
         self.ssid_override_file = config['NETREACH_ADAPTER_SSID_OVERRIDE_FILE']
-        self.geolocation = config.get('NETREACH_ADAPTER_GEOLOCATION')
         self.management_address = config.get('NETREACH_ADAPTER_MAN_ADDRESS')
         self.management_interface = config.get('NETREACH_ADAPTER_MAN_INTERFACE')
         self.controller_base_url = config['NETREACH_ADAPTER_CONTROLLER_BASE_URL']
@@ -51,10 +51,12 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.connection_startup_delay_s = config.get('NETREACH_ADAPTER_CONN_START_DELAY_S')
         self.connection_retry_s = config.get('NETREACH_ADAPTER_CONN_RETRY_S')
         self.use_device_pass = bool(config.get('NETREACH_ADAPTER_USE_DEVICE_PASS', "False"))
+        self.psk_lookup_timeout_s = config.get('NETREACH_ADAPTER_PSK_LOOKUP_TIMEOUT_S', 0)
         self.psk_cache_enabled = bool(config.get('NETREACH_ADAPTER_PSK_CACHE_ENABLED', "True"))
         self.psk_cache_expire_s = config.get('NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S', 120)
         self.device_mtu = config.get('NETREACH_ADAPTER_DEVICE_MTU', 0)
         self.set_connected_on_associated = config['NETREACH_ADAPTER_SET_CONN_ON_ASSOC']
+        self.geolocation = config.get('NETREACH_ADAPTER_GEOLOCATION', self._get_geolocation())
         self.tunnel_man = NetreachApNetworkManager(config, self)
         self.api_token = None
         self.api_token_refresh = None
@@ -78,8 +80,6 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             logger.info(f"NetreachAdapter: Setting management address to {self.management_interface} address")
             self.management_address = ip_for_interface(self.management_interface)
         self.ssid_override = self.ssid_override_file.read_text().strip() if self.ssid_override_file.exists() else None
-        if not self.geolocation:
-            self.geolocation = self._get_geolocation()
         self.pub_key = None
         self.priv_key = None
         self.mqtt_client = None
@@ -202,13 +202,13 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                 (ap_group, ap_services, ap_service_devices) = await self._get_services_for_ap()
                 self.ap_group = ap_group
                 await self._setup_micronets_for_ap(ap_services, ap_service_devices)
+                await self._add_connected_stas_to_device_mac_cache()
                 if self.tunnel_man:
                     await self.tunnel_man.init_ap_online(str(self.ap_uuid), self.ap_group,
                                                          ap_services, ap_service_devices)
                 await self._configure_hostapd(ap_group)
             except Exception as ex:
-                logger.info(f"NetreachAdapter:_cloud_login_and_setup: Error performing controller login/setup: {ex}",
-                            exc_info=self.debug)
+                logger.info(f"NetreachAdapter:_cloud_login_and_setup: Error performing controller login/setup: {ex}")
                 logger.info(f"NetreachAdapter:_cloud_login_and_setup: Sleeping {self.connection_retry_s} seconds...")
                 await asyncio.sleep(self.connection_retry_s)
                 logger.info(f"NetreachAdapter:_cloud_login_and_setup: Retrying controller login/setup")
@@ -252,6 +252,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                                f"{response.status_code}: {response.text}")
                 raise ValueError(res_json)
             logger.info(f"NetreachAdapter:_login_to_controller: AP SUCCESSFULLY logged into NetReach Controller")
+            logger.info(f"NetreachAdapter:_login_to_controller: Login response: {json.dumps(res_json, indent=4)}")
             self.ap_uuid = uuid.UUID(res_json['uuid'])
             self.api_token = res_json['token']
             self.api_token_refresh = res_json['refresh_token']
@@ -309,61 +310,92 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             return ap_info
 
     async def _get_services_for_ap(self):
-        # Return the AP Group, a list of all the services currently configured on the AP
-        # and a dict keyed off the Service uuid mapped to an array of Device entries
+        # Return the AP Group, a list of all the services currently configured on the AP,
+        # a dict of Service Trust Domains keyed off the Service uuid, and a dict of Devices
+        # keyed off the Trust Domains uuid mapped to an array of Device entries
 
         async with httpx.AsyncClient() as httpx_client:
             # Get the AP Group(s)
             response = await httpx_client.get(f"{self.controller_base_url}/v1/ap-groups?apUuid={self.ap_uuid}",
                                               headers={"x-api-token": self.api_token})
             if response.status_code != 200:
-                logger.warning(f"NetreachAdapter._get_services_for_ap: FAILED retrieving AP list for "
-                               f"AP {self.ap_uuid} ({response.status_code}): {response.text}")
+                logger.info(f"NetreachAdapter._get_services_for_ap: could not retrieve AP group "
+                            f"for AP {self.ap_uuid} ({response.status_code}): {response.text}")
                 raise ValueError(response.status_code)
             ap_groups = response.json()['results']
             if len(ap_groups) == 0:
-                logger.info(f"NetreachAdapter:_get_services_for_ap {self.ap_name} ({self.ap_uuid}) is not assigned to an AP Group. Nothing to setup.")
+                logger.info(f"NetreachAdapter:_get_services_for_ap {self.ap_name} ({self.ap_uuid}) "
+                            f"is not assigned to an AP Group. Nothing to setup.")
             else:
                 ap_group = ap_groups[0]
-            logger.info(f"NetreachAdapter:_get_services_for_ap: AP Group \"{ap_group['name']}\" ({ap_group['uuid']})")
-
-            # Get the Services for the AP Group
+            ap_group_name = ap_group['name']
             ap_group_uuid = ap_group['uuid']
+            logger.info(f"NetreachAdapter:_get_services_for_ap: AP Group \"{ap_group_name}\" ({ap_group_uuid})")
+
+            # Get the Services and Trust Domains for the AP Group
             response = await httpx_client.get(f"{self.controller_base_url}/v1/services?apGroupUuid={ap_group_uuid}",
                                               headers={"x-api-token": self.api_token})
             if response.status_code != 200:
                 logger.warning(f"NetreachTunnelManager.get_aps_for_group: FAILED retrieving Service list for "
-                               f"AP Group \"{ap_group['name']}\" ({ap_group['uuid']}). "
+                               f"AP Group \"{ap_group_name}\" ({ap_group_uuid}). "
                                f"Returned status {response.status_code} ({response.text})")
                 raise ValueError(response.status_code)
+
             service_list = response.json()['results']
             logger.info(f"NetreachAdapter:_get_services_for_ap: Found {len(service_list)} services in AP Group "
-                        f"\"{ap_group['name']}\" ({ap_group['uuid']})")
+                        f"\"{ap_group_name}\" ({ap_group_uuid})")
 
-            # Get the Devices for each Service
-            service_device_list = {}
+            service_dict = {}
+            domain_dict = defaultdict(list)
             for service in service_list:
                 service_uuid = service['uuid']
-                service_name = service['name']
-                response = await httpx_client.get(f"{self.controller_base_url}/v1/services/{service_uuid}/devices",
-                                                  headers={"x-api-token": self.api_token})
-                if response.status_code != 200:
-                    logger.warning(f"Could not retrieve devices for service {service_name} ({service_uuid}) - "
-                                   f"Result was {response.status_code} ({response.reason_phrase})")
-                    continue
-                device_list = response.json()['results']
-                logger.info(f"NetreachAdapter:_get_services_for_ap: Found {len(device_list)} devices for service "
-                            f"\"{service_name}\" ({service_uuid})")
-                service_device_list[service_uuid] = device_list
+                service_dict[service_uuid] = service
+                service_domains = service['trustDomains']
+                logger.info(f"NetreachAdapter:_get_services_for_ap:   Service {service['name']} (uuid {service_uuid}) "
+                            f"has {len(service_domains)} Domains")
+                for domain in service_domains:
+                    domain_uuid = domain['uuid']
+                    domain_name = domain['name']
+                    domain_dict[domain_uuid] = domain
+                    logger.info(f"NetreachAdapter:_get_services_for_ap:     Domain {domain_name} (uuid {domain_uuid})")
 
-        return ap_group, service_list, service_device_list
+            # Get the Devices for the AP Group
+            response = await httpx_client.get(f"{self.controller_base_url}/v1/devices?apGroupUuid={ap_group_uuid}",
+                                              headers={"x-api-token": self.api_token})
+            if response.status_code != 200:
+                logger.warning(f"NetreachTunnelManager.get_aps_for_group: FAILED retrieving Device list for "
+                               f"AP Group \"{ap_group_name}\" ({ap_group_uuid}). "
+                               f"Returned status {response.status_code} ({response.text})")
+                raise ValueError(response.status_code)
+
+            device_list = response.json()['results']
+            logger.info(f"NetreachAdapter:_get_services_for_ap: Found {len(device_list)} devices in AP Group "
+                        f"\"{ap_group_name}\" ({ap_group_uuid})")
+
+            # Create a dict for the Devices indexed by Trust Domain UUIDs
+            device_dict = defaultdict(list)
+            for device in device_list:
+                device_domain = device['trustDomainUuid']
+                device_dict[device_domain].append(device)
+
+            # Dump the list of devices by Domain
+            for (z, device_list) in device_dict.items():
+                domain = domain_dict[z]
+                service_uuid = domain['serviceUuid']
+                service = service_dict.get(service_uuid, {"name": "NOT FOUND"})
+                logger.info(f"NetreachAdapter:_get_services_for_ap:   Trust Domain {domain['name']} "
+                            f"in Service {service['name']} has {len(device_list)} Devices")
+                for device in device_list:
+                    logger.info(f"NetreachAdapter:_get_services_for_ap:     Device {device['name']}")
+
+        return ap_group, service_dict, device_dict
 
     async def _update_ap_info(self, cur_ap_info):
         # Currently this will check/update the management address and geolocation
         cur_man_address = cur_ap_info.get('managementAddress')
         cur_geo_location = cur_ap_info.get('geolocation')
 
-        actual_geolocation = self._get_geolocation()
+        actual_geolocation = self.geolocation
 
         if cur_man_address == self.management_address and cur_geo_location == actual_geolocation:
             return
@@ -416,96 +448,115 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             logger.info(f"NetreachAdapter:_setup_micronets_for_ap:  Configuring {len(service_list)} services "
                         f"for AP Group \"{self.ap_group['name']}\" ({self.ap_group['uuid']})")
 
-            for service in service_list:
+            for (service_uuid, service) in service_list.items():
                 service_enabled = service['enabled']
-                service_uuid = service['uuid']
                 service_name = service['name']
-                micronet_subnet = IPv4Network(service['micronetSubnet'], strict=True)
-                micronet_vlan = int(service['vlan'])
-                # TODO: Replace this with gateway reference from Service object (see issue #15)
-                micronet_gateway = service['micronetGateway']
+                domain_list = service['trustDomains']
                 logger.info(f"NetreachAdapter:_setup_micronets_for_ap: Service \"{service_name}\" ({service_uuid})")
-                logger.info(f"NetreachAdapter:_setup_micronets_for_ap:  micronet id {service_uuid} vlan {micronet_vlan}")
-                if not (micronet_subnet and micronet_vlan):
-                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap: netreach Service {service_name} "
-                                f"({service_uuid}) does not have a micronet ID/vlan - SKIPPING")
-                    pass
-                micronet_subnet_addr = micronet_subnet.network_address
-                micronet_subnet_netmask = micronet_subnet.netmask
-                logger.info(f"NetreachAdapter:_setup_micronets_for_ap:    subnet {micronet_subnet} "
-                            f"({micronet_subnet_addr}/{micronet_subnet_netmask})")
-                logger.info(f"NetreachAdapter:_setup_micronets_for_ap:    micronet gateway {micronet_gateway}")
+                # TODO: Check for a micronet definition in the Service.
+                # This is the micronet-per-domain implementation
+                for domain in domain_list:
+                    domain_uuid = domain['uuid']
+                    domain_name = domain['name']
+                    # Use the micronet definition defined for the Domains, if present, or the one from the Service
+                    micronet = domain.get('micronet', service.get('micrnet'))
+                    micronet_subnet = IPv4Network(micronet['subnet'], strict=True)
+                    micronet_vlan = micronet['vlan']
+                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   Domain \"{domain_name}\" ({domain_uuid})")
+                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:     micronet id {service_uuid} vlan {micronet_vlan}")
+                    if not (micronet_subnet and micronet_vlan):
+                        logger.info(f"NetreachAdapter:_setup_micronets_for_ap: Domain \"{domain_name}\" "
+                                    f"({domain_uuid}) does not have a micronet ID/vlan - SKIPPING")
+                        pass
+                    micronet_subnet_addr = micronet_subnet.network_address
+                    micronet_subnet_netmask = micronet_subnet.netmask
+                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:     subnet {micronet_subnet} "
+                                f"({micronet_subnet_addr}/{micronet_subnet_netmask})")
 
-                micronet_to_add = {
-                    "micronet": {
-                        "micronetId": service_uuid,
-                        "name": service_name,
-                        "ipv4Network": {"network": str(micronet_subnet_addr), "mask": str(micronet_subnet_netmask),
-                                        "gateway": micronet_gateway},
-                        "interface": self.wifi_interface,
-                        "vlan": micronet_vlan,
-                        "nameservers": [micronet_gateway]
+                    micronet_gateway = micronet.get('gateway')
+                    if micronet_gateway:
+                        gw_how = "controller-assigned"
+                    else:
+                        gw_how = "self-assigned"
+                        micronet_gateway = str(micronet_subnet[1])
+                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:     gateway {micronet_gateway} ({gw_how})")
+
+                    micronet_to_add = {
+                        "micronet": {
+                            "micronetId": domain_uuid,
+                            "name": domain_name,
+                            "ipv4Network": {"network": str(micronet_subnet_addr), "mask": str(micronet_subnet_netmask),
+                                            "gateway": micronet_gateway},
+                            "interface": self.wifi_interface,
+                            "vlan": micronet_vlan,
+                            "nameservers": [micronet_gateway]
+                        }
                     }
-                }
 
-                if self.device_mtu:
-                    micronet_to_add['micronet']['mtu'] = self.device_mtu
-                logger.info(f"NetreachAdapter:_setup_micronets_for_ap: micronet: {json.dumps(micronet_to_add, indent=4)}")
-                result = await micronets_api.post(f"{self.micronets_api_prefix}/micronets",
-                                                  json=micronet_to_add)
-                if result.is_error:
-                    logger.warning(f"Could not add micronet for service \"{service_name}\" ({service_uuid}) - "
-                                   f"Result was {result.status_code} ({result.reason_phrase})")
-                    continue
-
-                nr_device_list = service_device_list[service_uuid]
-                micronet_devices = []
-
-                for device in nr_device_list:
-                    device_id = device['uuid']
-                    device_name = device['name']
-                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   device \"{device_name}\" ({device_id})")
-                    device_enabled = device['enabled']
-                    device_mac = device.get('macAddress')
-                    device_ip = device['ipAddress']
-                    device_bootstrapping_info = device.get('bootstrappingInfo')
-                    device_psk_or_pass = device['passphrase'] if self.use_device_pass else device['psks'][0]
-                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   device \"{device_name}\" "
-                                f"mac {device_mac} ip {device_ip}")
-                    device_to_add = {
-                        "deviceId": device_id,
-                        "name": device_name,
-                        "networkAddress": {"ipv4": device_ip}
-                    }
-                    if device_mac:
-                        device_mac = device_mac.lower()
-                        device_to_add['macAddress'] = device_mac
-                        mac_cache_entry = {"updated": int(time.time()), "serviceUuid": service_uuid,
-                                           "deviceUuid": device_id}
-                        self.device_mac_cache[device_mac] = mac_cache_entry
-                        logger.info(f"NetreachAdapter._setup_micronets_for_ap:   Adding mac cache entry for {device_mac}: "
-                                    + str(mac_cache_entry))
-                    if not device_psk_or_pass:
-                        logger.info(f"NetreachAdapter:_setup_micronets_for_ap:   Device {device_id} (\"{device_name}\") "
-                                    f" does not have a PSK ({device_id})")
+                    if self.device_mtu:
+                        micronet_to_add['micronet']['mtu'] = self.device_mtu
+                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap: micronet: {json.dumps(micronet_to_add, indent=4)}")
+                    result = await micronets_api.post(f"{self.micronets_api_prefix}/micronets",
+                                                      json=micronet_to_add)
+                    if result.is_error:
+                        logger.warning(f"Could not add micronet for service \"{service_name}\" ({service_uuid}) - "
+                                       f"Result was {result.status_code} ({result.reason_phrase})")
                         continue
-                    if device_bootstrapping_info:
-                        device_to_add['dppBootstrapUri'] = device_bootstrapping_info
-                    if not device_enabled or not service_enabled:
-                        # Poison the PSK
-                        device_psk_or_pass = "DISABLED-" + str(random.getrandbits(24)) + "-" + device_psk_or_pass
-                    device_to_add['psk'] = device_psk_or_pass
-                    micronet_devices.append(device_to_add)
 
-                micronet_device_list = {"devices": micronet_devices}
-                logger.info(f"NetreachAdapter:_setup_micronets_for_ap: Micronet devices for service {service_name}: \n"
-                            f"{json.dumps(micronet_device_list, indent=4)}")
-                result = await micronets_api.post(f"{self.micronets_api_prefix}/micronets/{service_uuid}/devices",
-                                                  json=micronet_device_list)
-                if result.is_error:
-                    logger.warning(f"NetreachAdapter:_setup_micronets_for_ap: Could not add micronet devices "
-                                   f"for service {service_name} ({service_uuid}) - Result was {result.reason_phrase}")
-                    continue
+                    nr_device_list = service_device_list[domain_uuid]
+                    micronet_devices = []
+
+                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap:    Devices:")
+                    for device in nr_device_list:
+                        device_id = device['uuid']
+                        device_name = device['name']
+                        logger.info(f"NetreachAdapter:_setup_micronets_for_ap:      device \"{device_name}\" ({device_id})")
+                        device_enabled = device['enabled']
+                        device_blocked = device.get('blocked')
+                        # Use the cred defined for the Device, if present, or use the cred from the Domain
+                        device_cred = device.get('networkCredential', domain.get('networkCredential'))
+                        if device_cred['type'] != "WPA2_PASSPHRASE":
+                            logger.info(f"NetreachAdapter:_setup_micronets_for_ap:      device credential type "
+                                        f"{device_cred['type']} not supported - disabling")
+                            device_psk_or_pass = None
+                        else:
+                            device_psk_or_pass = device_cred['value'] if self.use_device_pass else device['psks'][0]
+                        device_mac = device.get('macAddress') # MAC will not always be there
+                        device_ip = device['ipAddress']
+                        device_bootstrapping_info = device.get('bootstrappingInfo')
+                        logger.info(f"NetreachAdapter:_setup_micronets_for_ap:      mac {device_mac}, ip {device_ip}")
+                        device_to_add = {
+                            "deviceId": device_id,
+                            "name": device_name.strip(),
+                            "networkAddress": {"ipv4": device_ip}
+                        }
+                        if device_mac:
+                            device_mac = device_mac.lower()
+                            device_to_add['macAddress'] = device_mac
+                            mac_cache_entry = {"updated": int(time.time()), "serviceUuid": service_uuid,
+                                               "domainUuid": domain_uuid, "deviceUuid": device_id}
+                            self.device_mac_cache[device_mac] = mac_cache_entry
+                            logger.info(f"NetreachAdapter._setup_micronets_for_ap: Adding mac cache entry for {device_mac}: "
+                                        + str(mac_cache_entry))
+                        if device_bootstrapping_info:
+                            device_to_add['dppBootstrapUri'] = device_bootstrapping_info
+                        if device_enabled and service_enabled and device_psk_or_pass and not device_blocked:
+                            # Poison the PSK entry so PSK lookups for this device aren't
+                            device_to_add['psk'] = device_psk_or_pass
+                        else:
+                            device_to_add['psk'] = "DISABLED-" + str(random.getrandbits(64))
+                        micronet_devices.append(device_to_add)
+
+                    micronet_device_list = {"devices": micronet_devices}
+                    logger.info(f"NetreachAdapter:_setup_micronets_for_ap: Micronet devices for service \"{service_name}\": \n"
+                                f"{json.dumps(micronet_device_list, indent=4)}")
+                    result = await micronets_api.post(f"{self.micronets_api_prefix}/micronets/{domain_uuid}/devices",
+                                                      json=micronet_device_list)
+                    if result.is_error:
+                        logger.warning(f"NetreachAdapter:_setup_micronets_for_ap: Could not add micronet devices "
+                                       f"for service/domain \"{service_name}\"/\"{domain_name}\" ({service_uuid}/{domain_uuid}) "
+                                       f"- Result was \"{result.reason_phrase}\"")
+                        continue
 
     async def _configure_hostapd(self, ap_group):
         logger.info(f"NetreachAdapter:_configure_hostapd({ap_group})")
@@ -623,7 +674,8 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         }
 
         if not msg["event"] in event_dict:
-            raise Exception(f"No Event: {msg['event']}")
+            logger.info(f"NetreachAdapter:_handle_event_topic: Ignoring unknown event {msg['event']}")
+            return
 
         # handle the event async
         asyncio.run_coroutine_threadsafe(event_dict[msg["event"]](client, msg), self.async_event_loop)
@@ -730,19 +782,16 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"NetreachAdapter:_handle_ap_update_device({client},{message})")
         try:
             href_components = message['href'].split('/')
-            service_id = href_components[2]
-            device_id = href_components[4]
+            device_id = href_components[2]
             payload = message['payload']
             connected = payload.get("connected") if payload else None
             associated_ap_id = payload.get("associatedApUuid")
             if connected is not None:
-                logger.info(f"NetreachAdapter:_handle_ap_update_device: Device status updated for Device {device_id} "
-                            f"(Service {service_id})")
+                logger.info(f"NetreachAdapter:_handle_ap_update_device: Device status updated for Device {device_id}")
                 await self._refresh_all_services()
                 # await self.tunnel_man.update_ap_network_for_device(device_id, service_id, connected, associated_ap_id)
             else:
-                logger.info(f"NetreachAdapter:_handle_ap_update_device: Device record updated for Device {device_id} "
-                            f" (Service {service_id})")
+                logger.info(f"NetreachAdapter:_handle_ap_update_device: Device record updated for Device {device_id}")
                 await self._refresh_all_services()
             # TODO: Move failure/success reporting
             # Report Success
@@ -819,17 +868,18 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
         try:
             # Perform the actual lookup of the PSK with the cloud
+            logger.info(f"NetreachAdapter.lookup_psk_for_device: Invoking PSK lookup on controller")
             result = httpx.post(f"{self.controller_base_url}/v1/psks/psk-lookup",
                                 headers={"x-api-token": self.api_token},
-                                json=psk_lookup_fields)
+                                json=psk_lookup_fields, timeout=self.psk_lookup_timeout_s)
             logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup {'FAILED' if result.is_error else 'SUCCEEDED'}")
             logger.info(f"NetreachAdapter.lookup_psk_for_device: PSK lookup response: {result.text}")
             headers_to_pass = {k: result.headers[k] for k in result.headers.keys() & {"content-type"}}
         except Exception as e:
-            return {"detail": f"Unexpected error performing PSK lookup on controller: {str(e)}"}, 500
+            return {"detail": f"Error performing PSK lookup on controller: {str(e)}"}, 500
 
         if self.psk_cache_enabled:
-            # If result is 200, response will have "psk', "vlan", "deviceUuid", and "serviceUuid"
+            # If result is 200, response will have "psk', "vlan", "deviceUuid", "domainUuid", and "serviceUuid"
             psk_entry = {"count": 1, "createTime": int(time.time()), "pskFound": not result.is_error,
                          "lookupResultCode": result.status_code, "lookupResult": result.text,
                          "headers": headers_to_pass}
@@ -837,12 +887,16 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         logger.info(f"NetreachAdapter.lookup_psk_for_device: Passing headers: {headers_to_pass}")
 
         if not result.is_error:
-            response_json = result.json()
-            cache_entry = {"updated": int(time.time()),
-                           "serviceUuid": response_json['serviceUuid'],
-                           "deviceUuid": response_json['deviceUuid']}
-            self.device_mac_cache[sta_mac] = cache_entry
-            logger.info(f"NetreachAdapter.lookup_psk_for_device: Adding mac cache entry for {sta_mac}: {cache_entry}")
+            try:
+                response_json = result.json()
+                cache_entry = {"updated": int(time.time()),
+                               "serviceUuid": response_json['serviceUuid'],
+                               "domainUuid": response_json['domainUuid'],
+                               "deviceUuid": response_json['deviceUuid']}
+                self.device_mac_cache[sta_mac] = cache_entry
+                logger.info(f"NetreachAdapter.lookup_psk_for_device: Adding mac cache entry for {sta_mac}: {cache_entry}")
+            except Exception as e:
+                return {"detail": f"Error processing PSK response: {str(e)}"}, 500
 
         return (result.text, result.status_code, headers_to_pass)
 
@@ -882,7 +936,6 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             # If we're getting here, check the pattern provided to the HostapdCLIEventHandler constructor
             return
 
-
     async def _update_device_status_and_cache(self, mac, associated, connected) -> None:
         # Note: This method must only be called on authoritative changes in local station state
         #       i.e. This should only be called when a device is known to transition from CONNECTED to DISCONNECTED
@@ -894,6 +947,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
                            "in device-to-mac cache")
             return
         service_id = mac_cache_entry['serviceUuid']
+        domain_id = mac_cache_entry['domainUuid']
         device_id = mac_cache_entry['deviceUuid']
 
         logger.info(f"NetreachAdapter._update_device_status_and_cache: Found device {device_id} for {mac} "
@@ -901,39 +955,40 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
         # The associated device cache is for devices associated with this AP
         if associated:
-            cache_entry = {"deviceUuid": device_id, "serviceUuid": service_id, "connectedTime": int(time.time())}
+            cache_entry = {"deviceUuid": device_id, "domainUuid": domain_id, "connectedTime": int(time.time())}
             self.associated_devices[mac] = cache_entry
         else:
             if self.associated_devices.get(mac):
                 del self.associated_devices[mac]
 
         # Now update the Device on the controller
-        async with httpx.AsyncClient() as httpx_client:
-            device_patch = {"associated": associated, "connected": connected}
-            result = await httpx_client.patch(f"{self.controller_base_url}/v1/services/{service_id}/devices/{device_id}",
-                                              headers={"x-api-token": self.api_token},
-                                              json=device_patch)
-            if result.is_error:
-                logger.warning(f"NetreachAdapter._update_device_status_and_cache: Could not update status of Device "
-                               f"{device_id} in Service {service_id} to {device_patch} on NetReach Controller: "
-                               f"{result.reason_phrase} ({result.status_code})")
-            else:
-                logger.info("NetreachAdapter._update_device_status_and_cache: Updated controller status of Device "
-                            f"{device_id} in Service {service_id} to {device_patch}")
+        if device_id:
+            async with httpx.AsyncClient() as httpx_client:
+                device_patch = {"associated": associated, "connected": connected}
+                result = await httpx_client.patch(f"{self.controller_base_url}/v1/devices/{device_id}",
+                                                  headers={"x-api-token": self.api_token},
+                                                  json=device_patch)
+                if result.is_error:
+                    logger.warning(f"NetreachAdapter._update_device_status_and_cache: Could not update status of Device "
+                                   f"{device_id} in Domain/Service {domain_id}/{service_id} to {device_patch}: "
+                                   f"{result.reason_phrase} ({result.status_code})")
+                else:
+                    logger.info("NetreachAdapter._update_device_status_and_cache: Updated controller status of Device "
+                                f"{device_id} in Domain/Service {domain_id}/{service_id} to {device_patch}")
 
-    def get_associated_devices(self, service_uuid=None):
-        if service_uuid is None:
+    def get_associated_devices(self, domain_id=None):
+        if domain_id is None:
             return self.associated_devices
         connected_devs = {}
         for mac, entry in self.associated_devices.items():
-            if entry['serviceUuid'] == service_uuid:
+            if entry['domainUuid'] == domain_id:
                 connected_devs[mac] = entry
         return connected_devs
 
-    def dump_associated_devices(self, service_uuid=None, prefix="") -> str:
+    def dump_associated_devices(self, domain_id=None, prefix="") -> str:
         strcat = ""
         for mac, entry in self.associated_devices.items():
-            if service_uuid and entry['serviceUuid'] != service_uuid:
+            if domain_id and entry['domainUuid'] != domain_id:
                 continue
             strcat += f"{prefix}{mac}: {entry}\n"
         return strcat

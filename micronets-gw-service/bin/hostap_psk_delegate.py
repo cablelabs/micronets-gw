@@ -9,6 +9,7 @@ import json
 LOOKUP_URL_BASE = "http://localhost:5000"
 LOOKUP_URL_PATH = "/gateway/v1/netreach/psk-lookup"
 LOOKUP_URL = LOOKUP_URL_BASE + LOOKUP_URL_PATH
+LOOKUP_TIMEOUT_S = 5
 
 # Some basic config
 DELEGATE_BIN_DIR = pathlib.Path(__file__).parent.resolve()
@@ -103,7 +104,7 @@ async def main():
 
     headers = { "x-api-token": api_token}
     logger.debug(f"headers: {headers}")
-    async with aiohttp.ClientSession(headers=headers) as session:
+    async with aiohttp.ClientSession(headers=headers, read_timeout=LOOKUP_TIMEOUT_S) as session:
       async with session.post(LOOKUP_URL, json=psk_data) as resp:
         logger.debug(f"Response code of psk lookup: {resp.status}")
         resp_body = await resp.read()

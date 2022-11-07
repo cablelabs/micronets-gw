@@ -62,12 +62,15 @@ class NetreachApNetworkManager:
         # TODO: Enable via diagnostics
         for connection in needed_connections:
             dev = connection['device']
+            domain = connection['domain']
             serv = connection['service']
             ap = connection['accessPoint']
+            # If Domain has micronet, use it. Otherwise use the Service micronet
+            micronet = domain.get('micronet', serv.get('micronet'))
             tun_name = self._tunnel_name_for_connection(connection)
             logger.info(f"update_ap_network():  {tun_name} to {ap['name']} ({ap['managementAddress']}) "
-                        f"for Dev {dev['name']} ({short_uuid(dev['uuid'])}) in Service {serv['name']} "
-                        f"({short_uuid(serv['uuid'])}) with vlan {serv['vlan']}")
+                        f"for Dev {dev['name']} ({short_uuid(dev['uuid'])}) in Service/Domain {serv['name']}/{domain['name']} "
+                        f"({short_uuid(serv['uuid'])}) with vlan {micronet['vlan']}")
 
         missing_connections = await self._determine_missing_connections(needed_connections, existing_tun_names)
         logger.info(f"update_ap_network(): {len(missing_connections)} MISSING connections:")
@@ -89,57 +92,64 @@ class NetreachApNetworkManager:
         # TODO
 
     async def _determine_needed_network_connections(self, service_list, service_device_list) -> []:
+        # service_list is a dict of Services keyed on service UUID (each service has a trustDomain array)
+        # service_device_list is a dict of device lists keyed on trust domain UUID
         # Return a list of needed network connections
         # logger.info(f"_determine_needed_network_connections: Connected devices:")
         # logger.info(self.netreach_adapter.dump_connected_devices(prefix="       "))
         needed_connection_list = []
         ap_list = None
-        for service in service_list:
+        for (service_uuid, service) in service_list.items():
             service_enabled = service['enabled']
-            service_uuid = service['uuid']
             service_name = service['name']
             if not service_enabled:
                 logger.info(f"_determine_needed_network_connections: "
                             f"Service  \"{service_name}\" ({service_uuid}) is disabled - skipping it")
                 continue
-            local_devices_in_service = self.netreach_adapter.get_associated_devices(service_uuid)
-            if len(local_devices_in_service) == 0:
-                logger.info(f"_determine_needed_network_connections: no local devices "
-                            f"in Service \"{service_name}\" ({service_uuid}) - skipping it")
-                continue
-            logger.info(f"_determine_needed_network_connections: AP has "
-                        f"{len(local_devices_in_service)} connected devices "
-                        f"in Service \"{service_name}\" ({service_uuid}) - Setting up inter-AP connections")
-            # Assert: This AP has at least one Device from the service directly connected
-            # Determine if there are Devices in this service connected to other APs
-            nr_device_list = service_device_list[service_uuid]
-            for device in nr_device_list:
-                device_id = device['uuid']
-                device_name = device['name']
-                device_associated = device['associated']
-                if not device_associated:
-                    logger.debug(f"_determine_needed_network_connections:   Device "
-                                 f"\"{device_name}\" ({device_id}) isn't associated - skipping it")
+            domain_list = service['trustDomains']
+            for domain in domain_list:
+                domain_uuid = domain['uuid']
+                domain_name = domain['name']
+                local_devices_in_domain = self.netreach_adapter.get_associated_devices(domain_uuid)
+                if len(local_devices_in_domain) == 0:
+                    logger.info(f"_determine_needed_network_connections: no local devices "
+                                f"in Domain \"{domain_name}\" ({domain_uuid}) - skipping it")
                     continue
-                associated_ap_uuid = device['associatedApUuid']
-                if not associated_ap_uuid:
-                    # Should not happen if the dev is "connected" - it represents an error in the NR Controller
-                    logger.warning(f"_determine_needed_network_connections:   Device "
-                                   f"\"{device_name}\" ({device_id}) connected but doesn't have an associated AP field")
-                    continue
-                if associated_ap_uuid == self.ap_uuid:
-                    logger.debug(f"_determine_needed_network_connections:   "
-                                 f"Device \"{device_name}\" ({device_id}) is connected locally - skipping it")
-                    continue
-                # Assert: device is connected to a non-local AP (and we have local devices in the same service)
-                logger.info(f"_determine_needed_network_connections:   "
-                            f"Connection required for Device \"{device_name}\" ({device_id}) "
-                            f"on AP {associated_ap_uuid}")
-                if not ap_list:  # Only get the ap list if/when needed
-                    ap_list = await self._get_ap_list_for_apgroup(self.ap_group_uuid)
-                connection_entry = {"device": device, "service": service, "accessPoint": ap_list[associated_ap_uuid]}
-                # logger.info(f"_determine_needed_network_connections:     {json.dumps(connection_entry, indent=4)}")
-                needed_connection_list.append(connection_entry)
+                logger.info(f"_determine_needed_network_connections: AP has "
+                            f"{len(local_devices_in_domain)} connected devices "
+                            f"in Domain \"{domain_name}\" ({domain_uuid}) of "
+                            f"Service \"{service_name}\" ({service_uuid}) - SETTING UP inter-AP connections")
+                # Assert: This AP has at least one Device from the service directly connected
+                # Determine if there are Devices in this service connected to other APs
+                nr_device_list = service_device_list[domain_uuid]
+                for device in nr_device_list:
+                    device_id = device['uuid']
+                    device_name = device['name']
+                    device_associated = device['associated']
+                    if not device_associated:
+                        logger.debug(f"_determine_needed_network_connections:   Device "
+                                     f"\"{device_name}\" ({device_id}) isn't associated - skipping it")
+                        continue
+                    associated_ap_uuid = device['associatedApUuid']
+                    if not associated_ap_uuid:
+                        # Should not happen if the dev is "connected" - it represents an error in the NR Controller
+                        logger.warning(f"_determine_needed_network_connections:   Device "
+                                       f"\"{device_name}\" ({device_id}) connected but doesn't have an associated AP field")
+                        continue
+                    if associated_ap_uuid == self.ap_uuid:
+                        logger.debug(f"_determine_needed_network_connections:   "
+                                     f"Device \"{device_name}\" ({device_id}) is connected locally - skipping it")
+                        continue
+                    # Assert: device is connected to a non-local AP (and we have local devices in the same service)
+                    logger.info(f"_determine_needed_network_connections:   "
+                                f"Connection required for Device \"{device_name}\" ({device_id}) "
+                                f"on AP {associated_ap_uuid}")
+                    if not ap_list:  # Only get the ap list if/when needed
+                        ap_list = await self._get_ap_list_for_apgroup(self.ap_group_uuid)
+                    connection_entry = {"device": device, "domain": domain, "service": service,
+                                        "accessPoint": ap_list[associated_ap_uuid]}
+                    # logger.info(f"_determine_needed_network_connections:     {json.dumps(connection_entry, indent=4)}")
+                    needed_connection_list.append(connection_entry)
         return needed_connection_list
 
     async def _get_open_tunnel_names(self) -> {str}:
@@ -199,19 +209,26 @@ class NetreachApNetworkManager:
             if tun_name in tunnels_added:
                 continue
             dev = connection['device']
+            domain = connection['domain']
             serv = connection['service']
             ap = connection['accessPoint']
+            # If Domain has micronet, use it. Otherwise use the Service micronet
+            micronet = domain.get('micronet', serv.get('micronet'))
             logger.info (f"_setup_network_connections():  Connecting {tun_name} to AP {ap['name']} "
                          f"(@{ap['managementAddress']}) "
                          f"for Dev {dev['name']} ({short_uuid(dev['uuid'])}) in Service {serv['name']} "
-                         f"({short_uuid(serv['uuid'])}) with vlan {serv['vlan']}")
+                         f"({short_uuid(serv['uuid'])}) with vlan {micronet['vlan']}")
             await self._setup_tunnel_for_connection(connection)
             tunnels_added.add(tun_name)
 
     async def _setup_tunnel_for_connection(self, connection) -> str:
         vxlan_port_name = self._tunnel_name_for_connection(connection)
         ap_addr = connection['accessPoint']['managementAddress']
-        conn_key = connection['service']['vlan']
+        # If Domain has micronet, use it. Otherwise use the Service micronet
+        service = connection['service']
+        domain = connection['domain']
+        micronet = domain.get('micronet', service.get('micronet'))
+        conn_key = micronet['vlan']
         run_cmd = self.vxlan_connect_cmd.format (**{"vxlan_net_bridge": self.vxlan_net_bridge,
                                                     "vxlan_port_name": vxlan_port_name,
                                                     "remote_vxlan_host": ap_addr,
@@ -262,7 +279,10 @@ class NetreachApNetworkManager:
                 dev_mac = connection['device'].get('macAddress')
                 if not dev_mac:
                     continue
-                vlan = connection['service']['vlan']
+                domain = connection['domain']
+                service = connection['service']
+                micronet = domain.get('micronet', service.get('micronet'))
+                vlan = micronet['vlan']
                 tun_name = self._tunnel_name_for_connection(connection)
                 if vlan not in vlan_map:
                     # We only need one of these rules per VLAN
@@ -322,5 +342,9 @@ class NetreachApNetworkManager:
 
     def _tunnel_name_for_connection(self, connection) -> str:
         ap_uuid = connection['accessPoint']['uuid']
-        vlan = connection['service']['vlan']
+        service = connection['service']
+        domain = connection['domain']
+        # If Domain has micronet, use it. Otherwise use the Service micronet
+        micronet = domain.get('micronet', service.get('micronet'))
+        vlan = micronet['vlan']
         return self.vxlan_port_format.format(**{"ap_uuid": ap_uuid, "short_ap_id": ap_uuid[-6:], "vlan": vlan})
