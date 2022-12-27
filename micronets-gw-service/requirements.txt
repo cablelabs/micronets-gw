@@ -50,6 +50,6 @@ Quart==0.6.6
     MarkupSafe==1.1.1
   multidict==4.5.2
   sortedcontainers==2.1.0
-setuptools==40.6.3
+setuptools==65.5.1
 websockets==5.0.1
 wheel==0.32.3
