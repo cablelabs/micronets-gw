@@ -69,7 +69,7 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_USE_DEVICE_PASS = True
     NETREACH_ADAPTER_PSK_LOOKUP_TIMEOUT_S = 4
     NETREACH_ADAPTER_PSK_CACHE_ENABLED = True
-    NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S = 60
+    NETREACH_ADAPTER_PSK_CACHE_EXPIRE_S = 30
     NETREACH_ADAPTER_VXLAN_PEER_INAME_PREFIX = "nap."
     NETREACH_ADAPTER_VXLAN_PEER_INAME_FORMAT = "nap.{short_ap_id}.{vlan:x}"
     NETREACH_ADAPTER_VXLAN_NET_BRIDGE = "brhapd"
@@ -157,7 +157,7 @@ class WiredGatewayConfigWithWebsocketLookup (WiredGatewayConfig):
 
 class WirelessGatewayConfig (ReferenceGatewaySettings):
     # Note: No websocket connection is setup
-    DPP_ADAPTER_ENABLED = False
+    DPP_ADAPTER_ENABLED = True
     FLOW_ADAPTER_ENABLED = True
     HOSTAPD_ADAPTER_ENABLED = True
     DEBUG = False
