@@ -13,6 +13,8 @@ import pathlib
 lease_notifiction_host = "localhost:5000"
 lease_notification_method = "PUT"
 lease_notification_path = "/gateway/v1/dhcp-leases"
+# Define the path to the named pipe
+fifo_path = "/var/run/diplomat/leases"
 
 bindir = os.path.dirname (os.path.abspath (sys.argv [0]))
 logging_filename = pathlib.Path(bindir).parent.joinpath("micronets-gw.log")
@@ -59,6 +61,9 @@ if __name__ == '__main__':
         exit (0)
     if action == "add":
         lease_change_type = 'leaseAcquired'
+        # Open the named pipe for writing
+        with open(fifo_path, 'w') as fifo:
+            fifo.write(mac_address)
     elif action == "del":
         lease_change_type = "leaseExpired"
     lease_change_event = {"leaseChangeEvent": {
