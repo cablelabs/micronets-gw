@@ -57,8 +57,8 @@ class NetreachDefaultSettings():
     # NETREACH_ADAPTER_MAN_ADDRESS = "1.2.3.4"
     NETREACH_ADAPTER_GEOLOCATION = {"latitude": "39.956989", "longitude": "-105.160183"}
     NETREACH_ADAPTER_SSID_OVERRIDE_FILE = libpath.joinpath('netreach-ssid-override.txt')
-    # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://dev.api.controller.netreach.in"
-    NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://staging.api.controller.netreach.in"
+    NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://dev.api.controller.netreach.in"
+    # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://staging.api.controller.netreach.in"
     # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://api.controller.netreach.in"
     NETREACH_ADAPTER_API_KEY_FILE = libpath.joinpath('netreach-api-token.txt')
     NETREACH_ADAPTER_API_KEY_REFRESH_DAYS = 500

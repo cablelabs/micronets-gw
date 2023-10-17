@@ -890,12 +890,13 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             try:
                 response_json = result.json()
                 cache_entry = {"updated": int(time.time()),
-                               "serviceUuid": response_json['serviceUuid'],
-                               "domainUuid": response_json['domainUuid'],
+                               "serviceUuid": response_json.get('serviceUuid'),
+                               "domainUuid": response_json.get('trustDomainUuid'),
                                "deviceUuid": response_json['deviceUuid']}
                 self.device_mac_cache[sta_mac] = cache_entry
                 logger.info(f"NetreachAdapter.lookup_psk_for_device: Adding mac cache entry for {sta_mac}: {cache_entry}")
             except Exception as e:
+                logger.warn(f"NetreachAdapter.lookup_psk_for_device: Caught exception creating PSK entry for {sta_mac}: {str(e)}")
                 return {"detail": f"Error processing PSK response: {str(e)}"}, 500
 
         return (result.text, result.status_code, headers_to_pass)
