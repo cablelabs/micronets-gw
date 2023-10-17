@@ -121,7 +121,7 @@ ovs-ofctl add-flow brhapd "table=0, priority=200, in_port=1, actions=output:hapo
 #  TODO: Make the Micronets agent perform these steps dynamically
 echo "Enabling iptables NAT..."
 
-for subnet in {1..35}; do
+for subnet in {1..255}; do
   config_address_for_bridge brmn001 10.0.${subnet}.0/24 10.0.${subnet}.1/24
 done
 
