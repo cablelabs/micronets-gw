@@ -77,9 +77,6 @@ def get_dpp_adapter():
 def get_netreach_adapter():
     return netreach_adapter
 
-if not 'DHCP_ADAPTER' in app.config:
-    exit (f"A DHCP_ADAPTER must be defined in the selected configuration ({app.config})")
-
 subscriber_id = app.config.get('SUBSCRIBER_ID')
 
 gateway_id = app.config.get('GATEWAY_ID')
@@ -104,19 +101,18 @@ else:
 
 dhcp_adapter = None
 adapter = app.config.get('DHCP_ADAPTER')
-if not adapter:
-    exit ("Missing DHCP_ADAPTER setting in config")
-adapter = adapter.upper()
-if adapter == "ISCDHCP":
-    from .isc_dhcpd_adapter import IscDhcpdAdapter
-    logger.info ("Using ISC DHCP adapter")
-    dhcp_adapter = IscDhcpdAdapter (app.config)
-elif adapter == "DNSMASQ":
-    from .dnsmasq_adapter import DnsMasqAdapter
-    logger.info ("Using DNSMASQ adapter")
-    dhcp_adapter = DnsMasqAdapter (app.config)
-else:
-    exit (f"Unrecognized DHCP_ADAPTER type ({adapter})")
+if adapter:
+    adapter = adapter.upper()
+    if adapter == "ISCDHCP":
+        from .isc_dhcpd_adapter import IscDhcpdAdapter
+        logger.info ("Using ISC DHCP adapter")
+        dhcp_adapter = IscDhcpdAdapter (app.config)
+    elif adapter == "DNSMASQ":
+        from .dnsmasq_adapter import DnsMasqAdapter
+        logger.info ("Using DNSMASQ adapter")
+        dhcp_adapter = DnsMasqAdapter (app.config)
+    else:
+        exit (f"Unrecognized DHCP_ADAPTER type ({adapter})")
 
 
 from .ws_connector import WSConnector

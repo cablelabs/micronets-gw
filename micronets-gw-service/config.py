@@ -42,7 +42,7 @@ class ReferenceGatewaySettings (BaseConfigSettings):
     DNSMASQ_ADAPTER_RESTART_COMMAND = ['sudo', 'systemctl', 'restart', 'dnsmasq.service']
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {command_file}'
     FLOW_ADAPTER_APPLY_RULES_COMMAND = '/usr/bin/ovs-ofctl add-groups {ovs_bridge} {command_file}'
-    HOSTAPD_CLI_PATH = '/opt/micronets-hostapd/bin/hostapd_cli'
+    HOSTAPD_CLI_PATH = '/var/run/hostapd/wlan0'
     HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
 
 class NetreachDefaultSettings():
@@ -55,9 +55,11 @@ class NetreachDefaultSettings():
     NETREACH_ADAPTER_WIFI_INTERFACE = "wlan0"
     NETREACH_ADAPTER_MAN_INTERFACE = "eth0"
     # NETREACH_ADAPTER_MAN_ADDRESS = "1.2.3.4"
-    NETREACH_ADAPTER_GEOLOCATION = {"latitude": "39.956989", "longitude": "-105.160183"}
+#    NETREACH_ADAPTER_GEOLOCATION = {"latitude": "39.956989", "longitude": "-105.160183"}
+    NETREACH_ADAPTER_GEOLOCATION = {"latitude": "45.558974", "longitude": "-122.846488"}
     NETREACH_ADAPTER_SSID_OVERRIDE_FILE = libpath.joinpath('netreach-ssid-override.txt')
-    NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://dev.api.controller.netreach.in"
+    # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://dev.api.controller.netreach.in"
+    NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://zto-controller.naaplab.cablelabs.com"
     # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://staging.api.controller.netreach.in"
     # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://api.controller.netreach.in"
     NETREACH_ADAPTER_API_KEY_FILE = libpath.joinpath('netreach-api-token.txt')
@@ -195,3 +197,12 @@ class NetreachDebugConfigNoLogFile (WirelessGatewayDebugConfig, NetreachDefaultS
 class DefaultConfig (NetreachDebugConfig):
     pass
 
+class HostapdOnly(BaseConfigSettings):
+    LISTEN_HOST = "127.0.0.1"
+    LISTEN_PORT = 5000
+    DHCP_ADAPTER = False
+    HOSTAPD_ADAPTER_ENABLED = True
+    HOSTAPD_CLI_PATH = '/var/run/hostapd/wlan0'
+    HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
+    LOGGING_LEVEL = logging.DEBUG
+    LOGFILE_PATH = None

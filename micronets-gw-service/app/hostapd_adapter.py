@@ -1,35 +1,36 @@
 import asyncio
 import logging
 import locale
-import subprocess
-import threading
+import os
 import traceback
 import re
 import netaddr
+import socket
 from queue import Queue, Empty
-from subprocess import Popen, PIPE
 from ipaddress import IPv4Network, IPv4Address
 from pathlib import Path
 
 logger = logging.getLogger ('hostapd_adapter')
 
+
 class HostapdAdapter:
 
-    cli_event_re = re.compile ('^.*<([0-9]+)>(.+)$')
-    cli_ready_re = re.compile ('Connection.*established|Interactive mode')
+    cli_event_re = re.compile ('^<([0-9]+)>(.+)$')
 
-    def __init__ (self, hostapd_psk_path, hostapd_cli_path, hostapd_cli_args=()):
+    def __init__ (self, hostapd_psk_path, hostapd_cli_path):
+        self.event_loop = asyncio.get_event_loop()
         self.event_handler_table = []
         self.hostapd_psk_path = Path(hostapd_psk_path) if hostapd_psk_path else None
         self.hostapd_cli_path = Path(hostapd_cli_path) if hostapd_cli_path else None
-        self.hostapd_cli_args = hostapd_cli_args
-        self.hostapd_cli_process = None
+        self.hostapd_socket = None
+        self.hostapd_max_response = 4096
+        self.hostapd_read_timeout = 60
         self.process_reader_thread = None
         self.command_queue = None
-        self.event_loop = None
         self.cli_connected = False
         self.cli_ready = False
         self.status_vars = None
+        self.local_sock = f'/tmp/mn-wpactrl-{os.getpid()}'
 
     class HostapdCLIEventHandler:
         def __init__ (self, event_prefixes):
@@ -63,7 +64,7 @@ class HostapdAdapter:
             logger.info(f"HostapdAdapter.update: No PSK file configured, so nothing to do")
 
         with self.hostapd_psk_path.open ('w') as outfile:
-            logger.info (f"HostapdAdapter.update: Writing PSKs to {self.hostapd_psk_path.absolute ()}")
+            logger.info (f"HostapdAdapter.update: Writing PSKs to {self.hostapd_psk_path.absolute()}")
             outfile.write ("# THIS WPA-PSK FILE IS MANAGED BY THE MICRONETS GATEWAY SERVICE\n\n")
             outfile.write ("# MODIFICATIONS TO THIS FILE WILL BE OVER-WRITTEN\n\n")
             for micronet_id, devices in device_lists.items ():
@@ -119,6 +120,12 @@ class HostapdAdapter:
         else:
             logger.warning(f"HostapdAdapter.update: Could not issue PSK reload (CLI not ready)")
 
+    def local_socket_path(self):
+        if not self.local_sock:
+            self.local_sock = '/tmp/wpactrl-{}-{}'.format(
+                os.getpid(), self.SOCKETS_COUNT + 1)
+        return self.local_sock
+
     async def connect(self):
         logger.info(f"HostapdAdapter:connect()")
         if self.cli_connected:
@@ -127,17 +134,19 @@ class HostapdAdapter:
         if not self.hostapd_cli_path:
             logger.info(f"HostapdAdapter:connect: hostapd_cli_path not set - returning")
             return
-        self.event_loop = asyncio.get_event_loop ()
-        self.command_queue = Queue()  # https://docs.python.org/3.6/library/queue.html
-        logger.info(f"HostapdAdapter:connect: Running {self.hostapd_cli_path} {self.hostapd_cli_args}")
 
-        self.hostapd_cli_process = Popen([self.hostapd_cli_path, *self.hostapd_cli_args],
-                                         shell=False, bufsize=1,
-                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.hostapd_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        self.hostapd_socket.bind(self.local_sock)
+        # self.hostapd_socket.settimeout(self.hostapd_read_timeout)
+        self.hostapd_socket.connect(str(self.hostapd_cli_path))
         self.cli_connected = True
-        self.process_reader_thread = threading.Thread(target=self.read_cli_output)
-        self.process_reader_thread.start()
-        logger.info(f"HostapdAdapter:connect: Reader thread started")
+        logger.info(f"HostapdAdapter:connect: Connected socket to {self.hostapd_cli_path}")
+
+        self.command_queue = Queue()  # https://docs.python.org/3.6/library/queue.html
+        self.event_loop.create_task(self.read_cli_output())
+        logger.info(f"HostapdAdapter:connect: Reader task started")
+        await self.send_command(self.StartEventsCommand())
+
 
     def is_cli_connected(self):
         return self.cli_connected
@@ -145,55 +154,38 @@ class HostapdAdapter:
     def is_cli_ready(self):
         return self.cli_ready
 
-    def read_cli_output(self):
+    async def read_cli_output(self):
         response_data = None
         self.command_queue = Queue()
+        self.cli_ready = True
         logger.info(f"HostapdAdapter:read_cli_output: Started")
         command = None
         while True:
             try:
-                # https://docs.python.org/3/library/io.html
-
-                # logger.debug(f"HostapdAdapter:read_cli_output: Waiting on stdout.readline()...")
-                data = self.hostapd_cli_process.stdout.readline()
+                logger.debug(f"HostapdAdapter:read_cli_output: Waiting for data on {str(self.hostapd_cli_path)}...")
+                data = await self.event_loop.sock_recv(self.hostapd_socket, self.hostapd_max_response)
                 if not data:
-                    logger.info(f"HostapdAdapter:read_cli_output: Got EOF from hostapd_cli - exiting")
+                    logger.info(f"HostapdAdapter:read_cli_output: Got EOF from hostapd_cli - exiting read loop")
                     break
-                line = data.decode("utf-8")
-                if len(line) == 0:
+                response = data.decode("utf-8")
+                if len(response) == 0:
                     continue
-                logger.debug(f"HostapdAdapter:read_cli_output: \"{line[:-1]}\"")
-                if not self.cli_ready and self.cli_ready_re.match(line):
-                    logger.info(f"HostapdAdapter:read_cli_output: hostapd CLI is now READY")
-                    self.cli_ready = True
-                    asyncio.run_coroutine_threadsafe(self._process_hostapd_ready(), self.event_loop)
-                cli_event_match = HostapdAdapter.cli_event_re.match(line)
-                if cli_event_match:
-                    event_data = cli_event_match.group(2).strip()
-                    asyncio.run_coroutine_threadsafe(self._process_hostapd_event(event_data), self.event_loop)
+                logger.debug(f"HostapdAdapter:read_cli_output: \"{response[:-1]}\"")
+                event_match = HostapdAdapter.cli_event_re.match(response)
+                if event_match:
+                    interface_index = int(event_match.group(1))
+                    event_data = event_match.group(2).strip()
+                    self.event_loop.create_task(self._process_hostapd_event(event_data))
                     continue
                 if not command:
-                    response_data = None
                     try:
                         command = self.command_queue.get(block=False)
                     except Empty:
                         command = None
                 if command:
-                    if response_data is None:
-                        # Don't store the first line - which contains the command (start aggregating on the next line)
-                        response_data = ""
-                        continue
-                    response_data += line
-                    pos = response_data.find("> ")
-                    if pos >= 0:
-                        # logger.debug (f"HostapdAdapter:read_cli_output: aggregate response_data: {response_data}")
-                        command_type = type(command).__name__
-                        complete_response = response_data[:pos].rstrip()
-                        logger.debug (f"HostapdAdapter:read_cli_output: Found command response for {command}: {complete_response}")
-                        asyncio.run_coroutine_threadsafe(command.process_response_data(complete_response), 
-                                                         command.event_loop)
-                        response_data = None
-                        command = None
+                    logger.debug (f"HostapdAdapter:read_cli_output: Found command response for {command}: {response}")
+                    self.event_loop.create_task(command.process_response_data(response))
+                    command = None
             except Exception as ex:
                 logger.warning(f"HostapdAdapter:read_cli_output: Error processing data: {ex}", exc_info=True)
         self.cli_connected = False
@@ -258,15 +250,11 @@ class HostapdAdapter:
     async def send_command(self, command):
         if not isinstance(command, HostapdAdapter.HostapdCLICommand):
             raise TypeError
-        if not self.cli_ready:
-            raise Exception("hostapd adapter CLI is not ready")
         self.command_queue.put(command)
         command_string = command.get_command_string()
         logger.info (f"HostapdAdapter:send_command: issuing command: {command}")
-        # Put 2 newlines on the end to force a newline on the output
-        command_string = command_string + "\n\n"
-        self.hostapd_cli_process.stdin.write(command_string.encode())
-        self.hostapd_cli_process.stdin.flush()
+        # command_string = command_string + "\n"
+        self.hostapd_socket.send(command_string.encode())
 
         return command
 
@@ -291,13 +279,26 @@ class HostapdAdapter:
                 compound_command = " " + compound_command
             return compound_command
 
-
     class HelpCLICommand(HostapdCLICommand):
         def __init__ (self, event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
 
         def get_command_string(self):
             return "help"
+
+    class StartEventsCommand(HostapdCLICommand):
+        def __init__ (self, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+
+        def get_command_string(self):
+            return "ATTACH"
+
+    class StopEventsCommand(HostapdCLICommand):
+        def __init__ (self, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+
+        def get_command_string(self):
+            return "DETACH"
 
     class StatusCLICommand(HostapdCLICommand):
 
