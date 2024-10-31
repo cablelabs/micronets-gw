@@ -12,7 +12,7 @@ from .utils import InvalidUsage
 logger = logging.getLogger ('micronets-gw-service')
 
 
-class DPPAdapter(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
+class DPPAdapter(WSMessageHandler, HostapdAdapter.HostapdEventHandler):
     EVENT_ONBOARDING_STARTED = "DPPOnboardingStartedEvent"
     EVENT_ONBOARDING_PROGRESS = "DPPOnboardingProgressEvent"
     EVENT_ONBOARDING_COMPLETE = "DPPOnboardingCompleteEvent"
@@ -21,7 +21,7 @@ class DPPAdapter(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
 
     def __init__ (self, config, hostapd_adapter):
         WSMessageHandler.__init__(self, "DPP")
-        HostapdAdapter.HostapdCLIEventHandler.__init__(self, ("DPP","AP-STA"))
+        HostapdAdapter.HostapdEventHandler.__init__(self, ("DPP","AP-STA"))
         self.config = config
         self.simulate_response_events = config['DPP_ADAPTER_SIMULATE_ONBOARD_RESPONSE_EVENTS']
         self.simulated_event_wait_s = 6
@@ -142,14 +142,14 @@ class DPPAdapter(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         micronet_id = micronet['micronetId']
         device_id = device['deviceId']
         logger.info(f"{__name__}: Issuing DPP onboarding commands for device {device_id} in micronet {micronet_id}...")
-        if not self.hostapd_adapter.is_cli_connected():
-            raise InvalidUsage(500, message=f"Hostapd CLI is not connected (is hostapd running?)")
+        if not self.hostapd_adapter.is_hostapd_connected():
+            raise InvalidUsage(500, message=f"Hostapd control channel is not connected (is hostapd running?)")
 
-        if not self.hostapd_adapter.is_cli_ready():
-            raise InvalidUsage(500, message=f"Hostapd CLI is not ready (is hostapd running?)")
+        if not self.hostapd_adapter.is_hostapd_ready():
+            raise InvalidUsage(500, message=f"Hostapd is not ready (is hostapd running?)")
 
         logger.info (f"{__name__}:   DPP QRCode URI: {dpp_uri}")
-        add_qrcode_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAddQRCodeCLICommand(dpp_uri))
+        add_qrcode_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.DPPAddQRCodeCommand(dpp_uri))
         qrcode_id = await add_qrcode_cmd.get_qrcode_id()
         logger.info(f"{__name__}:   DPP QRCode ID: {qrcode_id}")
 
@@ -220,11 +220,11 @@ class DPPAdapter(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
         micronet = conf_model.check_micronet_reference(micronet_id)
         device = conf_model.check_device_reference(micronet_id, device_id)
 
-        if not self.hostapd_adapter.is_cli_connected():
-            return "Hostapd CLI is not connected", 500
+        if not self.hostapd_adapter.is_hostapd_connected():
+            return "Hostapd is not connected", 500
 
-        if not self.hostapd_adapter.is_cli_ready():
-            return "Hostapd CLI is not ready (hostapd is probably not running)", 500
+        if not self.hostapd_adapter.is_hostapd_ready():
+            return "Hostapd is not ready (hostapd is probably not running)", 500
 
         logger.info(f"DPPAdapter.onboard_device: Issuing DPP reprovisioning commands for device '{device_id}' in micronet '{micronet_id}...")
 
@@ -251,7 +251,7 @@ class DPPAdapter(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
             logger.info(f"{__name__}: Failed to set reprovisioning credentials for micronet/device {micronet_id}/{device_id}")
             return f"Could not set DPP V2 reprovisioning credentials for micronet/device {micronet_id}/{device_id}", 400
 
-    async def handle_hostapd_cli_event(self, event_msg):
+    async def handle_hostapd_event(self, event_msg):
         logger.info(f"DPPAdapter.handle_hostapd_cli_event({event_msg})")
         if self.pending_onboard:
             micronet = self.pending_onboard['micronet']
@@ -335,7 +335,7 @@ class DPPAdapter(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
             dpp_config_key_file_for_ssid.write_text(self.dpp_config_key)
             logger.info(f"DPPAdapter._configure_for_ssid: Saved new configurator key to {dpp_config_key_filename_for_ssid}")
 
-        add_configurator_cmd = HostapdAdapter.DPPAddConfiguratorCLICommand(curve="prime256v1", key=self.dpp_config_key)
+        add_configurator_cmd = HostapdAdapter.DPPAddConfiguratorCommand(curve="prime256v1", key=self.dpp_config_key)
         await self.hostapd_adapter.send_command(add_configurator_cmd)
         self.dpp_configurator_id = await add_configurator_cmd.get_configurator_id()
         logger.info(f"DPPAdapter._configure_for_ssid: DPP Configurator ID: {self.dpp_configurator_id}")
@@ -351,7 +351,7 @@ class DPPAdapter(WSMessageHandler, HostapdAdapter.HostapdCLIEventHandler):
                 # Create the AP's connector
                 logger.info(f"DPPAdapter: _configure_for_ssid: Creating a DPP Connector for the AP")
                 self.dpp_ap_connector = {}
-                dpp_config_sign_cmd = HostapdAdapter.DPPConfiguratorDPPSignCLICommand(self.dpp_configurator_id,
+                dpp_config_sign_cmd = HostapdAdapter.DPPConfiguratorDPPSignCommand(self.dpp_configurator_id,
                                                                                       ssid=self.ssid)
                 await self.hostapd_adapter.send_command(dpp_config_sign_cmd)
                 result = await dpp_config_sign_cmd.get_response()

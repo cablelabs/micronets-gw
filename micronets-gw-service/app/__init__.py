@@ -142,11 +142,11 @@ hostapd_adapter = None
 try:
     hostapd_adapter_enabled = app.config['HOSTAPD_ADAPTER_ENABLED']
     if hostapd_adapter_enabled:
-        hostapd_cli_path = app.config.get('HOSTAPD_CLI_PATH')
+        hostapd_ctrl_path = app.config.get('HOSTAPD_CTRL_PATH')
         hostapd_psk_file_path = app.config.get('HOSTAPD_PSK_FILE_PATH')
         logger.info(f"hostapd adapter enabled (hostapd_psk_file_path {hostapd_psk_file_path}"
-                                             f",hostapd cli path {hostapd_cli_path})")
-        hostapd_adapter = HostapdAdapter(hostapd_psk_file_path, hostapd_cli_path)
+                    f",hostapd ctrl socket path {hostapd_ctrl_path})")
+        hostapd_adapter = HostapdAdapter(hostapd_psk_file_path, hostapd_ctrl_path)
         asyncio.ensure_future(hostapd_adapter.connect())
     else:
         logger.info("Not initiating hostapd adapter (disabled via config)")
@@ -163,7 +163,7 @@ try:
         if ws_connector:
             ws_connector.register_handler (dpp_adapter)
         if hostapd_adapter:
-            hostapd_adapter.register_cli_event_handler(dpp_adapter)
+            hostapd_adapter.register_event_handler(dpp_adapter)
     else:
         logger.info("Not initiating dpp adapter (DPP adapter disabled)")
 except Exception as ex:
@@ -177,7 +177,7 @@ try:
 
         flow_adapter = OpenFlowAdapter (app.config)
         if hostapd_adapter:
-            hostapd_adapter.register_cli_event_handler(flow_adapter)
+            hostapd_adapter.register_event_handler(flow_adapter)
     else:
         logger.info("Not starting OpenFlowAdapter (adapter disabled in config)")
 except Exception as ex:

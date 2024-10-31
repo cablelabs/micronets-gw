@@ -30,10 +30,10 @@ from .hostapd_adapter import HostapdAdapter
 logger = logging.getLogger ('netreach-adapter')
 
 
-class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
+class NetreachAdapter(HostapdAdapter.HostapdEventHandler):
 
     def __init__ (self, config):
-        HostapdAdapter.HostapdCLIEventHandler.__init__(self, ("AP-STA"))
+        HostapdAdapter.HostapdEventHandler.__init__(self, ("AP-STA"))
         self.debug = config.get('DEBUG')
         self.serial_number_file = config['NETREACH_ADAPTER_SERIAL_NUM_FILE']
         self.reg_token_file = config['NETREACH_ADAPTER_REG_TOKEN_FILE']
@@ -577,12 +577,12 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
             logger.info(f"NetreachAdapter:_configure_hostapd): Changing AP SSID from \"{cur_ssids[0]}\" "
                         f"to \"{ssid}\"")
-            set_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.SetCLICommand("ssid", ssid))
+            set_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.SetCommand("ssid", ssid))
             if not await set_cmd.was_successful():
                 response = await set_cmd.get_response()
                 raise Exception(f"Could not set ssid to {ssid}: {response}")
 
-            reload_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.ReloadCLICommand())
+            reload_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.ReloadCommand())
             if not await reload_cmd.was_successful():
                 raise Exception(f"Error issuing hostapd reload after setting SSID to {ssid}")
             await self.hostapd_adapter.refresh_status_vars()
@@ -903,7 +903,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
 
     def register_hostapd_event_handler(self, hostapd_adapter):
         if hostapd_adapter:
-            hostapd_adapter.register_cli_event_handler(self)
+            hostapd_adapter.register_event_handler(self)
 
     async def handle_hostapd_ready(self):
         logger.info(f"NetreachAdapter.handle_hostapd_ready()")
@@ -916,7 +916,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             logger.info(f"NetreachAdapter:_add_connected_stas_to_device_mac_cache: Processing STA MAC {sta_mac}")
             await self._update_device_status_and_cache(sta_mac, True, self.set_connected_on_associated)
 
-    async def handle_hostapd_cli_event(self, event_msg):
+    async def handle_hostapd_event(self, event_msg):
         # Note: Handler is registered to receive "AP-STA" events only
         logger.info(f"NetreachAdapter.handle_hostapd_cli_event({event_msg})")
         if not self.api_token:
@@ -933,7 +933,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
             await self._update_device_status_and_cache(mac, False, False)
         else:
             logger.warning(f"NetreachAdapter.handle_hostapd_cli_event: Received unknown event '{event_msg}'")
-            # If we're getting here, check the pattern provided to the HostapdCLIEventHandler constructor
+            # If we're getting here, check the pattern provided to the HostapdEventHandler constructor
             return
 
     async def _update_device_status_and_cache(self, mac, associated, connected) -> None:

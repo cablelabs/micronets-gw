@@ -42,7 +42,7 @@ class ReferenceGatewaySettings (BaseConfigSettings):
     DNSMASQ_ADAPTER_RESTART_COMMAND = ['sudo', 'systemctl', 'restart', 'dnsmasq.service']
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/ovs-ofctl add-flows {ovs_bridge} {command_file}'
     FLOW_ADAPTER_APPLY_RULES_COMMAND = '/usr/bin/ovs-ofctl add-groups {ovs_bridge} {command_file}'
-    HOSTAPD_CLI_PATH = '/var/run/hostapd/wlan0'
+    HOSTAPD_CTRL_PATH = '/var/run/hostapd/wlan0'
     HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
 
 class NetreachDefaultSettings():
@@ -98,7 +98,7 @@ class LocalDevelopmentSettings (BaseConfigSettings):
     DNSMASQ_ADAPTER_CONF_FILE = BaseConfigSettings.SERVER_LIB_DIR.joinpath("dnsmasq-config.sample")
     DNSMASQ_ADAPTER_RESTART_COMMAND = []
     FLOW_ADAPTER_APPLY_FLOWS_COMMAND = '/usr/bin/sort -t= -k 2n -k 3rn {flow_file}'
-    HOSTAPD_CLI_PATH = None
+    HOSTAPD_CTRL_PATH = None
     HOSTAPD_PSK_FILE_PATH = BaseConfigSettings.SERVER_LIB_DIR.joinpath("hostapd.wpa_psk")
 
 #
@@ -201,7 +201,7 @@ class HostapdOnly(BaseConfigSettings):
     LISTEN_PORT = 5000
     DHCP_ADAPTER = False
     HOSTAPD_ADAPTER_ENABLED = True
-    HOSTAPD_CLI_PATH = '/var/run/hostapd/wlan0'
+    HOSTAPD_CTRL_PATH = '/var/run/hostapd/wlan0'
     HOSTAPD_PSK_FILE_PATH = '/opt/micronets-hostapd/lib/hostapd.wpa_psk'
     LOGGING_LEVEL = logging.DEBUG
     LOGFILE_PATH = None

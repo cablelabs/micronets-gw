@@ -22,7 +22,7 @@ from .hostapd_adapter import HostapdAdapter
 logger = logging.getLogger ('micronets-gw-service')
 
 
-class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
+class OpenFlowAdapter(HostapdAdapter.HostapdEventHandler):
     start_table = 0
     from_micronets_ingress = 100
     from_micronets_egress = 110
@@ -40,7 +40,7 @@ class OpenFlowAdapter(HostapdAdapter.HostapdCLIEventHandler):
         self.micronet_trunk_port = config['MICRONETS_OVS_BRIDGE_TRUNK_PORT']
         self.drop_port = config['MICRONETS_OVS_BRIDGE_DROP_PORT']
         self.drop_action = f"output:{self.drop_port}"
-        HostapdAdapter.HostapdCLIEventHandler.__init__(self, None)
+        HostapdAdapter.HostapdEventHandler.__init__(self, None)
         self.bss = {}
 
 
