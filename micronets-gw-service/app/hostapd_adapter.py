@@ -4,6 +4,7 @@ import locale
 import os
 import traceback
 import re
+import pprint
 from asyncio import CancelledError
 
 import netaddr
@@ -45,6 +46,10 @@ class HostapdAdapter:
             self.event_prefixes = event_prefixes
 
         async def handle_hostapd_ready(self):
+            # Called when the connection to hostapd is made ready
+            pass
+
+        async def handle_hostapd_not_ready(self):
             # Called when the connection to hostapd is made ready
             pass
 
@@ -125,7 +130,7 @@ class HostapdAdapter:
                 response = await psk_reload_command.get_response()
                 logger.warning(f"HostapdAdapter.update: PSK reload FAILED (received '{response}')")
         else:
-            logger.warning(f"HostapdAdapter.update: Could not issue PSK reload (CLI not ready)")
+            logger.warning(f"HostapdAdapter.update: Could not issue PSK reload (CLI NOT READY)")
 
     async def connect(self):
         logger.info(f"HostapdAdapter:connect()")
@@ -155,27 +160,22 @@ class HostapdAdapter:
                 self.hostapd_read_task = asyncio.create_task(self._read_cli_output())
                 await self.hostapd_reader_ready
 
-                logger.info(f"HostapdAdapter:connect: Control interface reader task started and ready")
+                logger.info(f"HostapdAdapter:connect: Control interface reader task started and READY")
                 self.cli_ready = True
                 enable_command = await self.send_command(self.EnableEventsCommand())
                 enable_result = await enable_command.get_response()
-                # # TODO: REMOVE ME
-                logger.info(f"HostapdAdapter:read_cli_output: TESTING STATUS COMMAND")
-                status_command = await self.send_command(self.StatusCLICommand())
-                status_dict = await status_command.get_status_dict()
-                logger.info(f"HostapdAdapter:read_cli_output: STATUS DICT: {status_dict}")
-
-                logger.info(f"HostapdAdapter:read_cli_output: TESTING LIST STA COMMAND")
-                first_sta_command = await self.send_command(self.FirstStaCommand())
-                first_sta_result = await first_sta_command.get_response()
                 if not enable_result:
-                    raise RuntimeWarning(f"FAILED to enable hostapd control events "
-                                         f"({self.EnableEventsCommand.get_command_string()} failed)")
+                    logger.warning(f"HostapdAdapter:connect: FAILED to enable hostapd control events "
+                                   f"({self.EnableEventsCommand.get_command_string()} command failed)")
+                sta_mibs = await self.get_connected_sta_mibs()  # TODO: REMOVE ME
+                logger.info(f"HostapdAdapter:connect: STA MIB LIST: \n{pprint.pformat(sta_mibs)}")
+                await self._refresh_status_vars()
                 self.hostapd_ping_task = asyncio.create_task(self._hostapd_ping_loop())
-
+                await self._process_hostapd_ready()
                 logger.info(f"HostapdAdapter:connect: Waiting for control interface read task to exit.")
                 await self.hostapd_read_task
                 logger.info(f"HostapdAdapter:connect: Control interface read task EXITED.")
+                await self._process_hostapd_not_ready()
             except Exception as ex:
                 self.cli_ready = False
                 self.cli_connected = False
@@ -231,7 +231,7 @@ class HostapdAdapter:
                     asyncio.create_task(self._process_hostapd_event(interface_index, event_data))
                     continue
                 if self.cur_command:
-                    logger.debug (f"HostapdAdapter:read_cli_output: FOUND command response for {self.cur_command}: {response}")
+                    logger.debug(f"HostapdAdapter:read_cli_output: FOUND command response for {self.cur_command}: {response}")
                     done = self.cur_command.process_response_data(response)
                     if done:
                         logger.debug(f"HostapdAdapter:read_cli_output: COMPLETED command: {self.cur_command}")
@@ -264,7 +264,11 @@ class HostapdAdapter:
 
     async def _process_hostapd_ready(self):
         logger.info(f"HostapdAdapter:process_hostapd_ready()")
-        await self._refresh_status_vars()
+        for handler in self.event_handler_table:
+            asyncio.ensure_future(handler.handle_hostapd_ready())
+
+    async def _process_hostapd_not_ready(self):
+        logger.info(f"HostapdAdapter:process_hostapd_not_ready()")
         for handler in self.event_handler_table:
             asyncio.ensure_future(handler.handle_hostapd_ready())
 
@@ -298,6 +302,31 @@ class HostapdAdapter:
         if not self.status_vars:
             raise Exception("The Hostapd adapter status variables aren't initialized")
         return self.status_vars.get(var_name, None)
+
+    indexed_value_re = re.compile("^([a-zA-Z0-9]+)\[([0-9]+)\]$")
+
+    @staticmethod
+    def _convert_namevals_into_dict(nameval_lines):
+        out_dict = {}
+        for line in nameval_lines.splitlines():
+            try:
+                (name, val) = line.split("=")
+                if not name or not val:
+                    continue
+                index_match = HostapdAdapter.indexed_value_re.match(name)
+                if index_match:
+                    name = index_match.group(1)
+                    index = int(index_match.group(2))
+                    if name not in out_dict:
+                        out_dict[name] = {}
+                    out_dict[name][index] = val
+                else:
+                    out_dict[name] = val
+                logger.debug(f"HostapdAdapter._convert_namevals_into_dict: {name} = \"{out_dict[name]}\"")
+            except Exception as ex:
+                logger.warning(f"HostapdAdapter._convert_namevals_into_dict: Error processing MIB line {line}: {ex}",
+                               exc_info=True)
+        return out_dict
 
     class HostapdCLICommand:
         def __init__(self, event_loop = asyncio.get_event_loop()):
@@ -388,9 +417,6 @@ class HostapdAdapter:
             return "DETACH"
 
     class StatusCLICommand(HostapdCLICommand):
-
-        index_re = re.compile("^([a-zA-Z0-9]+)\[([0-9]+)\]$")
-
         def __init__ (self, event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
             self.status_vars = {}
@@ -399,27 +425,8 @@ class HostapdAdapter:
             return "STATUS"
 
         def process_response_data(self, response):
-            try:
-                for line in response.splitlines():
-                    try:
-                        (name,val) = line.split("=")
-                        if not name or not val:
-                            continue
-                        index_match = HostapdAdapter.StatusCLICommand.index_re.match(name)
-                        if index_match:
-                            name = index_match.group(1)
-                            index = int(index_match.group(2))
-                            if name not in self.status_vars:
-                                self.status_vars[name] = {}
-                            self.status_vars[name][index] = val
-                        else:
-                            self.status_vars[name] = val
-                        logger.debug(f"StatusCLICommand.process_response_data: {name} = \"{self.status_vars[name]}\"")
-                    except Exception as ex:
-                        logger.warning(f"StatusCLICommand.process_response_data: Error processing status line {line}: {ex}",
-                                       exc_info=self.log_exception_backtraces)
-            finally:
-                return super().process_response_data(response)
+            self.status_vars = HostapdAdapter._convert_namevals_into_dict(response)
+            return super().process_response_data(response)
 
         async def get_status_dict(self):
             await self.get_response()
@@ -462,41 +469,6 @@ class HostapdAdapter:
         async def get_sta_stats(self):
             await self.get_response()
             return self.sta_stats
-
-    class FirstStaCommand(HostapdCLICommand):
-        def __init__ (self, event_loop=asyncio.get_event_loop()):
-            super().__init__(event_loop)
-            self.macAddress = None
-
-        def get_command_string(self):
-            return "STA-FIRST"
-
-        def process_response_data(self, response):
-            try:
-                if len(response) == 0:
-                    self.macAddress = None
-                else:
-                    self.macAddress = response
-            finally:
-                return super().process_response_data(response)
-
-    class NextStaCommand(HostapdCLICommand):
-        def __init__ (self, prev_mac_address, event_loop=asyncio.get_event_loop()):
-            super().__init__(event_loop)
-            self.prevMacAddress = prev_mac_address
-            self.macAddress = None
-
-        def get_command_string(self):
-            return f"STA-FIRST {self.prevMacAddress}"
-
-        def process_response_data(self, response):
-            try:
-                if response == "FAIL":
-                    self.macAddress = None
-                else:
-                    self.macAddress = response
-            finally:
-                return super().process_response_data(response)
 
     class SetCLICommand(HostapdCLICommand):
         def __init__ (self, setting_name, setting_value, event_loop=asyncio.get_event_loop()):
@@ -832,6 +804,85 @@ class HostapdAdapter:
             await self.get_response()
             return self.success
 
+    class FirstStaCommand(HostapdCLICommand):
+        def __init__ (self, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.mac_address = None
+            self.response_data = None
+
+        def get_command_string(self):
+            return "STA-FIRST"
+
+        def process_response_data(self, response):
+            try:
+                if len(response) < 18:
+                    self.mac_address = None
+                else:
+                    self.mac_address = response[0:17]
+                    self.response_data = response
+            finally:
+                return super().process_response_data(response)
+
+        async def get_mac(self):
+            await self.get_response()
+            return self.mac_address
+
+        async def get_sta_mibs(self):
+            await self.get_response()
+            return HostapdAdapter._convert_namevals_into_dict(self.response_data[18:])
+
+    class NextStaCommand(HostapdCLICommand):
+        def __init__ (self, prev_mac_address, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.prev_mac_address = prev_mac_address
+            self.mac_address = None
+            self.response_data = None
+
+        def get_command_string(self):
+            return f"STA-NEXT {self.prev_mac_address}"
+
+        def process_response_data(self, response):
+            try:
+                if response == "FAIL":
+                    self.mac_address = None
+                elif len(response) < 18:
+                    self.mac_address = None
+                else:
+                    self.mac_address = response[0:17]
+                    self.response_data = response
+            finally:
+                return super().process_response_data(response)
+
+        async def get_mac(self):
+            await self.get_response()
+            return self.mac_address
+
+        async def get_sta_mibs(self):
+            await self.get_response()
+            return HostapdAdapter._convert_namevals_into_dict(self.response_data[18:])
+
+    async def get_connected_sta_macs(self):
+        logger.debug(f"HostapdAdapter:get_connected_stas()")
+        mac_list = []
+        first_sta_command = await self.send_command(self.FirstStaCommand())
+        mac_addr = await first_sta_command.get_mac()
+        while mac_addr:
+            mac_list.append(mac_addr)
+            next_sta_command = await self.send_command(self.NextStaCommand(mac_addr))
+            mac_addr = await next_sta_command.get_mac()
+        return mac_list
+
+    async def get_connected_sta_mibs(self):
+        logger.debug(f"HostapdAdapter:get_connected_stas()")
+        mac_mibs = {}
+        sta_command = await self.send_command(self.FirstStaCommand())
+        mac_addr = await sta_command.get_mac()
+        while mac_addr:
+            mac_mibs[mac_addr] = await sta_command.get_sta_mibs()
+            sta_command = await self.send_command(self.NextStaCommand(mac_addr))
+            mac_addr = await sta_command.get_mac()
+        return mac_mibs
+
 async def run_tests():
     hostapd_adapter = HostapdAdapter(None, "/opt/micronets-hostapd/bin/hostapd_cli", [])
 
@@ -851,9 +902,8 @@ async def run_tests():
     logger.info (f"{__name__}: Ping response: {response}")
 
     await asyncio.sleep(2)
-    logger.info (f"{__name__}: Issuing List Stations command...")
-    list_sta_cmd = await hostapd_adapter.send_command(HostapdAdapter.ListStationsCLICommand())
-    stas = await list_sta_cmd.get_sta_macs()
+    logger.info (f"{__name__}: Getting active stations...")
+    stas = await hostapd_adapter.get_connected_stas()
     logger.info (f"{__name__}: Station List: {stas}")
 
     await asyncio.sleep(2)

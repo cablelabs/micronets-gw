@@ -911,8 +911,7 @@ class NetreachAdapter(HostapdAdapter.HostapdCLIEventHandler):
         await self._add_connected_stas_to_device_mac_cache()
 
     async def _add_connected_stas_to_device_mac_cache(self):
-        list_sta_cmd = await self.hostapd_adapter.send_command(HostapdAdapter.ListStationsCLICommand())
-        sta_macs = await list_sta_cmd.get_sta_macs()
+        sta_macs = await self.hostapd_adapter.get_connected_sta_macs()
         for sta_mac in sta_macs:
             logger.info(f"NetreachAdapter:_add_connected_stas_to_device_mac_cache: Processing STA MAC {sta_mac}")
             await self._update_device_status_and_cache(sta_mac, True, self.set_connected_on_associated)

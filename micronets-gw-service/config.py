@@ -58,9 +58,9 @@ class NetreachDefaultSettings():
 #    NETREACH_ADAPTER_GEOLOCATION = {"latitude": "39.956989", "longitude": "-105.160183"}
     NETREACH_ADAPTER_GEOLOCATION = {"latitude": "45.558974", "longitude": "-122.846488"}
     NETREACH_ADAPTER_SSID_OVERRIDE_FILE = libpath.joinpath('netreach-ssid-override.txt')
-    NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://zto-controller.naaplab.cablelabs.com"
+    # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://zto-controller.naaplab.cablelabs.com"
     # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://zto-controller-staging.naaplab.cablelabs.com"
-    # NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://zto-controller-dev.naaplab.cablelabs.com"
+    NETREACH_ADAPTER_CONTROLLER_BASE_URL = "https://zto-controller-dev.naaplab.cablelabs.com"
     NETREACH_ADAPTER_API_KEY_FILE = libpath.joinpath('netreach-api-token.txt')
     NETREACH_ADAPTER_API_KEY_REFRESH_DAYS = 500
     # NETREACH_ADAPTER_MQTT_BROKER_URL = "mqtts://staging.broker.controller.netreach.in:4883" # for overriding
