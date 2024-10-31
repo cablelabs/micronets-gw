@@ -31,12 +31,13 @@ class HostapdAdapter:
         self.hostapd_read_timeout_s = 5
         self.hostapd_ping_task = None
         self.hostapd_ping_interval_s = 10
-        self.command_queue = None
+        self.cur_command = None
+        self.command_queue = Queue()
         self.cli_connected = False
         self.cli_ready = False
         self.status_vars = None
         self.local_sock = f'/tmp/mn-wpactrl-{os.getpid()}'
-        self.log_exception_backtraces = False
+        self.log_exception_backtraces = True
 
     class HostapdCLIEventHandler:
         def __init__ (self, event_prefixes):
@@ -142,8 +143,6 @@ class HostapdAdapter:
 
     async def _connect_retry(self):
         logger.info(f"HostapdAdapter:_connect_retry()")
-        self.command_queue = Queue()  # https://docs.python.org/3.6/library/queue.html
-
         self.hostapd_read_task = None
         while True:
             try:
@@ -152,20 +151,31 @@ class HostapdAdapter:
                 self.hostapd_socket.setblocking(False)
                 self.hostapd_socket.connect(str(self.hostapd_cli_path))
                 logger.info(f"HostapdAdapter:connect: Connected control socket to {self.hostapd_cli_path}")
-                self.command_queue = Queue()
                 self.hostapd_reader_ready = asyncio.Future(loop=self.event_loop)
                 self.hostapd_read_task = asyncio.create_task(self._read_cli_output())
                 await self.hostapd_reader_ready
+
                 logger.info(f"HostapdAdapter:connect: Control interface reader task started and ready")
                 self.cli_ready = True
                 enable_command = await self.send_command(self.EnableEventsCommand())
-                enable_success = await enable_command.get_response()
-                if not enable_success:
-                    logger.warning(f"FAILED to enable hostapd control events "
-                                   f"({self.EnableEventsCommand.get_command_string()} failed)")
+                enable_result = await enable_command.get_response()
+                # # TODO: REMOVE ME
+                logger.info(f"HostapdAdapter:read_cli_output: TESTING STATUS COMMAND")
+                status_command = await self.send_command(self.StatusCLICommand())
+                status_dict = await status_command.get_status_dict()
+                logger.info(f"HostapdAdapter:read_cli_output: STATUS DICT: {status_dict}")
+
+                logger.info(f"HostapdAdapter:read_cli_output: TESTING LIST STA COMMAND")
+                first_sta_command = await self.send_command(self.FirstStaCommand())
+                first_sta_result = await first_sta_command.get_response()
+                if not enable_result:
+                    raise RuntimeWarning(f"FAILED to enable hostapd control events "
+                                         f"({self.EnableEventsCommand.get_command_string()} failed)")
                 self.hostapd_ping_task = asyncio.create_task(self._hostapd_ping_loop())
+
+                logger.info(f"HostapdAdapter:connect: Waiting for control interface read task to exit.")
                 await self.hostapd_read_task
-                logger.info(f"HostapdAdapter:connect: Control interface read task exited.")
+                logger.info(f"HostapdAdapter:connect: Control interface read task EXITED.")
             except Exception as ex:
                 self.cli_ready = False
                 self.cli_connected = False
@@ -175,9 +185,9 @@ class HostapdAdapter:
                 if self.hostapd_ping_task:
                     self.hostapd_ping_task.cancel()
                     self.hostapd_ping_task = None
-                logger.info(f"HostapdAdapter:connect: Could not connect to hostapd control socket "
+                logger.info(f"HostapdAdapter:connect: Error setting up hostapd control connection "
                             f"{self.hostapd_cli_path}: {ex}", exc_info=self.log_exception_backtraces)
-                await asyncio.sleep(self.hostapd_control_connect_retry_s)
+            await asyncio.sleep(self.hostapd_control_connect_retry_s)
 
     async def _hostapd_ping_loop(self):
         try:
@@ -200,52 +210,57 @@ class HostapdAdapter:
         return self.cli_ready
 
     async def _read_cli_output(self):
-        response_data = None
+        logger.debug(f"HostapdAdapter:_read_cli_output())")
         self.cli_ready = True
-        logger.info(f"HostapdAdapter:read_cli_output: Started")
-        command = None
         self.hostapd_reader_ready.set_result(True)
+
+        self.cur_command = None  # Set when we're waiting for a command response
         while True:
             try:
-                logger.debug(f"HostapdAdapter:read_cli_output: Waiting for data on {str(self.hostapd_cli_path)}...")
+                logger.debug(f"HostapdAdapter:read_cli_output: WAITING for data on {str(self.hostapd_cli_path)}...")
                 data = await self.event_loop.sock_recv(self.hostapd_socket, self.hostapd_max_response)
-                if not data:
+                if data is None:
                     logger.info(f"HostapdAdapter:read_cli_output: Got EOF from hostapd_cli - exiting read loop")
                     break
                 response = data.decode("utf-8")
-                if len(response) == 0:
-                    continue
-                logger.debug(f"HostapdAdapter:read_cli_output: \"{response[:-1]}\"")
+                logger.debug(f"HostapdAdapter:read_cli_output: read {len(response)} bytes: \"{response[:-1]}\"")
                 event_match = HostapdAdapter.cli_event_re.match(response)
                 if event_match:
                     interface_index = int(event_match.group(1))
                     event_data = event_match.group(2).strip()
-                    logger.debug(f"HostapdAdapter:read_cli_output: Found event on interface {interface_index}: {event_data}")
                     asyncio.create_task(self._process_hostapd_event(interface_index, event_data))
                     continue
-                if not command:
-                    try:
-                        command = self.command_queue.get(block=False)
-                    except Empty:
-                        command = None
-                if command:
-                    logger.debug (f"HostapdAdapter:read_cli_output: Found command response for {command}: {response}")
-                    done = command.process_response_data(response)
+                if self.cur_command:
+                    logger.debug (f"HostapdAdapter:read_cli_output: FOUND command response for {self.cur_command}: {response}")
+                    done = self.cur_command.process_response_data(response)
                     if done:
-                        command = None
+                        logger.debug(f"HostapdAdapter:read_cli_output: COMPLETED command: {self.cur_command}")
+                        if self.command_queue.empty():
+                            self.cur_command = None
+                        else:
+                            self.cur_command = self.command_queue.get(block=False)
+                            command_string = self.cur_command.get_command_string()
+                            await self.event_loop.sock_sendall(self.hostapd_socket, command_string.encode())
                     else:
-                        logger.debug(f"HostapdAdapter:read_cli_output: Continuing multi-response command: {command}")
+                        logger.debug(f"HostapdAdapter:read_cli_output: CONTINUING multi-response command: {self.cur_command}")
             except socket.timeout as to:
-                logger.debug("HostapdAdapter:read_cli_output: Read timeout. Continuing...")
+                logger.debug("HostapdAdapter:read_cli_output: Read TIMEOUT. Continuing...")
             except CancelledError as ce:
-                logger.info("HostapdAdapter:read_cli_output: Socket read was cancelled - exiting")
+                logger.info("HostapdAdapter:read_cli_output: Socket read was CANCELLED - exiting")
                 break
             except Exception as ex:
                 logger.warning(f"HostapdAdapter:read_cli_output: Error processing data: {ex.__class__} - {ex}",
                                exc_info=self.log_exception_backtraces)
-        self.command_queue = None
+        # Terminate any pending commands
+        if self.cur_command:
+            self.cur_command.fail("Command channel closed")
+            self.cur_command = None
+        while not self.command_queue.empty():
+            command = self.command_queue.get()
+            command.fail("Command channel closed")
         self.cli_connected = False
         self.cli_ready = False
+        logger.info(f"HostapdAdapter:read_cli_output: EXITING")
 
     async def _process_hostapd_ready(self):
         logger.info(f"HostapdAdapter:process_hostapd_ready()")
@@ -285,21 +300,13 @@ class HostapdAdapter:
         return self.status_vars.get(var_name, None)
 
     class HostapdCLICommand:
-        def __init__(self, host_adapter, event_loop = asyncio.get_event_loop()):
+        def __init__(self, event_loop = asyncio.get_event_loop()):
             self.event_loop = event_loop
             self.response_future = asyncio.Future(loop=event_loop)
 
         def get_command_string(self):
             """ Over-ride this method to provide the string that compromise the hostapd_cli command (without newline)"""
-            pass
-
-        async def run_command(self, hostapd_adapter):
-            """ Run the command. For simple commands, the base class will use get_command_string() to determine
-            the command to execute. For multi-part commands, this method can be over-ridden to perform multi-part
-            commands. """
-            command_string = self.get_command_string()
-            logger.info(f"HostapdCLICommand:run_command: issuing command: {command_string}")
-            hostapd_adapter.hostapd_socket.send(command_string.encode())
+            return ""
 
         def process_response_data(self, response):
             """This is where the response can be parsed for meaningful data, parsed, and have
@@ -311,14 +318,24 @@ class HostapdAdapter:
             """Return the raw response data. Subclasses may provide accessors for specific data elements."""
             return await self.response_future
 
+        def fail(self, reason):
+            self.response_future.cancel()
+
         def __str__(self):
             return type(self).__name__ + ": " + self.get_command_string()
 
+    # TODO: Rename to run_command()
     async def send_command(self, command):
         if not isinstance(command, HostapdAdapter.HostapdCLICommand):
             raise TypeError
-        self.command_queue.put(command)
-        await command.run_command(self)
+        command_string = command.get_command_string()
+        if self.cur_command:
+            self.command_queue.put(command)
+            logger.info(f"HostapdCLICommand:run_command: QUEUED command: {command_string}")
+        else:
+            logger.info(f"HostapdCLICommand:run_command: SENDING command: {command_string}")
+            self.cur_command = command
+            await self.event_loop.sock_sendall(self.hostapd_socket, command_string.encode())
         return command
 
     class PingCLICommand(HostapdCLICommand):
@@ -335,7 +352,7 @@ class HostapdAdapter:
             finally:
                 return super().process_response_data(response)
 
-    class GenericHostapdCLIMessage(HostapdCLICommand):
+    class GenericHostapdCLICommand(HostapdCLICommand):
         def __init__ (self, hostapd_command, hostapd_command_args=(), event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
             self.hostapd_command = hostapd_command.upper()
@@ -348,13 +365,6 @@ class HostapdAdapter:
             for arg in self.hostapd_command_args:
                 compound_command = " " + compound_command
             return compound_command
-
-    class HelpCLICommand(HostapdCLICommand):
-        def __init__ (self, event_loop=asyncio.get_event_loop()):
-            super().__init__(event_loop)
-
-        def get_command_string(self):
-            return "HELP"
 
     class EnableEventsCommand(HostapdCLICommand):
         def __init__ (self, event_loop=asyncio.get_event_loop()):
@@ -420,7 +430,6 @@ class HostapdAdapter:
             return self.status_vars.get(name)
 
     class TrackStationsCLICommand(HostapdCLICommand):
-
         def __init__ (self, event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
             # Will be a dict indexed on MAC address with a duple (age(int), db(int))
@@ -454,23 +463,40 @@ class HostapdAdapter:
             await self.get_response()
             return self.sta_stats
 
-    class ListStationsCLICommand(HostapdCLICommand):
+    class FirstStaCommand(HostapdCLICommand):
         def __init__ (self, event_loop=asyncio.get_event_loop()):
             super().__init__(event_loop)
-            self.sta_macs = []
+            self.macAddress = None
 
-        # TODO: This will need to be changed to a macro to use STA-FIRST/STA-NEXT %s
         def get_command_string(self):
-            return "LIST_STA"
+            return "STA-FIRST"
 
         def process_response_data(self, response):
-            self.sta_macs = response.splitlines()
-            # TODO: Return False until the last STA is processed
-            return super().process_response_data(response)
+            try:
+                if len(response) == 0:
+                    self.macAddress = None
+                else:
+                    self.macAddress = response
+            finally:
+                return super().process_response_data(response)
 
-        async def get_sta_macs(self):
-            await self.get_response()
-            return self.sta_macs
+    class NextStaCommand(HostapdCLICommand):
+        def __init__ (self, prev_mac_address, event_loop=asyncio.get_event_loop()):
+            super().__init__(event_loop)
+            self.prevMacAddress = prev_mac_address
+            self.macAddress = None
+
+        def get_command_string(self):
+            return f"STA-FIRST {self.prevMacAddress}"
+
+        def process_response_data(self, response):
+            try:
+                if response == "FAIL":
+                    self.macAddress = None
+                else:
+                    self.macAddress = response
+            finally:
+                return super().process_response_data(response)
 
     class SetCLICommand(HostapdCLICommand):
         def __init__ (self, setting_name, setting_value, event_loop=asyncio.get_event_loop()):
